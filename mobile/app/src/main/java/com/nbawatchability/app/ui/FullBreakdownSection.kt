@@ -102,12 +102,17 @@ fun FullBreakdownSection(game: Game, modifier: Modifier = Modifier) {
     }
 }
 
+// Covers the full margin range (matches rubric.ts's marginPoints buckets) so
+// a lopsided game still gets a descriptor instead of falling through to "No
+// standout moments logged" just because it wasn't close.
 private fun marginDescriptor(margin: Int?): String? = when {
     margin == null -> null
     margin <= 3 -> "One-possession finish"
     margin <= 6 -> "Two-possession finish"
     margin <= 9 -> "Three-possession finish"
-    else -> null
+    margin <= 15 -> "Comfortable double-digit win"
+    margin <= 20 -> "Lopsided margin"
+    else -> "Blowout margin"
 }
 
 private fun breakdownFacts(game: Game): List<String> = buildList {
