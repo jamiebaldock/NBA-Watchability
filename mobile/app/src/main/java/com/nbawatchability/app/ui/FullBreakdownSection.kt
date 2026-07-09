@@ -73,10 +73,11 @@ fun FullBreakdownSection(game: Game, modifier: Modifier = Modifier) {
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Full breakdown (heavy spoilers — how it played out, never the winner)",
+                text = "Game breakdown - no spoilers, just how it played all out.",
                 style = MaterialTheme.typography.bodySmall,
                 color = TierInstantClassic,
                 textAlign = TextAlign.Center,
+                lineHeight = MaterialTheme.typography.bodySmall.fontSize * 1.4f,
                 modifier = Modifier.fillMaxWidth()
             )
         }

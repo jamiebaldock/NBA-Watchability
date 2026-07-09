@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -21,8 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -32,15 +29,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.GameStatus
@@ -94,15 +84,11 @@ fun GameCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text(
-                        text = matchupText(game.away, game.home),
-                        inlineContent = mapOf(
-                            AWAY_LOGO_ID to teamLogoInlineContent(game.awayLogo),
-                            HOME_LOGO_ID to teamLogoInlineContent(game.homeLogo)
-                        ),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f).padding(end = 8.dp)
-                    )
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        TeamRow(logoUrl = game.awayLogo, name = game.away)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        TeamRow(logoUrl = game.homeLogo, name = game.home)
+                    }
 
                     Column(horizontalAlignment = Alignment.End) {
                         StatusIndicator(game)
@@ -129,32 +115,29 @@ fun GameCard(
     }
 }
 
-private const val AWAY_LOGO_ID = "awayLogo"
-private const val HOME_LOGO_ID = "homeLogo"
-private val LOGO_SIZE = 20.sp
+private val LOGO_SIZE = 20.dp
 
-private fun matchupText(away: String, home: String): AnnotatedString = buildAnnotatedString {
-    appendInlineContent(AWAY_LOGO_ID, "[logo]")
-    append(" ")
-    withStyle(SpanStyle(color = TextPrimary, fontWeight = FontWeight.Bold)) { append(away) }
-    withStyle(SpanStyle(color = TextSecondary, fontWeight = FontWeight.Normal)) { append(" at ") }
-    appendInlineContent(HOME_LOGO_ID, "[logo]")
-    append(" ")
-    withStyle(SpanStyle(color = TextPrimary, fontWeight = FontWeight.Bold)) { append(home) }
-}
-
-private fun teamLogoInlineContent(logoUrl: String?): InlineTextContent =
-    InlineTextContent(
-        placeholder = Placeholder(width = LOGO_SIZE, height = LOGO_SIZE, placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter)
-    ) {
+// Away listed above home, each with its logo before the name — standard
+// scoreboard convention, so no "at"/"@" separator needed between them.
+@Composable
+private fun TeamRow(logoUrl: String?, name: String) {
+    Row(verticalAlignment = Alignment.Top) {
         if (logoUrl != null) {
             AsyncImage(
                 model = logoUrl,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.size(LOGO_SIZE)
             )
+            Spacer(modifier = Modifier.width(6.dp))
         }
+        Text(
+            text = name,
+            color = TextPrimary,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium
+        )
     }
+}
 
 @Composable
 private fun StatusIndicator(game: Game) {
