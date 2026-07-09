@@ -1,0 +1,26 @@
+{
+  "name": "nba-watchability-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloud function backend for the NBA Watchability app: fetches games, scores watchability, generates spoiler-free hooks/stakes via LLM, caches daily.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p .",
+    "dev": "tsx watch src/devServer.ts",
+    "start": "node dist/devServer.js",
+    "test": "tsx src/rubric.test.ts"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.2",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3"
+  }
+}

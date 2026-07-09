@@ -1,0 +1,21 @@
+# Backend (Node/TS)
+backend/node_modules/
+backend/dist/
+backend/cache/*.json
+backend/.env
+
+# Android / Gradle
+mobile/.gradle/
+mobile/build/
+mobile/app/build/
+mobile/local.properties
+mobile/.idea/
+mobile/*.iml
+mobile/app/*.iml
+mobile/captures/
+mobile/.cxx/
+
+# OS
+.DS_Store
+Thumbs.db
+.claude/settings.local.json
