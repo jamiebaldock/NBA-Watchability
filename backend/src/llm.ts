@@ -71,26 +71,33 @@ export async function generateHookAndStakes(ctx: MatchupContext): Promise<{ hook
   const anthropic = getClient();
   if (!anthropic) return fallbackHookAndStakes(ctx);
 
-  const message = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 300,
-    tools: [HOOK_STAKES_TOOL],
-    tool_choice: { type: "tool", name: HOOK_STAKES_TOOL.name },
-    messages: [
-      {
-        role: "user",
-        content:
-          `NBA matchup: ${ctx.away}${ctx.awayRecord ? ` (${ctx.awayRecord})` : ""} at ` +
-          `${ctx.home}${ctx.homeRecord ? ` (${ctx.homeRecord})` : ""}.` +
-          (ctx.notes ? ` Context: ${ctx.notes}.` : "") +
-          `\n\nWrite a one-line, spoiler-free "hook" sentence that sells the matchup/storylines ` +
-          `(rivalry, form, stakes) — like a pre-game preview blurb. This same sentence may be shown ` +
-          `whether the game is upcoming, in progress, or already finished, so it must never predict, ` +
-          `state, or imply anything about the outcome. Also give a 0-10 stakes score for how much this ` +
-          `game matters (playoff race, rivalry, seeding implications).`,
-      },
-    ],
-  });
+  try {
+    const message = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 300,
+      tools: [HOOK_STAKES_TOOL],
+      tool_choice: { type: "tool", name: HOOK_STAKES_TOOL.name },
+      messages: [
+        {
+          role: "user",
+          content:
+            `NBA matchup: ${ctx.away}${ctx.awayRecord ? ` (${ctx.awayRecord})` : ""} at ` +
+            `${ctx.home}${ctx.homeRecord ? ` (${ctx.homeRecord})` : ""}.` +
+            (ctx.notes ? ` Context: ${ctx.notes}.` : "") +
+            `\n\nWrite a one-line, spoiler-free "hook" sentence that sells the matchup/storylines ` +
+            `(rivalry, form, stakes) — like a pre-game preview blurb. This same sentence may be shown ` +
+            `whether the game is upcoming, in progress, or already finished, so it must never predict, ` +
+            `state, or imply anything about the outcome. Also give a 0-10 stakes score for how much this ` +
+            `game matters (playoff race, rivalry, seeding implications).`,
+        },
+      ],
+    });
 
-  return extractToolInput(message) ?? fallbackHookAndStakes(ctx);
+    return extractToolInput(message) ?? fallbackHookAndStakes(ctx);
+  } catch (err) {
+    // Never let a transient/billing/rate-limit API failure take down the whole
+    // schedule request — degrade to the same no-key fallback instead.
+    console.error("generateHookAndStakes: Anthropic call failed, using fallback", err);
+    return fallbackHookAndStakes(ctx);
+  }
 }
