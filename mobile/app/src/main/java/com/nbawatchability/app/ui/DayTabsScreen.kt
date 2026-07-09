@@ -39,6 +39,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.DayGames
 import com.nbawatchability.app.ui.theme.BackgroundBase
@@ -213,8 +214,9 @@ private fun DayGamesList(
             Text(
                 text = "No games scheduled",
                 color = TextSecondary,
+                textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(24.dp),
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.titleLarge
             )
         }
         return
