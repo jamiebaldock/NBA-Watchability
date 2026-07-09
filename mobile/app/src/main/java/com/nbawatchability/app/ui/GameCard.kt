@@ -43,7 +43,7 @@ import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierInstantClassicAccent
-import java.time.Instant
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -172,5 +172,8 @@ private fun periodLabel(quarter: Int?): String = when {
     else -> "OT${quarter - 4}"
 }
 
+// ESPN omits the seconds field when it's :00 (e.g. "19:30Z" not "19:30:00Z"),
+// which Instant.parse's strict ISO_INSTANT formatter rejects; OffsetDateTime's
+// default ISO_OFFSET_DATE_TIME format treats seconds as optional.
 private fun localTipoff(utc: String): String =
-    Instant.parse(utc).atZone(ZoneId.systemDefault()).format(localTimeFormatter)
+    OffsetDateTime.parse(utc).atZoneSameInstant(ZoneId.systemDefault()).format(localTimeFormatter)
