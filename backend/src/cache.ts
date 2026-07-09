@@ -21,6 +21,8 @@ export interface CachedGame {
   league?: League;
   stakes: number;
   hook: string;
+  // Optional because cache files written before the pitch blurb existed don't have it.
+  pitch?: string;
   finalRubric?: {
     finalMargin: number;
     largestDeficitOvercome: number;

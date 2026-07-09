@@ -57,6 +57,7 @@ data class Game(
     @SerialName("st") val starPerformance: String? = null,
     @SerialName("sk") val stakes: Int? = null,
     @SerialName("hook") val hook: String,
+    @SerialName("pitch") val pitch: String? = null,
     @SerialName("score") val score: Int? = null,
     @SerialName("score_visible") val scoreVisible: Boolean
 ) {

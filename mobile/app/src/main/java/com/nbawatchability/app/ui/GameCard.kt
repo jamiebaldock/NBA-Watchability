@@ -107,6 +107,18 @@ fun GameCard(
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                 )
 
+                // Distinct from the one-line hook above: a longer spoiler-free
+                // blurb. Skipped when blank or identical to the hook (the
+                // no-LLM-key fallback emits the same plain sentence for both).
+                if (!game.pitch.isNullOrBlank() && game.pitch != game.hook) {
+                    Text(
+                        text = game.pitch,
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                    )
+                }
+
                 if (game.hasBreakdown) {
                     FullBreakdownSection(game = game, modifier = Modifier.padding(top = 12.dp))
                 }

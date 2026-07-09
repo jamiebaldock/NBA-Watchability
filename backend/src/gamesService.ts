@@ -32,7 +32,7 @@ async function ensureMatchupContext(day: CachedDay, league: League, event: EspnE
   const away = competition.competitors.find((c) => c.homeAway === "away")!;
   const home = competition.competitors.find((c) => c.homeAway === "home")!;
 
-  const { hook, stakes } = await generateHookAndStakes({
+  const { hook, stakes, pitch } = await generateHookAndStakes({
     away: away.team.displayName,
     home: home.team.displayName,
     awayRecord: overallRecord(away),
@@ -53,6 +53,7 @@ async function ensureMatchupContext(day: CachedDay, league: League, event: EspnE
     league,
     stakes,
     hook,
+    pitch,
   };
 }
 
@@ -96,6 +97,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
         st: null,
         sk: cached.stakes,
         hook: cached.hook,
+        pitch: cached.pitch,
         score_visible: false,
       });
       continue;
@@ -152,6 +154,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
       st: rubric.starPerformance,
       sk: cached.stakes,
       hook: cached.hook,
+      pitch: cached.pitch,
       score: rubric.score,
       score_visible: true,
     });
@@ -189,6 +192,7 @@ function buildLiveGameJson(
     st: null,
     sk: stakes,
     hook: cached.hook,
+    pitch: cached.pitch,
     score_visible: false,
   };
 

@@ -26,6 +26,7 @@ export interface GameJson {
   st: StarPerformance;
   sk?: number;
   hook: string;
+  pitch?: string;
   score?: number;
   score_visible: boolean;
 }

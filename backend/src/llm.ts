@@ -1,14 +1,15 @@
-// Server-side-only LLM use (spec section 2, point 14): exactly two fuzzy,
-// non-numeric fields — the spoiler-free hook sentence, and the 0-10 stakes
-// judgment. Everything numeric (the rubric score itself) is computed in
-// rubric.ts, never by the model.
+// Server-side-only LLM use (spec section 2, point 14, expanded with a third
+// fuzzy field): the spoiler-free hook sentence, the 0-10 stakes judgment, and
+// a short pitch blurb. Everything numeric (the rubric score itself) is
+// computed in rubric.ts, never by the model.
 //
-// The hook is always a neutral, pre-game-style matchup synopsis (teams,
-// storylines, rivalry, stakes) — never a description of how the game played
-// out, even for completed games. Drama facts (comeback, lead changes, OT,
-// buzzer-beater) are reserved for the "full breakdown" reveal in the client,
-// which is gated behind its own explicit tap. There is deliberately only one
-// hook per game, generated once and never regenerated based on the result.
+// The hook and pitch are always a neutral, pre-game-style matchup synopsis
+// (teams, storylines, rivalry, stakes) — never a description of how the game
+// played out, even for completed games. Drama facts (comeback, lead changes,
+// OT, buzzer-beater) are reserved for the "full breakdown" reveal in the
+// client, which is gated behind its own explicit tap. There is deliberately
+// only one hook/pitch per game, generated once and never regenerated based
+// on the result.
 import Anthropic from "@anthropic-ai/sdk";
 
 const MODEL = "claude-haiku-4-5-20251001"; // cheap/fast: fits the daily call-budget cap in spec section 4
@@ -20,9 +21,9 @@ function getClient(): Anthropic | null {
   return client;
 }
 
-const HOOK_STAKES_TOOL: Anthropic.Tool = {
-  name: "emit_hook_and_stakes",
-  description: "Emit the spoiler-free hook sentence and the stakes score.",
+const MATCHUP_COPY_TOOL: Anthropic.Tool = {
+  name: "emit_matchup_copy",
+  description: "Emit the spoiler-free hook sentence, the stakes score, and the pitch blurb.",
   input_schema: {
     type: "object",
     properties: {
@@ -38,17 +39,32 @@ const HOOK_STAKES_TOOL: Anthropic.Tool = {
         maximum: 10,
         description: "0-10 judgment of playoff/rivalry/seeding stakes, based only on matchup context.",
       },
+      pitch: {
+        type: "string",
+        description:
+          "A short 2-3 sentence spoiler-free blurb selling why this matchup is worth watching " +
+          "(storylines, form, players to watch, stakes) — more detail than the one-line hook, but the " +
+          "same rule applies: never mention the score, the winner, or how the game played out.",
+      },
     },
-    required: ["hook", "stakes"],
+    required: ["hook", "stakes", "pitch"],
   },
 };
 
-function extractToolInput(message: Anthropic.Message): { hook: string; stakes: number } | null {
+interface MatchupCopy {
+  hook: string;
+  stakes: number;
+  pitch: string;
+}
+
+function extractToolInput(message: Anthropic.Message): MatchupCopy | null {
   const toolUse = message.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
   if (!toolUse) return null;
-  const input = toolUse.input as { hook?: unknown; stakes?: unknown };
-  if (typeof input.hook !== "string" || typeof input.stakes !== "number") return null;
-  return { hook: input.hook, stakes: Math.max(0, Math.min(10, Math.round(input.stakes))) };
+  const input = toolUse.input as { hook?: unknown; stakes?: unknown; pitch?: unknown };
+  if (typeof input.hook !== "string" || typeof input.stakes !== "number" || typeof input.pitch !== "string") {
+    return null;
+  }
+  return { hook: input.hook, stakes: Math.max(0, Math.min(10, Math.round(input.stakes))), pitch: input.pitch };
 }
 
 export interface MatchupContext {
@@ -60,23 +76,24 @@ export interface MatchupContext {
 }
 
 /** Fallback used when ANTHROPIC_API_KEY isn't set, so the rest of the backend is testable without a key. */
-function fallbackHookAndStakes(ctx: MatchupContext): { hook: string; stakes: number } {
+function fallbackMatchupCopy(ctx: MatchupContext): MatchupCopy {
   return {
     hook: `${ctx.away} at ${ctx.home}.`,
     stakes: ctx.notes ? 5 : 3,
+    pitch: `${ctx.away} at ${ctx.home}.`,
   };
 }
 
-export async function generateHookAndStakes(ctx: MatchupContext): Promise<{ hook: string; stakes: number }> {
+export async function generateHookAndStakes(ctx: MatchupContext): Promise<MatchupCopy> {
   const anthropic = getClient();
-  if (!anthropic) return fallbackHookAndStakes(ctx);
+  if (!anthropic) return fallbackMatchupCopy(ctx);
 
   try {
     const message = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 300,
-      tools: [HOOK_STAKES_TOOL],
-      tool_choice: { type: "tool", name: HOOK_STAKES_TOOL.name },
+      tools: [MATCHUP_COPY_TOOL],
+      tool_choice: { type: "tool", name: MATCHUP_COPY_TOOL.name },
       messages: [
         {
           role: "user",
@@ -88,16 +105,18 @@ export async function generateHookAndStakes(ctx: MatchupContext): Promise<{ hook
             `(rivalry, form, stakes) — like a pre-game preview blurb. This same sentence may be shown ` +
             `whether the game is upcoming, in progress, or already finished, so it must never predict, ` +
             `state, or imply anything about the outcome. Also give a 0-10 stakes score for how much this ` +
-            `game matters (playoff race, rivalry, seeding implications).`,
+            `game matters (playoff race, rivalry, seeding implications). Finally, write a short 2-3 ` +
+            `sentence "pitch" blurb expanding on the same spoiler-free premise — more color and context ` +
+            `than the one-line hook, still never revealing the result.`,
         },
       ],
     });
 
-    return extractToolInput(message) ?? fallbackHookAndStakes(ctx);
+    return extractToolInput(message) ?? fallbackMatchupCopy(ctx);
   } catch (err) {
     // Never let a transient/billing/rate-limit API failure take down the whole
     // schedule request — degrade to the same no-key fallback instead.
     console.error("generateHookAndStakes: Anthropic call failed, using fallback", err);
-    return fallbackHookAndStakes(ctx);
+    return fallbackMatchupCopy(ctx);
   }
 }

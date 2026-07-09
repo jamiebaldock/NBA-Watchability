@@ -66,7 +66,7 @@ fun FullBreakdownSection(game: Game, modifier: Modifier = Modifier) {
                     text = breakdownAnnotatedText(game),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
-                    modifier = Modifier.blur(14.dp)
+                    modifier = Modifier.blur(7.dp)
                 )
             } else {
                 RedactedBars(seed = game.id.hashCode(), lines = 2)
