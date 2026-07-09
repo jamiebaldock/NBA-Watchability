@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,8 +27,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -100,29 +105,60 @@ fun GameCard(
                     }
                 }
 
-                Text(
-                    text = game.hook,
-                    color = TextSecondary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
-                )
-
-                // Distinct from the one-line hook above: a longer spoiler-free
-                // blurb. Skipped when blank or identical to the hook (the
-                // no-LLM-key fallback emits the same plain sentence for both).
-                if (!game.pitch.isNullOrBlank() && game.pitch != game.hook) {
-                    Text(
-                        text = game.pitch,
-                        color = TextSecondary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
-                    )
-                }
+                PitchSection(game = game, modifier = Modifier.padding(top = 10.dp))
 
                 if (game.hasBreakdown) {
                     FullBreakdownSection(game = game, modifier = Modifier.padding(top = 12.dp))
                 }
             }
+        }
+    }
+}
+
+/**
+ * Spoiler-free hook/pitch text, blurred until tapped (spec section 2, point
+ * 7: "Hook text is blurred until the user taps it") — matches the reference
+ * prototype's "even a vibe is information" framing. Mirrors
+ * FullBreakdownSection's reveal pattern (blur where supported, redacted bars
+ * otherwise) since it's the same "hide it, but show something's there" idea.
+ */
+@Composable
+private fun PitchSection(game: Game, modifier: Modifier = Modifier) {
+    var revealed by remember(game.id) { mutableStateOf(false) }
+
+    // Distinct from the one-line hook: a longer spoiler-free blurb. Treated as
+    // absent when blank or identical to the hook (the no-LLM-key fallback
+    // emits the same plain sentence for both).
+    val pitch = game.pitch?.takeIf { it.isNotBlank() && it != game.hook }
+
+    if (!revealed) {
+        Column(modifier = modifier.fillMaxWidth().clickable { revealed = true }) {
+            Text(
+                text = "The pitch is hidden. It's written spoiler-free, but even a vibe is information.",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            if (canBlur) {
+                Column(modifier = Modifier.blur(7.dp)) {
+                    Text(text = game.hook, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    pitch?.let {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(text = it, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            } else {
+                RedactedBars(seed = game.id.hashCode(), lines = if (pitch != null) 3 else 1)
+            }
+        }
+        return
+    }
+
+    Column(modifier = modifier.fillMaxWidth().clickable { revealed = false }) {
+        Text(text = game.hook, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+        pitch?.let {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(text = it, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
