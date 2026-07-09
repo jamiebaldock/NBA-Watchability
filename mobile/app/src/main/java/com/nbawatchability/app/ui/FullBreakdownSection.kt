@@ -41,7 +41,7 @@ import com.nbawatchability.app.ui.theme.TierInstantClassic
  * actually blur it; otherwise fall back to abstract redacted bars that carry
  * no real content regardless of rendering support.
  */
-internal val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+private val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
 /**
  * "How it played out" reveal (spec section 2, point 8): comeback size, OT,
@@ -145,7 +145,7 @@ private fun breakdownAnnotatedText(game: Game) = buildAnnotatedString {
 }
 
 @Composable
-internal fun RedactedBars(seed: Int, lines: Int) {
+private fun RedactedBars(seed: Int, lines: Int) {
     val random = remember(seed) { kotlin.random.Random(seed) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         repeat(lines) {

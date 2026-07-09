@@ -6,7 +6,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,10 +31,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.GameStatus
@@ -116,45 +117,19 @@ fun GameCard(
 }
 
 /**
- * Spoiler-free hook/pitch text, blurred until tapped (spec section 2, point
- * 7: "Hook text is blurred until the user taps it") — matches the reference
- * prototype's "even a vibe is information" framing. Mirrors
- * FullBreakdownSection's reveal pattern (blur where supported, redacted bars
- * otherwise) since it's the same "hide it, but show something's there" idea.
+ * Spoiler-free hook/pitch text, always visible — unlike the full breakdown,
+ * there's nothing here to hide: it's written to never reveal the score,
+ * winner, or how the game played out, so blurring it added friction without
+ * protecting anything.
  */
 @Composable
 private fun PitchSection(game: Game, modifier: Modifier = Modifier) {
-    var revealed by remember(game.id) { mutableStateOf(false) }
-
     // Distinct from the one-line hook: a longer spoiler-free blurb. Treated as
     // absent when blank or identical to the hook (the no-LLM-key fallback
     // emits the same plain sentence for both).
     val pitch = game.pitch?.takeIf { it.isNotBlank() && it != game.hook }
 
-    if (!revealed) {
-        Column(modifier = modifier.fillMaxWidth().clickable { revealed = true }) {
-            Text(
-                text = "The pitch is hidden. It's written spoiler-free, but even a vibe is information.",
-                color = TextSecondary,
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            if (canBlur) {
-                Column(modifier = Modifier.blur(7.dp)) {
-                    Text(text = game.hook, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                    pitch?.let {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(text = it, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            } else {
-                RedactedBars(seed = game.id.hashCode(), lines = if (pitch != null) 3 else 1)
-            }
-        }
-        return
-    }
-
-    Column(modifier = modifier.fillMaxWidth().clickable { revealed = false }) {
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(text = game.hook, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
         pitch?.let {
             Spacer(modifier = Modifier.height(6.dp))
@@ -169,7 +144,7 @@ private val LOGO_SIZE = 20.dp
 // scoreboard convention, so no "at"/"@" separator needed between them.
 @Composable
 private fun TeamRow(logoUrl: String?, name: String) {
-    Row(verticalAlignment = Alignment.Top) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         if (logoUrl != null) {
             AsyncImage(
                 model = logoUrl,
@@ -178,13 +153,50 @@ private fun TeamRow(logoUrl: String?, name: String) {
             )
             Spacer(modifier = Modifier.width(6.dp))
         }
-        Text(
+        FitOneLineText(
             text = name,
             color = TextPrimary,
             fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.titleMedium
+            baseStyle = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f, fill = false)
         )
     }
+}
+
+private val MIN_TEAM_NAME_FONT_SIZE = 12.sp
+
+/**
+ * Shrinks [text] just enough to fit on one line instead of wrapping or
+ * truncating — a long team name reads worse split across two lines or cut
+ * off with an ellipsis than slightly smaller.
+ */
+@Composable
+private fun FitOneLineText(
+    text: String,
+    color: Color,
+    fontWeight: FontWeight,
+    baseStyle: TextStyle,
+    modifier: Modifier = Modifier
+) {
+    var style by remember(text) { mutableStateOf(baseStyle) }
+    var readyToDraw by remember(text) { mutableStateOf(false) }
+
+    Text(
+        text = text,
+        color = color,
+        fontWeight = fontWeight,
+        style = style,
+        maxLines = 1,
+        softWrap = false,
+        modifier = modifier.drawWithContent { if (readyToDraw) drawContent() },
+        onTextLayout = { result ->
+            if (result.didOverflowWidth && style.fontSize > MIN_TEAM_NAME_FONT_SIZE) {
+                style = style.copy(fontSize = style.fontSize * 0.92f)
+            } else {
+                readyToDraw = true
+            }
+        }
+    )
 }
 
 @Composable
