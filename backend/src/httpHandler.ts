@@ -8,7 +8,12 @@ export interface DaySchedule {
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MAX_RANGE_DAYS = 14; // basic abuse guard (spec section 4: "basic request throttling")
+// Basic abuse guard (spec section 4: "basic request throttling"). The client
+// requests a couple of buffer days beyond what it displays (spec section 10:
+// past/future 7 days = 15 days) to absorb ESPN's US-Eastern-based scoreboard
+// date bucketing shifting by up to a day or two once re-bucketed into the
+// user's own local calendar date, so this needs headroom above 15.
+const MAX_RANGE_DAYS = 21;
 
 export class BadRequestError extends Error {}
 
