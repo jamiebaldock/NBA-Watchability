@@ -41,6 +41,7 @@ data class Game(
     @SerialName("h") val home: String,
     @SerialName("stt") val status: GameStatus,
     @SerialName("utc") val tipoffUtc: String,
+    @SerialName("lg") val league: String = "nba",
     @SerialName("q") val quarter: Int? = null,
     @SerialName("clk") val clock: String? = null,
     @SerialName("m") val margin: Int? = null,
@@ -58,6 +59,8 @@ data class Game(
     @SerialName("score_visible") val scoreVisible: Boolean
 ) {
     val id: String get() = "$away@$home@$tipoffUtc"
+
+    val isSummerLeague: Boolean get() = league == "summer"
 
     val tier: Tier? get() = if (scoreVisible && score != null) Tier.fromScore(score) else null
 

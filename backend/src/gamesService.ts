@@ -1,5 +1,5 @@
 import { CachedDay, loadDay, saveDay } from "./cache";
-import { EspnEvent, fetchScoreboard, fetchSummary, toEspnDate } from "./espnClient";
+import { ALL_LEAGUES, EspnEvent, League, fetchScoreboard, fetchSummary, toEspnDate } from "./espnClient";
 import { mapEspnState, mapEventToGame } from "./gameMapper";
 import { generateHookAndStakes } from "./llm";
 import { computeWatchabilityScore, isScoreVisible } from "./rubric";
@@ -9,7 +9,23 @@ function overallRecord(competitor: EspnEvent["competitions"][number]["competitor
   return competitor.records?.find((r) => r.type === "total")?.summary;
 }
 
-async function ensureMatchupContext(day: CachedDay, event: EspnEvent): Promise<void> {
+interface LeagueEvent {
+  league: League;
+  event: EspnEvent;
+}
+
+/** Each league is its own ESPN "sport", so a day's full slate is the union of separate per-league fetches. */
+async function fetchAllEvents(espnDate: string): Promise<LeagueEvent[]> {
+  const perLeague = await Promise.all(
+    ALL_LEAGUES.map(async (league) => {
+      const events = await fetchScoreboard(espnDate, league);
+      return events.map((event): LeagueEvent => ({ league, event }));
+    })
+  );
+  return perLeague.flat();
+}
+
+async function ensureMatchupContext(day: CachedDay, league: League, event: EspnEvent): Promise<void> {
   if (day.games[event.id]) return;
 
   const competition = event.competitions[0];
@@ -21,6 +37,10 @@ async function ensureMatchupContext(day: CachedDay, event: EspnEvent): Promise<v
     home: home.team.displayName,
     awayRecord: overallRecord(away),
     homeRecord: overallRecord(home),
+    notes:
+      league !== "nba"
+        ? "NBA Summer League exhibition game — rookies/prospects, not regular-season standings, no playoff implications"
+        : undefined,
   });
 
   day.games[event.id] = {
@@ -28,6 +48,7 @@ async function ensureMatchupContext(day: CachedDay, event: EspnEvent): Promise<v
     away: away.team.displayName,
     home: home.team.displayName,
     tipoffUtc: event.date,
+    league,
     stakes,
     hook,
   };
@@ -43,14 +64,17 @@ async function ensureMatchupContext(day: CachedDay, event: EspnEvent): Promise<v
  */
 export async function getGamesForDate(date: string): Promise<GameJson[]> {
   const espnDate = toEspnDate(new Date(`${date}T12:00:00Z`));
-  const events = await fetchScoreboard(espnDate);
+  const leagueEvents = await fetchAllEvents(espnDate);
   const day = loadDay(date);
 
   const results: GameJson[] = [];
 
-  for (const event of events) {
-    await ensureMatchupContext(day, event);
+  for (const { league, event } of leagueEvents) {
+    await ensureMatchupContext(day, league, event);
     const cached = day.games[event.id];
+    // Older cache entries predate Summer League support and have no stored league.
+    const eventLeague: League = cached.league ?? league;
+    const lg: GameJson["lg"] = eventLeague === "nba" ? "nba" : "summer";
     const status = mapEspnState(event.competitions[0].status.type.state);
 
     if (status === "upcoming") {
@@ -59,6 +83,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
         h: cached.home,
         stt: "upcoming",
         utc: cached.tipoffUtc,
+        lg,
         ot: 0,
         c5: false,
         lcf: false,
@@ -76,7 +101,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
     let rubric = cached.finalRubric;
 
     if (!rubric) {
-      const summary = await fetchSummary(event.id);
+      const summary = await fetchSummary(event.id, eventLeague);
       const mapped = mapEventToGame(event, summary);
       const period = mapped.rubric.period;
       const clock = mapped.rubric.clock;
@@ -99,7 +124,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
         rubric = cached.finalRubric;
       } else {
         // live, still in-progress: build a GameJson straight from this poll's rubric.
-        results.push(buildLiveGameJson(cached, status, period, clock, mapped.rubric, cached.stakes, scoreVisible));
+        results.push(buildLiveGameJson(cached, lg, status, period, clock, mapped.rubric, cached.stakes, scoreVisible));
         continue;
       }
     }
@@ -109,6 +134,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
       h: cached.home,
       stt: "final",
       utc: cached.tipoffUtc,
+      lg,
       ot: rubric.overtimePeriods,
       m: rubric.finalMargin,
       cb: rubric.largestDeficitOvercome,
@@ -131,6 +157,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
 
 function buildLiveGameJson(
   cached: CachedDay["games"][string],
+  lg: GameJson["lg"],
   status: "live",
   period: number | undefined,
   clock: string | undefined,
@@ -143,6 +170,7 @@ function buildLiveGameJson(
     h: cached.home,
     stt: status,
     utc: cached.tipoffUtc,
+    lg,
     q: period,
     clk: clock,
     ot: 0,

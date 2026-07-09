@@ -72,6 +72,15 @@ fun GameCard(
             }
 
             Column(modifier = Modifier.weight(1f).padding(16.dp)) {
+                if (game.isSummerLeague) {
+                    Text(
+                        text = "NBA SUMMER LEAGUE",
+                        color = TextMuted,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

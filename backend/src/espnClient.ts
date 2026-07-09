@@ -1,7 +1,24 @@
 // Thin client for ESPN's public (keyless) NBA endpoints. Unofficial but widely
 // used for exactly this kind of hobby project; named as an example source in
 // nba-watchability-spec.md section 2 point 12.
-const BASE = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba";
+//
+// Regular season/playoffs and each NBA Summer League tournament are separate
+// "sports" as far as ESPN's site API is concerned, each with their own
+// scoreboard AND summary path — an event fetched from one league's scoreboard
+// 404s if you ask the wrong league's summary endpoint for it, so callers must
+// always pair an event with the League it came from.
+export const ALL_LEAGUES = [
+  "nba",
+  "nba-summer-las-vegas",
+  "nba-summer-utah",
+  "nba-summer-sacramento",
+] as const;
+
+export type League = (typeof ALL_LEAGUES)[number];
+
+function basePath(league: League): string {
+  return `https://site.api.espn.com/apis/site/v2/sports/basketball/${league}`;
+}
 
 export interface EspnTeam {
   id: string;
@@ -78,13 +95,13 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 /** dateYyyymmdd must be in YYYYMMDD form (ESPN's scoreboard date format). */
-export async function fetchScoreboard(dateYyyymmdd: string): Promise<EspnEvent[]> {
-  const data = await getJson<{ events: EspnEvent[] }>(`${BASE}/scoreboard?dates=${dateYyyymmdd}`);
+export async function fetchScoreboard(dateYyyymmdd: string, league: League): Promise<EspnEvent[]> {
+  const data = await getJson<{ events: EspnEvent[] }>(`${basePath(league)}/scoreboard?dates=${dateYyyymmdd}`);
   return data.events ?? [];
 }
 
-export async function fetchSummary(eventId: string): Promise<EspnSummary> {
-  return getJson<EspnSummary>(`${BASE}/summary?event=${eventId}`);
+export async function fetchSummary(eventId: string, league: League): Promise<EspnSummary> {
+  return getJson<EspnSummary>(`${basePath(league)}/summary?event=${eventId}`);
 }
 
 export function toEspnDate(date: Date): string {

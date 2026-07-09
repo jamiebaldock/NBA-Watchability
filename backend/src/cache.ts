@@ -3,6 +3,7 @@
 // one later without touching gamesService.ts's call sites.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { League } from "./espnClient";
 import { StarPerformance } from "./types";
 
 const CACHE_DIR = join(__dirname, "..", "cache");
@@ -12,6 +13,9 @@ export interface CachedGame {
   away: string;
   home: string;
   tipoffUtc: string;
+  // Optional because cache files written before Summer League support don't
+  // have it; callers should treat a missing value as "nba".
+  league?: League;
   stakes: number;
   hook: string;
   finalRubric?: {
