@@ -8,6 +8,8 @@ export type StarPerformance = "historic" | "great" | "good" | null;
 export interface GameJson {
   a: string;
   h: string;
+  al?: string;
+  hl?: string;
   stt: GameStatus;
   utc: string;
   lg: "nba" | "summer";

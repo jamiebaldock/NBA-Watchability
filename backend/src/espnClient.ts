@@ -24,6 +24,7 @@ export interface EspnTeam {
   id: string;
   name: string;
   displayName: string;
+  logo?: string;
 }
 
 export interface EspnCompetitor {

@@ -39,6 +39,8 @@ enum class Tier(val label: String, val emoji: String) {
 data class Game(
     @SerialName("a") val away: String,
     @SerialName("h") val home: String,
+    @SerialName("al") val awayLogo: String? = null,
+    @SerialName("hl") val homeLogo: String? = null,
     @SerialName("stt") val status: GameStatus,
     @SerialName("utc") val tipoffUtc: String,
     @SerialName("lg") val league: String = "nba",

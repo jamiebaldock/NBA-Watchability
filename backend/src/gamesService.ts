@@ -47,6 +47,8 @@ async function ensureMatchupContext(day: CachedDay, league: League, event: EspnE
     eventId: event.id,
     away: away.team.displayName,
     home: home.team.displayName,
+    awayLogo: away.team.logo,
+    homeLogo: home.team.logo,
     tipoffUtc: event.date,
     league,
     stakes,
@@ -81,6 +83,8 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
       results.push({
         a: cached.away,
         h: cached.home,
+        al: cached.awayLogo,
+        hl: cached.homeLogo,
         stt: "upcoming",
         utc: cached.tipoffUtc,
         lg,
@@ -132,6 +136,8 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
     results.push({
       a: cached.away,
       h: cached.home,
+      al: cached.awayLogo,
+      hl: cached.homeLogo,
       stt: "final",
       utc: cached.tipoffUtc,
       lg,
@@ -168,6 +174,8 @@ function buildLiveGameJson(
   const base: GameJson = {
     a: cached.away,
     h: cached.home,
+    al: cached.awayLogo,
+    hl: cached.homeLogo,
     stt: status,
     utc: cached.tipoffUtc,
     lg,

@@ -12,6 +12,9 @@ export interface CachedGame {
   eventId: string;
   away: string;
   home: string;
+  // Optional because cache files written before logo support don't have them.
+  awayLogo?: string;
+  homeLogo?: string;
   tipoffUtc: string;
   // Optional because cache files written before Summer League support don't
   // have it; callers should treat a missing value as "nba".
