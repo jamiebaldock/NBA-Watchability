@@ -35,8 +35,11 @@ object NetworkGameRepository {
         withContext(Dispatchers.IO) {
             val url = URL("$baseUrl/schedule?start=$start&end=$end")
             val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 8000
-            connection.readTimeout = 8000
+            // Render's free tier cold-starts a sleeping instance in 30-60s+, so
+            // these need enough headroom to survive a wake-up rather than a
+            // typical request.
+            connection.connectTimeout = 45000
+            connection.readTimeout = 45000
             connection.requestMethod = "GET"
 
             try {
