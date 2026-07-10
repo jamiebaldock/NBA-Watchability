@@ -1,5 +1,6 @@
 package com.nbawatchability.app.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.SurfaceCardElevated
 import com.nbawatchability.app.ui.theme.TextPrimary
@@ -53,6 +55,20 @@ private enum class BottomNavTab(val label: String, val icon: ImageVector) {
 @Composable
 fun AppRoot() {
     var selectedTab by rememberSaveable { mutableStateOf(BottomNavTab.GAMES) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    val settingsViewModel: RubricSettingsViewModel = viewModel()
+
+    BackHandler(enabled = showSettings) { showSettings = false }
+
+    if (showSettings) {
+        SettingsScreen(
+            weights = settingsViewModel.weights,
+            onWeightChange = settingsViewModel::updateWeight,
+            onReset = settingsViewModel::resetToDefaults,
+            onBack = { showSettings = false }
+        )
+        return
+    }
 
     Scaffold(
         containerColor = BackgroundBase,
@@ -78,7 +94,10 @@ fun AppRoot() {
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             when (selectedTab) {
-                BottomNavTab.GAMES -> GamesTab()
+                BottomNavTab.GAMES -> GamesTab(
+                    weights = settingsViewModel.weights,
+                    onSettingsClick = { showSettings = true }
+                )
                 BottomNavTab.STANDINGS -> PlaceholderScreen("Standings — coming soon.")
                 BottomNavTab.STATS -> PlaceholderScreen("Stats — coming soon.")
                 BottomNavTab.NEWS -> PlaceholderScreen("News — coming soon.")
@@ -89,7 +108,7 @@ fun AppRoot() {
 }
 
 @Composable
-private fun GamesTab() {
+private fun GamesTab(weights: RubricWeights, onSettingsClick: () -> Unit) {
     val viewModel: GameListViewModel = viewModel()
     when (val state = viewModel.uiState) {
         is ScheduleUiState.Loading -> LoadingScreen()
@@ -104,7 +123,9 @@ private fun GamesTab() {
             sortBestFirst = viewModel.sortBestFirst,
             onToggleSort = viewModel::toggleSortBestFirst,
             isRefreshing = viewModel.isRefreshing,
-            onRefresh = viewModel::refresh
+            onRefresh = viewModel::refresh,
+            weights = weights,
+            onSettingsClick = onSettingsClick
         )
     }
 }

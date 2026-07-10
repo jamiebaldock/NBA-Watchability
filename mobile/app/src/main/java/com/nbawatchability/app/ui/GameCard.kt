@@ -40,7 +40,10 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.GameStatus
+import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.Tier
+import com.nbawatchability.app.data.effectiveScore
+import com.nbawatchability.app.data.effectiveTier
 import com.nbawatchability.app.ui.theme.LiveRed
 import com.nbawatchability.app.ui.theme.SurfaceCardElevated
 import com.nbawatchability.app.ui.theme.TextMuted
@@ -58,15 +61,18 @@ private const val TABULAR_NUMS = "tnum"
 fun GameCard(
     game: Game,
     showNumericScore: Boolean,
+    weights: RubricWeights,
     modifier: Modifier = Modifier
 ) {
+    val tier = game.effectiveTier(weights)
+
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = SurfaceCardElevated),
         shape = RoundedCornerShape(14.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            if (game.tier == Tier.INSTANT_CLASSIC) {
+            if (tier == Tier.INSTANT_CLASSIC) {
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -98,10 +104,12 @@ fun GameCard(
 
                     Column(horizontalAlignment = Alignment.End) {
                         StatusIndicator(game)
-                        val tier = game.tier
                         if (tier != null) {
                             Spacer(modifier = Modifier.height(6.dp))
-                            TierBadge(tier = tier, numericScore = if (showNumericScore) game.score else null)
+                            TierBadge(
+                                tier = tier,
+                                numericScore = if (showNumericScore) game.effectiveScore(weights) else null
+                            )
                         }
                     }
                 }
@@ -114,7 +122,7 @@ fun GameCard(
 
                 if (game.hasBreakdown) {
                     val breakdownTopPadding = if (game.status == GameStatus.FINAL) 10.dp else 12.dp
-                    FullBreakdownSection(game = game, modifier = Modifier.padding(top = breakdownTopPadding))
+                    FullBreakdownSection(game = game, weights = weights, modifier = Modifier.padding(top = breakdownTopPadding))
                 }
             }
         }

@@ -30,6 +30,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.Game
+import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierInstantClassic
@@ -52,7 +54,7 @@ private val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
  * prototype.
  */
 @Composable
-fun FullBreakdownSection(game: Game, modifier: Modifier = Modifier) {
+fun FullBreakdownSection(game: Game, weights: RubricWeights, modifier: Modifier = Modifier) {
     var revealed by remember(game.id) { mutableStateOf(false) }
 
     // The toggle text stays anchored at the bottom in both states - only its
@@ -63,7 +65,7 @@ fun FullBreakdownSection(game: Game, modifier: Modifier = Modifier) {
             HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = breakdownAnnotatedText(game),
+                text = breakdownAnnotatedText(game, weights),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
@@ -71,7 +73,7 @@ fun FullBreakdownSection(game: Game, modifier: Modifier = Modifier) {
         } else {
             if (canBlur) {
                 Text(
-                    text = breakdownAnnotatedText(game),
+                    text = breakdownAnnotatedText(game, weights),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                     modifier = Modifier.blur(7.dp)
@@ -126,12 +128,12 @@ private fun breakdownFacts(game: Game): List<String> = buildList {
     }
 }
 
-private fun breakdownAnnotatedText(game: Game) = buildAnnotatedString {
+private fun breakdownAnnotatedText(game: Game, weights: RubricWeights) = buildAnnotatedString {
     val facts = breakdownFacts(game)
     append(if (facts.isEmpty()) "No standout moments logged" else facts.joinToString(" · "))
     append(" · Watchability ")
     withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")) {
-        append("${game.score ?: 0}/100")
+        append("${game.effectiveScore(weights) ?: 0}/100")
     }
 }
 

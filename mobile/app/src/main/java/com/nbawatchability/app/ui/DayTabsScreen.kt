@@ -19,9 +19,11 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -43,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.DayGames
+import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
@@ -72,7 +76,9 @@ fun DayTabsScreen(
     sortBestFirst: Boolean,
     onToggleSort: () -> Unit,
     isRefreshing: Boolean,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    weights: RubricWeights,
+    onSettingsClick: () -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
 
@@ -103,6 +109,13 @@ fun DayTabsScreen(
                             tint = if (showNumericScore) TierWorthYourTime else TextSecondary
                         )
                     }
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = TextSecondary
+                        )
+                    }
                 }
             )
         }
@@ -127,7 +140,8 @@ fun DayTabsScreen(
                     DayGamesList(
                         games = days[page].games,
                         sortBestFirst = sortBestFirst,
-                        showNumericScore = showNumericScore
+                        showNumericScore = showNumericScore,
+                        weights = weights
                     )
                 }
             }
@@ -206,11 +220,12 @@ private fun CenteringDayTabRow(
 private fun DayGamesList(
     games: List<com.nbawatchability.app.data.Game>,
     sortBestFirst: Boolean,
-    showNumericScore: Boolean
+    showNumericScore: Boolean,
+    weights: RubricWeights
 ) {
     val ordered = if (sortBestFirst) {
-        val (scored, unscored) = games.partition { it.scoreVisible && it.score != null }
-        scored.sortedByDescending { it.score } + unscored
+        val (scored, unscored) = games.partition { it.effectiveScore(weights) != null }
+        scored.sortedByDescending { it.effectiveScore(weights) } + unscored
     } else {
         games
     }
@@ -237,7 +252,7 @@ private fun DayGamesList(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(ordered, key = { it.id }) { game ->
-            GameCard(game = game, showNumericScore = showNumericScore)
+            GameCard(game = game, showNumericScore = showNumericScore, weights = weights)
         }
     }
 }
