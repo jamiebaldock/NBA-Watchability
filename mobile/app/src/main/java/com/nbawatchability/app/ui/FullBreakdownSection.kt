@@ -55,12 +55,20 @@ private val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 fun FullBreakdownSection(game: Game, modifier: Modifier = Modifier) {
     var revealed by remember(game.id) { mutableStateOf(false) }
 
-    if (!revealed) {
-        Column(
-            modifier = modifier
-                .fillMaxWidth()
-                .clickable { revealed = true }
-        ) {
+    // The toggle text stays anchored at the bottom in both states - only its
+    // label swaps - rather than moving from bottom (collapsed) to top
+    // (revealed), which read as the control jumping to a different spot.
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (revealed) {
+            HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = breakdownAnnotatedText(game),
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        } else {
             if (canBlur) {
                 Text(
                     text = breakdownAnnotatedText(game),
@@ -72,32 +80,15 @@ fun FullBreakdownSection(game: Game, modifier: Modifier = Modifier) {
                 RedactedBars(seed = game.id.hashCode(), lines = 2)
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Game breakdown - no spoilers, just how it played all out.",
-                style = MaterialTheme.typography.bodySmall,
-                color = TierInstantClassic,
-                textAlign = TextAlign.Center,
-                lineHeight = MaterialTheme.typography.bodySmall.fontSize * 1.4f,
-                modifier = Modifier.fillMaxWidth()
-            )
         }
-        return
-    }
 
-    Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "Hide breakdown",
+            text = if (revealed) "Hide breakdown" else "Game breakdown - no spoilers, just how it played all out.",
             style = MaterialTheme.typography.bodySmall,
             color = TierInstantClassic,
-            modifier = Modifier.clickable { revealed = false }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = breakdownAnnotatedText(game),
-            style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary
+            textAlign = TextAlign.Center,
+            lineHeight = MaterialTheme.typography.bodySmall.fontSize * 1.4f,
+            modifier = Modifier.fillMaxWidth().clickable { revealed = !revealed }
         )
     }
 }

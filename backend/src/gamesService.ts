@@ -1,9 +1,11 @@
 import { CachedDay, loadDay, saveDay } from "./cache";
 import { ALL_LEAGUES, EspnEvent, League, fetchScoreboard, fetchSummary, toEspnDate } from "./espnClient";
 import { mapEspnState, mapEventToGame } from "./gameMapper";
+import { fetchTeamInjuries, injuryNotesToText } from "./injuries";
 import { generateHookAndStakes } from "./llm";
 import { computeWatchabilityScore, isScoreVisible } from "./rubric";
 import { GameJson } from "./types";
+import { hasLocalFiveAmPassed, venueTimeZone } from "./venueTimezone";
 
 function overallRecord(competitor: EspnEvent["competitions"][number]["competitors"][number]): string | undefined {
   return competitor.records?.find((r) => r.type === "total")?.summary;
@@ -25,12 +27,57 @@ async function fetchAllEvents(espnDate: string): Promise<LeagueEvent[]> {
   return perLeague.flat();
 }
 
-async function ensureMatchupContext(day: CachedDay, league: League, event: EspnEvent): Promise<void> {
+/** Plain, spoiler-free placeholder shown on the tile until the real pregame preview generates. */
+function fallbackHook(cached: Pick<CachedDay["games"][string], "away" | "home">): string {
+  return `${cached.away} at ${cached.home}.`;
+}
+
+async function ensureBaseEntry(day: CachedDay, league: League, event: EspnEvent): Promise<void> {
   if (day.games[event.id]) return;
 
   const competition = event.competitions[0];
   const away = competition.competitors.find((c) => c.homeAway === "away")!;
   const home = competition.competitors.find((c) => c.homeAway === "home")!;
+
+  day.games[event.id] = {
+    eventId: event.id,
+    away: away.team.displayName,
+    home: home.team.displayName,
+    awayLogo: away.team.logo,
+    homeLogo: home.team.logo,
+    tipoffUtc: event.date,
+    league,
+  };
+}
+
+/**
+ * Generates the pregame preview (hook/stakes/pitch) exactly once per game -
+ * not the first time the event is seen, but at/after 5am local time at the
+ * venue, so it can reflect same-day news (starter ruled out, etc.) instead of
+ * being locked in as soon as ESPN publishes the schedule. Before that gate,
+ * or if generation already happened, this is a no-op.
+ */
+async function ensurePregamePreview(day: CachedDay, league: League, event: EspnEvent): Promise<void> {
+  const cached = day.games[event.id];
+  if (cached.hook !== undefined) return; // already generated
+
+  const competition = event.competitions[0];
+  const away = competition.competitors.find((c) => c.homeAway === "away")!;
+  const home = competition.competitors.find((c) => c.homeAway === "home")!;
+
+  const zone = venueTimeZone(event, home.team.displayName);
+  if (!hasLocalFiveAmPassed(event.date, zone)) return; // not time yet
+
+  const [awayInjuries, homeInjuries] = await Promise.all([
+    fetchTeamInjuries(away.team.id),
+    fetchTeamInjuries(home.team.id),
+  ]);
+  const injuryContext = [
+    injuryNotesToText(away.team.displayName, awayInjuries),
+    injuryNotesToText(home.team.displayName, homeInjuries),
+  ]
+    .filter((n): n is string => n !== null)
+    .join(" | ");
 
   const { hook, stakes, pitch } = await generateHookAndStakes({
     away: away.team.displayName,
@@ -41,20 +88,12 @@ async function ensureMatchupContext(day: CachedDay, league: League, event: EspnE
       league !== "nba"
         ? "NBA Summer League exhibition game — rookies/prospects, not regular-season standings, no playoff implications"
         : undefined,
+    injuryContext: injuryContext || undefined,
   });
 
-  day.games[event.id] = {
-    eventId: event.id,
-    away: away.team.displayName,
-    home: home.team.displayName,
-    awayLogo: away.team.logo,
-    homeLogo: home.team.logo,
-    tipoffUtc: event.date,
-    league,
-    stakes,
-    hook,
-    pitch,
-  };
+  cached.hook = hook;
+  cached.stakes = stakes;
+  cached.pitch = pitch;
 }
 
 /**
@@ -62,8 +101,9 @@ async function ensureMatchupContext(day: CachedDay, league: League, event: EspnE
  * JSON contract (nba-watchability-spec.md section 5). Cheap to call
  * repeatedly: the sports-data fetch always happens (needed for live
  * period/clock), but each game's LLM call happens at most once ever (the
- * hook+stakes are a fixed matchup synopsis, generated once and never
- * regenerated based on the result) and is skipped entirely once cached.
+ * hook+stakes+pitch are a fixed matchup synopsis, generated once - at/after
+ * 5am local game day, see ensurePregamePreview - and never regenerated based
+ * on the result) and is skipped entirely once cached.
  */
 export async function getGamesForDate(date: string): Promise<GameJson[]> {
   const espnDate = toEspnDate(new Date(`${date}T12:00:00Z`));
@@ -73,12 +113,15 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
   const results: GameJson[] = [];
 
   for (const { league, event } of leagueEvents) {
-    await ensureMatchupContext(day, league, event);
+    await ensureBaseEntry(day, league, event);
+    await ensurePregamePreview(day, league, event);
     const cached = day.games[event.id];
     // Older cache entries predate Summer League support and have no stored league.
     const eventLeague: League = cached.league ?? league;
     const lg: GameJson["lg"] = eventLeague === "nba" ? "nba" : "summer";
     const status = mapEspnState(event.competitions[0].status.type.state);
+    const hook = cached.hook ?? fallbackHook(cached);
+    const stakes = cached.stakes ?? 0;
 
     if (status === "upcoming") {
       results.push({
@@ -96,7 +139,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
         bz: false,
         st: null,
         sk: cached.stakes,
-        hook: cached.hook,
+        hook,
         pitch: cached.pitch,
         score_visible: false,
       });
@@ -114,7 +157,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
       const scoreVisible = isScoreVisible(status, period);
 
       if (status === "final") {
-        const score = computeWatchabilityScore(mapped.rubric, cached.stakes).total;
+        const score = computeWatchabilityScore(mapped.rubric, stakes).total;
         cached.finalRubric = {
           finalMargin: mapped.rubric.finalMargin ?? 0,
           largestDeficitOvercome: mapped.rubric.largestDeficitOvercome ?? 0,
@@ -130,7 +173,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
         rubric = cached.finalRubric;
       } else {
         // live, still in-progress: build a GameJson straight from this poll's rubric.
-        results.push(buildLiveGameJson(cached, lg, status, period, clock, mapped.rubric, cached.stakes, scoreVisible));
+        results.push(buildLiveGameJson(cached, lg, hook, status, period, clock, mapped.rubric, stakes, scoreVisible));
         continue;
       }
     }
@@ -153,7 +196,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
       bz: rubric.buzzerBeater,
       st: rubric.starPerformance,
       sk: cached.stakes,
-      hook: cached.hook,
+      hook,
       pitch: cached.pitch,
       score: rubric.score,
       score_visible: true,
@@ -167,6 +210,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
 function buildLiveGameJson(
   cached: CachedDay["games"][string],
   lg: GameJson["lg"],
+  hook: string,
   status: "live",
   period: number | undefined,
   clock: string | undefined,
@@ -190,8 +234,8 @@ function buildLiveGameJson(
     fp: false,
     bz: false,
     st: null,
-    sk: stakes,
-    hook: cached.hook,
+    sk: cached.stakes,
+    hook,
     pitch: cached.pitch,
     score_visible: false,
   };

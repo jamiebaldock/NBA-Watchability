@@ -19,9 +19,12 @@ export interface CachedGame {
   // Optional because cache files written before Summer League support don't
   // have it; callers should treat a missing value as "nba".
   league?: League;
-  stakes: number;
-  hook: string;
-  // Optional because cache files written before the pitch blurb existed don't have it.
+  // stakes/hook/pitch are undefined until the pregame preview is actually
+  // generated - no longer on first sight, but at/after 5am local time at the
+  // venue (gamesService.ts). Also optional for the old reason: cache files
+  // written before the pitch blurb existed don't have it.
+  stakes?: number;
+  hook?: string;
   pitch?: string;
   finalRubric?: {
     finalMargin: number;

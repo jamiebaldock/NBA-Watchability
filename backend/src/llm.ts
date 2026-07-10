@@ -73,6 +73,10 @@ export interface MatchupContext {
   awayRecord?: string;
   homeRecord?: string;
   notes?: string; // e.g. "Both teams fighting for the final play-in spot"
+  // Current injury/roster notes pulled from ESPN at generation time (gamesService.ts),
+  // e.g. "Lakers: LeBron James (Out: rest)". Lets the preview reflect who's actually
+  // available instead of just static team names/records.
+  injuryContext?: string;
 }
 
 /** Fallback used when ANTHROPIC_API_KEY isn't set, so the rest of the backend is testable without a key. */
@@ -101,13 +105,17 @@ export async function generateHookAndStakes(ctx: MatchupContext): Promise<Matchu
             `NBA matchup: ${ctx.away}${ctx.awayRecord ? ` (${ctx.awayRecord})` : ""} at ` +
             `${ctx.home}${ctx.homeRecord ? ` (${ctx.homeRecord})` : ""}.` +
             (ctx.notes ? ` Context: ${ctx.notes}.` : "") +
+            (ctx.injuryContext ? ` Current injury/roster notes: ${ctx.injuryContext}.` : "") +
             `\n\nWrite a one-line, spoiler-free "hook" sentence that sells the matchup/storylines ` +
             `(rivalry, form, stakes) — like a pre-game preview blurb. This same sentence may be shown ` +
             `whether the game is upcoming, in progress, or already finished, so it must never predict, ` +
             `state, or imply anything about the outcome. Also give a 0-10 stakes score for how much this ` +
             `game matters (playoff race, rivalry, seeding implications). Finally, write a short 2-3 ` +
             `sentence "pitch" blurb expanding on the same spoiler-free premise — more color and context ` +
-            `than the one-line hook, still never revealing the result.`,
+            `than the one-line hook, still never revealing the result. If injury/roster notes were given ` +
+            `and a notable player is out or questionable, you may naturally mention that in the hook and/or ` +
+            `pitch (it's current pregame context, not a spoiler) — but never let it, or anything else, ` +
+            `predict or imply how the game turns out.`,
         },
       ],
     });

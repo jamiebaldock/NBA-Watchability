@@ -106,10 +106,15 @@ fun GameCard(
                     }
                 }
 
-                PitchSection(game = game, modifier = Modifier.padding(top = 10.dp))
+                // Once the game is final, the pregame preview area is fully
+                // replaced by the end-game breakdown - not shown alongside it.
+                if (game.status != GameStatus.FINAL) {
+                    PitchSection(game = game, modifier = Modifier.padding(top = 10.dp))
+                }
 
                 if (game.hasBreakdown) {
-                    FullBreakdownSection(game = game, modifier = Modifier.padding(top = 12.dp))
+                    val breakdownTopPadding = if (game.status == GameStatus.FINAL) 10.dp else 12.dp
+                    FullBreakdownSection(game = game, modifier = Modifier.padding(top = breakdownTopPadding))
                 }
             }
         }
