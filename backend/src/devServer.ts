@@ -1,8 +1,13 @@
+import compression from "compression";
 import express from "express";
 import { BadRequestError, getSchedule } from "./httpHandler";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
+
+// Free bandwidth win: gzips every response - JSON compresses very well, so
+// this cuts egress substantially with zero feature/behavior change.
+app.use(compression());
 
 app.get("/schedule", async (req, res) => {
   try {

@@ -70,17 +70,28 @@ class GameListViewModel : ViewModel() {
     }
 
     /**
-     * Pull-to-refresh: re-fetches the same window in place (live games are
-     * never cached stale server-side, so this alone is enough to pick up
-     * score/period/clock updates). Leaves the current view untouched on
-     * failure rather than replacing it with an error screen.
+     * Pull-to-refresh: re-fetches only the currently-viewed day (plus a small
+     * buffer so the cross-timezone rebucketing stays correct), not the whole
+     * +/-9 day window - there's no reason a refresh of "today" should also
+     * re-hit the backend for the other 18 days nobody's looking at. Live
+     * games are never cached stale server-side, so this alone is enough to
+     * pick up score/period/clock updates for the visible day. Leaves the
+     * current view untouched on failure rather than replacing it with an
+     * error screen.
      */
     fun refresh() {
         if (isRefreshing) return
+        val loadedState = uiState as? ScheduleUiState.Loaded ?: return
+        val targetDate = loadedState.days.getOrNull(selectedDayIndex)?.date ?: return
+
         isRefreshing = true
         viewModelScope.launch {
             try {
-                uiState = ScheduleUiState.Loaded(fetchSchedule())
+                val refreshedGames = fetchGamesForLocalDate(targetDate)
+                val updatedDays = loadedState.days.map { day ->
+                    if (day.date == targetDate) day.copy(games = refreshedGames) else day
+                }
+                uiState = ScheduleUiState.Loaded(updatedDays)
             } catch (e: Exception) {
                 // Swallow it: keep showing whatever was already loaded, the
                 // spinner stopping is signal enough that it didn't land.
@@ -97,6 +108,17 @@ class GameListViewModel : ViewModel() {
             end = today.plusDays(DISPLAY_RANGE_DAYS + QUERY_BUFFER_DAYS)
         )
         return rebucketByLocalDate(fetched, today)
+    }
+
+    private suspend fun fetchGamesForLocalDate(date: LocalDate): List<Game> {
+        val fetched = NetworkGameRepository.schedule(
+            baseUrl = BACKEND_BASE_URL,
+            start = date.minusDays(QUERY_BUFFER_DAYS),
+            end = date.plusDays(QUERY_BUFFER_DAYS)
+        )
+        return fetched.flatMap { it.games }
+            .filter { localDateOf(it) == date }
+            .sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
     }
 
     fun selectDay(index: Int) {
