@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,7 +70,9 @@ fun DayTabsScreen(
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
     sortBestFirst: Boolean,
-    onToggleSort: () -> Unit
+    onToggleSort: () -> Unit,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
 
@@ -112,15 +115,21 @@ fun DayTabsScreen(
                 onDaySelected = onDaySelected
             )
 
-            HorizontalPager(
-                state = pagerState,
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = onRefresh,
                 modifier = Modifier.fillMaxSize()
-            ) { page ->
-                DayGamesList(
-                    games = days[page].games,
-                    sortBestFirst = sortBestFirst,
-                    showNumericScore = showNumericScore
-                )
+            ) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
+                    DayGamesList(
+                        games = days[page].games,
+                        sortBestFirst = sortBestFirst,
+                        showNumericScore = showNumericScore
+                    )
+                }
             }
         }
     }

@@ -44,7 +44,9 @@ class MainActivity : ComponentActivity() {
                         showNumericScore = viewModel.showNumericScore,
                         onToggleNumericScore = viewModel::toggleNumericScore,
                         sortBestFirst = viewModel.sortBestFirst,
-                        onToggleSort = viewModel::toggleSortBestFirst
+                        onToggleSort = viewModel::toggleSortBestFirst,
+                        isRefreshing = viewModel.isRefreshing,
+                        onRefresh = viewModel::refresh
                     )
                 }
             }

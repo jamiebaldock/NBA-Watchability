@@ -37,6 +37,12 @@ class GameListViewModel : ViewModel() {
     var uiState by mutableStateOf<ScheduleUiState>(ScheduleUiState.Loading)
         private set
 
+    // Pull-to-refresh spinner for re-fetching on top of already-loaded data.
+    // Kept separate from uiState so a refresh failure doesn't blow away what's
+    // already on screen - it just stops spinning and leaves the old data.
+    var isRefreshing by mutableStateOf(false)
+        private set
+
     var selectedDayIndex by mutableStateOf(0)
         private set
 
@@ -54,18 +60,43 @@ class GameListViewModel : ViewModel() {
         uiState = ScheduleUiState.Loading
         viewModelScope.launch {
             uiState = try {
-                val fetched = NetworkGameRepository.schedule(
-                    baseUrl = BACKEND_BASE_URL,
-                    start = today.minusDays(DISPLAY_RANGE_DAYS + QUERY_BUFFER_DAYS),
-                    end = today.plusDays(DISPLAY_RANGE_DAYS + QUERY_BUFFER_DAYS)
-                )
-                val days = rebucketByLocalDate(fetched, today)
+                val days = fetchSchedule()
                 selectedDayIndex = days.indexOfFirst { it.date == today }.coerceAtLeast(0)
                 ScheduleUiState.Loaded(days)
             } catch (e: Exception) {
                 ScheduleUiState.Error(e.message ?: "Couldn't reach the backend")
             }
         }
+    }
+
+    /**
+     * Pull-to-refresh: re-fetches the same window in place (live games are
+     * never cached stale server-side, so this alone is enough to pick up
+     * score/period/clock updates). Leaves the current view untouched on
+     * failure rather than replacing it with an error screen.
+     */
+    fun refresh() {
+        if (isRefreshing) return
+        isRefreshing = true
+        viewModelScope.launch {
+            try {
+                uiState = ScheduleUiState.Loaded(fetchSchedule())
+            } catch (e: Exception) {
+                // Swallow it: keep showing whatever was already loaded, the
+                // spinner stopping is signal enough that it didn't land.
+            } finally {
+                isRefreshing = false
+            }
+        }
+    }
+
+    private suspend fun fetchSchedule(): List<DayGames> {
+        val fetched = NetworkGameRepository.schedule(
+            baseUrl = BACKEND_BASE_URL,
+            start = today.minusDays(DISPLAY_RANGE_DAYS + QUERY_BUFFER_DAYS),
+            end = today.plusDays(DISPLAY_RANGE_DAYS + QUERY_BUFFER_DAYS)
+        )
+        return rebucketByLocalDate(fetched, today)
     }
 
     fun selectDay(index: Int) {
