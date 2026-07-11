@@ -86,31 +86,18 @@ export async function searchHighlightsVideo(away: string, home: string, tipoffUt
     publishedBefore: publishedBefore.toISOString(),
   });
 
-  // TEMPORARY: verbose diagnostic logging while tracking down why no games
-  // are matching in production. Remove once confirmed working.
-  console.log(
-    `[YT_SEARCH] query="${query}" channelId=${NBA_YOUTUBE_CHANNEL_ID} ` +
-      `window=${publishedAfter.toISOString()}..${publishedBefore.toISOString()}`
-  );
-
   let data: YoutubeSearchResponse;
   try {
     const res = await fetch(`${YOUTUBE_SEARCH_URL}?${params.toString()}`);
-    const bodyText = await res.text();
-    console.log(`[YT_SEARCH] HTTP ${res.status} for "${query}" - body: ${bodyText.slice(0, 500)}`);
-
     if (!res.ok) {
       console.error(`YouTube search failed: ${res.status} ${res.statusText}`);
       return null;
     }
-    data = JSON.parse(bodyText) as YoutubeSearchResponse;
+    data = (await res.json()) as YoutubeSearchResponse;
   } catch (err) {
     console.error("YouTube search request failed", err);
     return null;
   }
-
-  const items = data.items ?? [];
-  console.log(`[YT_SEARCH] "${query}" returned ${items.length} item(s): ${items.map((i) => i.snippet?.title).join(" | ")}`);
 
   for (const item of data.items ?? []) {
     const videoId = item.id?.videoId;
@@ -123,13 +110,8 @@ export async function searchHighlightsVideo(away: string, home: string, tipoffUt
       upperTitle.includes(awayNickname.toUpperCase()) &&
       upperTitle.includes(homeNickname.toUpperCase());
 
-    console.log(
-      `[YT_SEARCH] candidate "${title}" vs nicknames away="${awayNickname}" home="${homeNickname}" -> match=${isMatch}`
-    );
-
     if (isMatch) return { videoId, title };
   }
 
-  console.log(`[YT_SEARCH] no match found for "${query}"`);
   return null;
 }
