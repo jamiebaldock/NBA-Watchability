@@ -15,6 +15,11 @@ mobile/app/*.iml
 mobile/captures/
 mobile/.cxx/
 
+# Release signing - the upload keystore is the app's signing identity;
+# never belongs in version control.
+mobile/keystore/
+mobile/keystore.properties
+
 # OS
 .DS_Store
 Thumbs.db
