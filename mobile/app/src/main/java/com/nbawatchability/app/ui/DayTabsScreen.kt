@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -48,6 +49,7 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.nbawatchability.app.data.DayGames
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
@@ -86,7 +88,13 @@ private fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             LeagueGroup.entries.forEach { league ->
                 DropdownMenuItem(
-                    text = { Text(league.displayName) },
+                    text = {
+                        AsyncImage(
+                            model = league.logoUrl,
+                            contentDescription = league.displayName,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    },
                     onClick = {
                         onLeagueSelected(league)
                         expanded = false
