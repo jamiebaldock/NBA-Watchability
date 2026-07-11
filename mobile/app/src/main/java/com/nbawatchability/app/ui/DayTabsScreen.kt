@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -89,11 +91,15 @@ private fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (
             LeagueGroup.entries.forEach { league ->
                 DropdownMenuItem(
                     text = {
-                        AsyncImage(
-                            model = league.logoUrl,
-                            contentDescription = league.displayName,
-                            modifier = Modifier.size(28.dp)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AsyncImage(
+                                model = league.logoUrl,
+                                contentDescription = null,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(league.displayName)
+                        }
                     },
                     onClick = {
                         onLeagueSelected(league)
