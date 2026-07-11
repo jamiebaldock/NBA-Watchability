@@ -135,7 +135,8 @@ fun GameCard(
  * Spoiler-free hook/pitch text, always visible — unlike the full breakdown,
  * there's nothing here to hide: it's written to never reveal the score,
  * winner, or how the game played out, so blurring it added friction without
- * protecting anything.
+ * protecting anything. Hook and pitch are two model outputs but read as one
+ * continuous preview, so they're collapsed together as a single 2-line block.
  */
 @Composable
 private fun PitchSection(game: Game, modifier: Modifier = Modifier) {
@@ -143,14 +144,14 @@ private fun PitchSection(game: Game, modifier: Modifier = Modifier) {
     // absent when blank or identical to the hook (the no-LLM-key fallback
     // emits the same plain sentence for both).
     val pitch = game.pitch?.takeIf { it.isNotBlank() && it != game.hook }
+    val previewText = if (pitch != null) "${game.hook} $pitch" else game.hook
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(text = game.hook, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-        pitch?.let {
-            Spacer(modifier = Modifier.height(6.dp))
-            ExpandableText(text = it, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
+    ExpandableText(
+        text = previewText,
+        color = TextSecondary,
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = modifier.fillMaxWidth()
+    )
 }
 
 /**
