@@ -114,6 +114,7 @@ private fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (
 private fun dayTabLabel(date: LocalDate, today: LocalDate): String = when (date) {
     today -> "Today"
     today.minusDays(1) -> "Yesterday"
+    today.plusDays(1) -> "Tomorrow"
     else -> "${date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${date.format(dayTabFormatter)}"
 }
 
