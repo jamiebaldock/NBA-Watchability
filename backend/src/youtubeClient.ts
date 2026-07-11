@@ -66,6 +66,11 @@ export async function searchHighlightsVideo(away: string, home: string, tipoffUt
 
   const params = new URLSearchParams({
     key: apiKey,
+    // Required by search.list - without it, results omit the snippet
+    // object entirely (no title, no publish date), which is why every
+    // candidate's title was silently coming through as undefined and
+    // failing the match check no matter what the results actually were.
+    part: "snippet",
     channelId: NBA_YOUTUBE_CHANNEL_ID,
     q: query,
     type: "video",
