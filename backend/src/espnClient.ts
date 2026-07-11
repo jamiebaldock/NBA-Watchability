@@ -116,3 +116,96 @@ export function toEspnDate(date: Date): string {
   const d = String(date.getUTCDate()).padStart(2, "0");
   return `${y}${m}${d}`;
 }
+
+// Standings, stats leaders, and news are only meaningful for the two real
+// leagues, never the Summer League tournament variants.
+export type ContentLeague = "nba" | "wnba";
+
+export interface EspnStandingsEntry {
+  team: {
+    id: string;
+    shortDisplayName: string;
+    abbreviation: string;
+    logos?: Array<{ href: string }>;
+  };
+  stats: Array<{ name: string; displayValue: string }>;
+}
+
+export interface EspnStandingsGroup {
+  name: string;
+  isConference?: boolean;
+  standings?: {
+    seasonDisplayName: string;
+    entries: EspnStandingsEntry[];
+  };
+  children?: EspnStandingsGroup[];
+}
+
+interface EspnStandingsRoot {
+  children: EspnStandingsGroup[];
+}
+
+/** Season is ESPN's "ends in" convention (2025-26 season = 2026). Returns null if that season has no standings data yet (not started). */
+export async function fetchStandings(league: ContentLeague, seasonYear: number): Promise<EspnStandingsRoot | null> {
+  const data = await getJson<EspnStandingsRoot>(
+    `https://site.api.espn.com/apis/v2/sports/basketball/${league}/standings?season=${seasonYear}`
+  );
+  const hasEntries = data.children?.some((group) => (group.standings?.entries?.length ?? 0) > 0);
+  return hasEntries ? data : null;
+}
+
+export interface EspnLeaderEntry {
+  displayValue: string;
+  athlete: { $ref: string };
+  team: { $ref: string };
+}
+
+export interface EspnLeaderCategory {
+  name: string;
+  displayName: string;
+  abbreviation: string;
+  leaders: EspnLeaderEntry[];
+}
+
+interface EspnLeadersRoot {
+  categories: EspnLeaderCategory[];
+}
+
+/** Same season convention/fallback contract as fetchStandings. */
+export async function fetchLeaders(league: ContentLeague, seasonYear: number): Promise<EspnLeadersRoot | null> {
+  try {
+    return await getJson<EspnLeadersRoot>(
+      `https://sports.core.api.espn.com/v2/sports/basketball/leagues/${league}/seasons/${seasonYear}/types/2/leaders`
+    );
+  } catch {
+    return null;
+  }
+}
+
+/** Resolves a leader's athlete $ref to a display name (small ~7KB fetch each, cached daily by the caller). */
+export async function fetchAthleteName(ref: string): Promise<string> {
+  const data = await getJson<{ displayName: string }>(ref);
+  return data.displayName;
+}
+
+/** Resolves a leader's team $ref to its abbreviation/logo (small ~9KB fetch each, cached daily by the caller). */
+export async function fetchTeamInfo(ref: string): Promise<{ abbreviation: string; logo?: string }> {
+  const data = await getJson<{ abbreviation: string; logos?: Array<{ href: string }> }>(ref);
+  return { abbreviation: data.abbreviation, logo: data.logos?.[0]?.href };
+}
+
+export interface EspnNewsArticle {
+  id: number;
+  headline: string;
+  description?: string;
+  published: string;
+  images?: Array<{ url: string }>;
+  links?: { web?: { href?: string } };
+}
+
+export async function fetchNews(league: ContentLeague, limit: number): Promise<EspnNewsArticle[]> {
+  const data = await getJson<{ articles?: EspnNewsArticle[] }>(
+    `${basePath(league)}/news?limit=${limit}`
+  );
+  return data.articles ?? [];
+}

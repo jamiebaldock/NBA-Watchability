@@ -1,6 +1,9 @@
 import { dateStringsBetween } from "./dateRange";
 import { getGamesForDate } from "./gamesService";
-import { GameJson, LeagueGroup } from "./types";
+import { getNews } from "./newsService";
+import { getStandings } from "./standingsService";
+import { getStats } from "./statsService";
+import { GameJson, LeagueGroup, NewsResponseJson, StandingsResponseJson, StatsResponseJson } from "./types";
 
 export interface DaySchedule {
   date: string;
@@ -39,4 +42,16 @@ export async function getSchedule(start: string, end: string, leagueGroupRaw = "
     schedule.push({ date, games: await getGamesForDate(date, leagueGroup) });
   }
   return schedule;
+}
+
+export async function getStandingsForLeagueGroup(leagueGroupRaw = "nba"): Promise<StandingsResponseJson> {
+  return getStandings(parseLeagueGroup(leagueGroupRaw));
+}
+
+export async function getStatsForLeagueGroup(leagueGroupRaw = "nba"): Promise<StatsResponseJson> {
+  return getStats(parseLeagueGroup(leagueGroupRaw));
+}
+
+export async function getNewsForLeagueGroup(leagueGroupRaw = "nba"): Promise<NewsResponseJson> {
+  return getNews(parseLeagueGroup(leagueGroupRaw));
 }

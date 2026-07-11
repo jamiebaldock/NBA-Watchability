@@ -50,9 +50,10 @@ private enum class BottomNavTab(val label: String, val icon: ImageVector) {
 }
 
 /**
- * App-wide root: a persistent bottom navigation bar with 5 tabs. "Games"
- * hosts the existing schedule/day-tabs experience; the other four are
- * placeholder screens until those features get built out.
+ * App-wide root: a persistent bottom navigation bar with 5 tabs. Games,
+ * Standings, Stats, and News all react to the same global league selection
+ * (Settings' "Show WNBA" toggle + the title dropdown); "About" remains a
+ * placeholder.
  */
 @Composable
 fun AppRoot() {
@@ -107,9 +108,9 @@ fun AppRoot() {
                     onLeagueSelected = appSettingsViewModel::setSelectedLeague,
                     effectiveLeagueGroup = appSettingsViewModel.settings.effectiveLeagueGroup
                 )
-                BottomNavTab.STANDINGS -> PlaceholderScreen("Standings — coming soon.")
-                BottomNavTab.STATS -> PlaceholderScreen("Stats — coming soon.")
-                BottomNavTab.NEWS -> PlaceholderScreen("News — coming soon.")
+                BottomNavTab.STANDINGS -> StandingsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
+                BottomNavTab.STATS -> StatsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
+                BottomNavTab.NEWS -> NewsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
                 BottomNavTab.ABOUT -> PlaceholderScreen("About — coming soon.")
             }
         }
@@ -153,6 +154,27 @@ private fun GamesTab(
             onLeagueSelected = onLeagueSelected
         )
     }
+}
+
+@Composable
+private fun StandingsTab(leagueGroup: LeagueGroup) {
+    val viewModel: StandingsViewModel = viewModel()
+    LaunchedEffect(leagueGroup) { viewModel.load(leagueGroup) }
+    StandingsScreen(uiState = viewModel.uiState, onRetry = viewModel::retry)
+}
+
+@Composable
+private fun StatsTab(leagueGroup: LeagueGroup) {
+    val viewModel: StatsViewModel = viewModel()
+    LaunchedEffect(leagueGroup) { viewModel.load(leagueGroup) }
+    StatsScreen(uiState = viewModel.uiState, onRetry = viewModel::retry)
+}
+
+@Composable
+private fun NewsTab(leagueGroup: LeagueGroup) {
+    val viewModel: NewsViewModel = viewModel()
+    LaunchedEffect(leagueGroup) { viewModel.load(leagueGroup) }
+    NewsScreen(uiState = viewModel.uiState, onRetry = viewModel::retry)
 }
 
 @Composable

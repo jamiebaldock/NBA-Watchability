@@ -37,6 +37,60 @@ export interface GameJson {
   score_visible: boolean;
 }
 
+export interface StandingsTeamJson {
+  id: string;
+  n: string;
+  ab: string;
+  lg?: string;
+  w: number;
+  l: number;
+  pct: string;
+  gb: string;
+  strk?: string;
+}
+
+export interface StandingsGroupJson {
+  name: string;
+  teams: StandingsTeamJson[];
+}
+
+export interface StandingsResponseJson {
+  season: string;
+  groups: StandingsGroupJson[];
+}
+
+export interface StatLeaderJson {
+  name: string;
+  team: string;
+  teamLogo?: string;
+  value: string;
+}
+
+export interface StatCategoryJson {
+  key: string;
+  label: string;
+  abbr: string;
+  leaders: StatLeaderJson[];
+}
+
+export interface StatsResponseJson {
+  season: string;
+  categories: StatCategoryJson[];
+}
+
+export interface NewsArticleJson {
+  id: number;
+  headline: string;
+  description?: string;
+  image?: string;
+  link?: string;
+  published: string;
+}
+
+export interface NewsResponseJson {
+  articles: NewsArticleJson[];
+}
+
 // Raw rubric inputs derived from play-by-play + box score, before the LLM
 // fields (hook/stakes) and before the score_visible gating rule are applied.
 export interface RubricInputs {
