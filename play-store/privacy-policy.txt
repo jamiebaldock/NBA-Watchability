@@ -1,0 +1,48 @@
+Privacy Policy for NBA Watchability
+
+Last updated: July 11, 2026
+
+NBA Watchability ("the app") does not collect, store, or share any
+personal information about you.
+
+WHAT THE APP DOES NOT DO
+- No account creation, sign-in, or sign-up of any kind.
+- No collection of your name, email address, location, contacts, photos,
+  or any other personal information.
+- No advertising, and no advertising or analytics SDKs of any kind.
+- No cookies or tracking technologies.
+- No data is sold or shared with third parties for marketing purposes.
+
+WHAT'S STORED ON YOUR DEVICE
+The app saves a small set of preferences locally on your device only,
+using Android's standard app-preferences storage:
+- Your chosen watchability-rating weights (if you've customized them in
+  Settings).
+- Whether you've enabled WNBA game data, and which league you last
+  viewed.
+
+None of this ever leaves your device. Uninstalling the app deletes it.
+
+NETWORK REQUESTS
+To show you game schedules, scores, and previews, the app makes standard
+internet requests to:
+- The app's own backend server, to fetch NBA/WNBA/Summer League game
+  data and pre-written game previews.
+- ESPN's public content servers, to load team logo images.
+
+As with any internet request, your device's IP address is inherently
+visible to these servers as part of normal network communication - the
+same as visiting any website. Neither server receives your name, email,
+or any other identifying information, and the app itself does not log,
+store, or associate requests with any personal profile.
+
+CHILDREN'S PRIVACY
+Because the app collects no personal information from anyone, it does
+not knowingly collect personal information from children.
+
+CHANGES TO THIS POLICY
+If this policy ever changes, the update will be posted here with a
+revised "Last updated" date.
+
+CONTACT
+Questions about this policy can be sent to: help@tech3d.com.au
