@@ -35,6 +35,7 @@ export interface GameJson {
   pitch?: string;
   score?: number;
   score_visible: boolean;
+  yt?: string;
 }
 
 export interface StandingsTeamJson {

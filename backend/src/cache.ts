@@ -26,6 +26,13 @@ export interface CachedGame {
   stakes?: number;
   hook?: string;
   pitch?: string;
+  // Matched YouTube video ID for the official full-game-highlights video,
+  // searched once (ever) after the game goes final. ytChecked distinguishes
+  // "searched, nothing matched" from "not searched yet" so a miss doesn't
+  // get retried on every request - both are optional for the old reason:
+  // cache files written before this feature existed have neither.
+  yt?: string;
+  ytChecked?: boolean;
   finalRubric?: {
     finalMargin: number;
     largestDeficitOvercome: number;

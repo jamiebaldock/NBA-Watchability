@@ -21,8 +21,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,6 +55,7 @@ import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierInstantClassicAccent
+import com.nbawatchability.app.ui.theme.TierWorthYourTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -64,7 +68,8 @@ fun GameCard(
     game: Game,
     showNumericScore: Boolean,
     weights: RubricWeights,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onWatchHighlights: (String) -> Unit = {}
 ) {
     val tier = game.effectiveTier(weights)
 
@@ -126,6 +131,16 @@ fun GameCard(
                     val breakdownTopPadding = if (game.status == GameStatus.FINAL) 10.dp else 12.dp
                     FullBreakdownSection(game = game, weights = weights, modifier = Modifier.padding(top = breakdownTopPadding))
                 }
+
+                // Not spoiler-sensitive like the breakdown above - the video
+                // itself already shows the result, so this is a plain,
+                // always-visible affordance rather than something blurred.
+                if (game.status == GameStatus.FINAL && game.youtubeVideoId != null) {
+                    HighlightsRow(
+                        onClick = { onWatchHighlights(game.youtubeVideoId) },
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+                }
             }
         }
     }
@@ -178,6 +193,28 @@ private fun ExpandableText(text: String, color: Color, style: TextStyle, modifie
             if (isTruncated || expanded) Modifier.clickable { expanded = !expanded } else Modifier
         )
     )
+}
+
+@Composable
+private fun HighlightsRow(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.clickable(onClick = onClick)
+    ) {
+        Icon(
+            imageVector = Icons.Default.PlayCircleFilled,
+            contentDescription = null,
+            tint = TierWorthYourTime,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "Watch highlights",
+            color = TierWorthYourTime,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
 }
 
 private val LOGO_SIZE = 20.dp

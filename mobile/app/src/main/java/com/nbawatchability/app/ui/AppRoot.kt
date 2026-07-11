@@ -59,10 +59,12 @@ private enum class BottomNavTab(val label: String, val icon: ImageVector) {
 fun AppRoot() {
     var selectedTab by rememberSaveable { mutableStateOf(BottomNavTab.GAMES) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var highlightsVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     val settingsViewModel: RubricSettingsViewModel = viewModel()
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
 
     BackHandler(enabled = showSettings) { showSettings = false }
+    BackHandler(enabled = highlightsVideoId != null) { highlightsVideoId = null }
 
     if (showSettings) {
         SettingsScreen(
@@ -73,6 +75,11 @@ fun AppRoot() {
             onShowWnbaChange = appSettingsViewModel::setShowWnba,
             onBack = { showSettings = false }
         )
+        return
+    }
+
+    highlightsVideoId?.let { videoId ->
+        HighlightsPlayerScreen(videoId = videoId, onBack = { highlightsVideoId = null })
         return
     }
 
@@ -106,7 +113,8 @@ fun AppRoot() {
                     showWnba = appSettingsViewModel.settings.showWnba,
                     selectedLeague = appSettingsViewModel.settings.selectedLeague,
                     onLeagueSelected = appSettingsViewModel::setSelectedLeague,
-                    effectiveLeagueGroup = appSettingsViewModel.settings.effectiveLeagueGroup
+                    effectiveLeagueGroup = appSettingsViewModel.settings.effectiveLeagueGroup,
+                    onWatchHighlights = { videoId -> highlightsVideoId = videoId }
                 )
                 BottomNavTab.STANDINGS -> StandingsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
                 BottomNavTab.STATS -> StatsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
@@ -124,7 +132,8 @@ private fun GamesTab(
     showWnba: Boolean,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
-    effectiveLeagueGroup: LeagueGroup
+    effectiveLeagueGroup: LeagueGroup,
+    onWatchHighlights: (String) -> Unit
 ) {
     val viewModel: GameListViewModel = viewModel()
 
@@ -151,7 +160,8 @@ private fun GamesTab(
             onSettingsClick = onSettingsClick,
             showWnba = showWnba,
             selectedLeague = selectedLeague,
-            onLeagueSelected = onLeagueSelected
+            onLeagueSelected = onLeagueSelected,
+            onWatchHighlights = onWatchHighlights
         )
     }
 }

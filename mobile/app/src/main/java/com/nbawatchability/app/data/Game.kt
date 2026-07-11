@@ -59,7 +59,8 @@ data class Game(
     @SerialName("hook") val hook: String,
     @SerialName("pitch") val pitch: String? = null,
     @SerialName("score") val score: Int? = null,
-    @SerialName("score_visible") val scoreVisible: Boolean
+    @SerialName("score_visible") val scoreVisible: Boolean,
+    @SerialName("yt") val youtubeVideoId: String? = null
 ) {
     val id: String get() = "$away@$home@$tipoffUtc"
 
