@@ -1,4 +1,4 @@
-import { EspnBoxscoreTeamPlayers, EspnEvent, EspnPlay, EspnSummary } from "./espnClient";
+import { EspnBoxscoreTeamPlayers, EspnEvent, EspnPlay, EspnSummary, League } from "./espnClient";
 import { GameStatus, RubricInputs, StarPerformance } from "./types";
 
 /** ESPN clock is "mm:ss" above 1 minute, plain seconds ("4.0", "27.1") under it. */
@@ -123,7 +123,21 @@ export function overtimePeriodsFrom(plays: EspnPlay[]): number {
 
 const STAT_CATEGORIES = ["PTS", "REB", "AST", "STL", "BLK"] as const;
 
-export function classifyStarPerformance(playersBoxscore: EspnBoxscoreTeamPlayers[] | undefined): StarPerformance {
+// Point thresholds are calibrated per league, not universal: a 40-point game
+// is unremarkable in the NBA but has happened only ~30 times in WNBA history
+// (28 seasons) - using NBA thresholds on WNBA data would make "historic"/
+// "great" nearly unreachable. Triple-double thresholds are left as-is (a
+// 10-10-10 line is the same fixed statistical achievement in either league).
+function starPointThresholds(league: League): { historic: number; great: number; good: number } {
+  return league === "wnba"
+    ? { historic: 40, great: 30, good: 25 }
+    : { historic: 50, great: 40, good: 35 };
+}
+
+export function classifyStarPerformance(
+  playersBoxscore: EspnBoxscoreTeamPlayers[] | undefined,
+  league: League
+): StarPerformance {
   if (!playersBoxscore || playersBoxscore.length === 0) return null;
 
   let maxPoints = 0;
@@ -145,9 +159,10 @@ export function classifyStarPerformance(playersBoxscore: EspnBoxscoreTeamPlayers
     }
   }
 
-  if (maxPoints >= 50) return "historic";
-  if (maxPoints >= 40 || anyTripleDouble) return "great";
-  if (maxPoints >= 35 || anyNearTripleDouble) return "good";
+  const { historic, great, good } = starPointThresholds(league);
+  if (maxPoints >= historic) return "historic";
+  if (maxPoints >= great || anyTripleDouble) return "great";
+  if (maxPoints >= good || anyNearTripleDouble) return "good";
   return null;
 }
 
@@ -159,7 +174,7 @@ export interface MappedGame {
   rubric: RubricInputs;
 }
 
-export function mapEventToGame(event: EspnEvent, summary?: EspnSummary): MappedGame {
+export function mapEventToGame(event: EspnEvent, league: League, summary?: EspnSummary): MappedGame {
   const competition = event.competitions[0];
   const status = mapEspnState(competition.status.type.state);
   const away = competition.competitors.find((c) => c.homeAway === "away")!;
@@ -198,7 +213,7 @@ export function mapEventToGame(event: EspnEvent, summary?: EspnSummary): MappedG
       leadChangeInFinalMin: leadChangeInFinalMin(plays),
       decidedOnFinalPossession: decidedOnFinalPossession(plays),
       buzzerBeater: isBuzzerBeater(plays),
-      starPerformance: classifyStarPerformance(summary?.boxscore?.players),
+      starPerformance: classifyStarPerformance(summary?.boxscore?.players, league),
     };
   }
 

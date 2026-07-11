@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.nbawatchability.app.data.BACKEND_BASE_URL
 import com.nbawatchability.app.data.DayGames
 import com.nbawatchability.app.data.Game
+import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.NetworkGameRepository
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -52,11 +53,14 @@ class GameListViewModel : ViewModel() {
     var sortBestFirst by mutableStateOf(false)
         private set
 
-    init {
-        load()
-    }
+    // Which league's slate is currently loaded - set by load(), reused by
+    // refresh()/fetchGamesForLocalDate() so callers don't need to keep
+    // threading it through on every pull-to-refresh.
+    private var currentLeagueGroup: LeagueGroup = LeagueGroup.NBA
 
-    fun load() {
+    /** Full reload for [leagueGroup] - called on first composition and again whenever the league selection changes. */
+    fun load(leagueGroup: LeagueGroup) {
+        currentLeagueGroup = leagueGroup
         uiState = ScheduleUiState.Loading
         viewModelScope.launch {
             uiState = try {
@@ -105,7 +109,8 @@ class GameListViewModel : ViewModel() {
         val fetched = NetworkGameRepository.schedule(
             baseUrl = BACKEND_BASE_URL,
             start = today.minusDays(DISPLAY_RANGE_DAYS + QUERY_BUFFER_DAYS),
-            end = today.plusDays(DISPLAY_RANGE_DAYS + QUERY_BUFFER_DAYS)
+            end = today.plusDays(DISPLAY_RANGE_DAYS + QUERY_BUFFER_DAYS),
+            leagueGroup = currentLeagueGroup
         )
         return rebucketByLocalDate(fetched, today)
     }
@@ -114,7 +119,8 @@ class GameListViewModel : ViewModel() {
         val fetched = NetworkGameRepository.schedule(
             baseUrl = BACKEND_BASE_URL,
             start = date.minusDays(QUERY_BUFFER_DAYS),
-            end = date.plusDays(QUERY_BUFFER_DAYS)
+            end = date.plusDays(QUERY_BUFFER_DAYS),
+            leagueGroup = currentLeagueGroup
         )
         return fetched.flatMap { it.games }
             .filter { localDateOf(it) == date }

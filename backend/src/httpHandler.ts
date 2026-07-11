@@ -1,6 +1,6 @@
 import { dateStringsBetween } from "./dateRange";
 import { getGamesForDate } from "./gamesService";
-import { GameJson } from "./types";
+import { GameJson, LeagueGroup } from "./types";
 
 export interface DaySchedule {
   date: string;
@@ -17,10 +17,17 @@ const MAX_RANGE_DAYS = 21;
 
 export class BadRequestError extends Error {}
 
-export async function getSchedule(start: string, end: string): Promise<DaySchedule[]> {
+function parseLeagueGroup(raw: string): LeagueGroup {
+  if (raw === "" || raw === "nba") return "nba";
+  if (raw === "wnba") return "wnba";
+  throw new BadRequestError('leagueGroup must be "nba" or "wnba"');
+}
+
+export async function getSchedule(start: string, end: string, leagueGroupRaw = "nba"): Promise<DaySchedule[]> {
   if (!DATE_RE.test(start) || !DATE_RE.test(end)) {
     throw new BadRequestError("start and end must be YYYY-MM-DD");
   }
+  const leagueGroup = parseLeagueGroup(leagueGroupRaw);
   const dates = dateStringsBetween(start, end);
   if (dates.length === 0) throw new BadRequestError("end must not be before start");
   if (dates.length > MAX_RANGE_DAYS) {
@@ -29,7 +36,7 @@ export async function getSchedule(start: string, end: string): Promise<DaySchedu
 
   const schedule: DaySchedule[] = [];
   for (const date of dates) {
-    schedule.push({ date, games: await getGamesForDate(date) });
+    schedule.push({ date, games: await getGamesForDate(date, leagueGroup) });
   }
   return schedule;
 }

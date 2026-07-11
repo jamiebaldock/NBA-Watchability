@@ -39,6 +39,10 @@ const CITY_TIMEZONES: Record<string, string> = {
   Toronto: "America/Toronto",
   Washington: "America/New_York",
   "Las Vegas": "America/Los_Angeles",
+  // WNBA-only venue cities (every other WNBA city is already covered above
+  // via its NBA counterpart's metro area).
+  Uncasville: "America/New_York", // Connecticut Sun - Mohegan Sun Arena
+  Seattle: "America/Los_Angeles", // Seattle Storm
 };
 
 // Fallback keyed by home team display name, for the rare case venue city data
@@ -74,6 +78,20 @@ const TEAM_TIMEZONES: Record<string, string> = {
   "Toronto Raptors": "America/Toronto",
   "Utah Jazz": "America/Denver",
   "Washington Wizards": "America/New_York",
+  // WNBA team-name fallback, for the rare case venue city data is missing.
+  "Atlanta Dream": "America/New_York",
+  "Chicago Sky": "America/Chicago",
+  "Connecticut Sun": "America/New_York",
+  "Dallas Wings": "America/Chicago",
+  "Golden State Valkyries": "America/Los_Angeles",
+  "Indiana Fever": "America/New_York",
+  "Las Vegas Aces": "America/Los_Angeles",
+  "Los Angeles Sparks": "America/Los_Angeles",
+  "Minnesota Lynx": "America/Chicago",
+  "New York Liberty": "America/New_York",
+  "Phoenix Mercury": "America/Phoenix",
+  "Seattle Storm": "America/Los_Angeles",
+  "Washington Mystics": "America/New_York",
 };
 
 const DEFAULT_TIME_ZONE = "America/New_York";

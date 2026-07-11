@@ -12,6 +12,7 @@ export const ALL_LEAGUES = [
   "nba-summer-las-vegas",
   "nba-summer-utah",
   "nba-summer-sacramento",
+  "wnba",
 ] as const;
 
 export type League = (typeof ALL_LEAGUES)[number];

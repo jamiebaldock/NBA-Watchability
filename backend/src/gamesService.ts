@@ -1,11 +1,21 @@
 import { CachedDay, loadDay, saveDay } from "./cache";
-import { ALL_LEAGUES, EspnEvent, League, fetchScoreboard, fetchSummary, toEspnDate } from "./espnClient";
+import { EspnEvent, League, fetchScoreboard, fetchSummary, toEspnDate } from "./espnClient";
 import { mapEspnState, mapEventToGame } from "./gameMapper";
 import { fetchTeamInjuries, injuryNotesToText } from "./injuries";
 import { generateHookAndStakes } from "./llm";
 import { computeWatchabilityScore } from "./rubric";
-import { GameJson } from "./types";
+import { GameJson, LeagueGroup } from "./types";
 import { hasLocalFiveAmPassed, venueTimeZone } from "./venueTimezone";
+
+// NBA and WNBA are mutually-exclusive slates the client picks between (settings
+// toggle + top-left dropdown) - never unioned together like the Summer League
+// variants are within the "nba" group. Cache entries are keyed by eventId
+// (globally unique across ESPN sports), so both groups safely share the same
+// per-date cache file with no risk of collision.
+const LEAGUE_GROUPS: Record<LeagueGroup, readonly League[]> = {
+  nba: ["nba", "nba-summer-las-vegas", "nba-summer-utah", "nba-summer-sacramento"],
+  wnba: ["wnba"],
+};
 
 function overallRecord(competitor: EspnEvent["competitions"][number]["competitors"][number]): string | undefined {
   return competitor.records?.find((r) => r.type === "total")?.summary;
@@ -17,9 +27,9 @@ interface LeagueEvent {
 }
 
 /** Each league is its own ESPN "sport", so a day's full slate is the union of separate per-league fetches. */
-async function fetchAllEvents(espnDate: string): Promise<LeagueEvent[]> {
+async function fetchAllEvents(espnDate: string, leagueGroup: LeagueGroup): Promise<LeagueEvent[]> {
   const perLeague = await Promise.all(
-    ALL_LEAGUES.map(async (league) => {
+    LEAGUE_GROUPS[leagueGroup].map(async (league) => {
       const events = await fetchScoreboard(espnDate, league);
       return events.map((event): LeagueEvent => ({ league, event }));
     })
@@ -69,8 +79,8 @@ async function ensurePregamePreview(day: CachedDay, league: League, event: EspnE
   if (!hasLocalFiveAmPassed(event.date, zone)) return; // not time yet
 
   const [awayInjuries, homeInjuries] = await Promise.all([
-    fetchTeamInjuries(away.team.id),
-    fetchTeamInjuries(home.team.id),
+    fetchTeamInjuries(away.team.id, league),
+    fetchTeamInjuries(home.team.id, league),
   ]);
   const injuryContext = [
     injuryNotesToText(away.team.displayName, awayInjuries),
@@ -84,10 +94,9 @@ async function ensurePregamePreview(day: CachedDay, league: League, event: EspnE
     home: home.team.displayName,
     awayRecord: overallRecord(away),
     homeRecord: overallRecord(home),
-    notes:
-      league !== "nba"
-        ? "NBA Summer League exhibition game — rookies/prospects, not regular-season standings, no playoff implications"
-        : undefined,
+    notes: league.startsWith("nba-summer")
+      ? "NBA Summer League exhibition game — rookies/prospects, not regular-season standings, no playoff implications"
+      : undefined,
     injuryContext: injuryContext || undefined,
   });
 
@@ -110,9 +119,9 @@ async function ensurePregamePreview(day: CachedDay, league: League, event: EspnE
  * appeared progressively from Q4 onward, which required re-fetching the full
  * play-by-play on every single poll for as long as the game stayed live).
  */
-export async function getGamesForDate(date: string): Promise<GameJson[]> {
+export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "nba"): Promise<GameJson[]> {
   const espnDate = toEspnDate(new Date(`${date}T12:00:00Z`));
-  const leagueEvents = await fetchAllEvents(espnDate);
+  const leagueEvents = await fetchAllEvents(espnDate, leagueGroup);
   const day = loadDay(date);
 
   const results: GameJson[] = [];
@@ -123,7 +132,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
     const cached = day.games[event.id];
     // Older cache entries predate Summer League support and have no stored league.
     const eventLeague: League = cached.league ?? league;
-    const lg: GameJson["lg"] = eventLeague === "nba" ? "nba" : "summer";
+    const lg: GameJson["lg"] = eventLeague === "nba" ? "nba" : eventLeague === "wnba" ? "wnba" : "summer";
     const status = mapEspnState(event.competitions[0].status.type.state);
     const hook = cached.hook ?? fallbackHook(cached);
     const stakes = cached.stakes ?? 0;
@@ -184,7 +193,7 @@ export async function getGamesForDate(date: string): Promise<GameJson[]> {
 
     if (!rubric) {
       const summary = await fetchSummary(event.id, eventLeague);
-      const mapped = mapEventToGame(event, summary);
+      const mapped = mapEventToGame(event, eventLeague, summary);
       const score = computeWatchabilityScore(mapped.rubric, stakes).total;
       cached.finalRubric = {
         finalMargin: mapped.rubric.finalMargin ?? 0,

@@ -13,7 +13,8 @@ app.get("/schedule", async (req, res) => {
   try {
     const start = String(req.query.start ?? "");
     const end = String(req.query.end ?? "");
-    const schedule = await getSchedule(start, end);
+    const leagueGroup = String(req.query.leagueGroup ?? "nba");
+    const schedule = await getSchedule(start, end, leagueGroup);
     res.json({ schedule });
   } catch (err) {
     if (err instanceof BadRequestError) {

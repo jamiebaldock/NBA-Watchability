@@ -31,9 +31,14 @@ private val json = Json { ignoreUnknownKeys = true }
  */
 object NetworkGameRepository {
 
-    suspend fun schedule(baseUrl: String, start: LocalDate, end: LocalDate): List<DayGames> =
+    suspend fun schedule(
+        baseUrl: String,
+        start: LocalDate,
+        end: LocalDate,
+        leagueGroup: LeagueGroup = LeagueGroup.NBA
+    ): List<DayGames> =
         withContext(Dispatchers.IO) {
-            val url = URL("$baseUrl/schedule?start=$start&end=$end")
+            val url = URL("$baseUrl/schedule?start=$start&end=$end&leagueGroup=${leagueGroup.apiValue}")
             val connection = url.openConnection() as HttpURLConnection
             // Render's free tier cold-starts a sleeping instance in 30-60s+, so
             // these need enough headroom to survive a wake-up rather than a

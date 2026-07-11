@@ -5,6 +5,12 @@ export type GameStatus = "final" | "live" | "upcoming";
 
 export type StarPerformance = "historic" | "great" | "good" | null;
 
+// Which mutually-exclusive slate the client is currently viewing (settings
+// toggle + top-left dropdown). Distinct from espnClient.ts's League - a
+// LeagueGroup determines which underlying ESPN leagues get unioned together
+// for a request (gamesService.ts's LEAGUE_GROUPS), never both at once.
+export type LeagueGroup = "nba" | "wnba";
+
 export interface GameJson {
   a: string;
   h: string;
@@ -12,7 +18,7 @@ export interface GameJson {
   hl?: string;
   stt: GameStatus;
   utc: string;
-  lg: "nba" | "summer";
+  lg: "nba" | "wnba" | "summer";
   q?: number;
   clk?: string;
   m?: number;

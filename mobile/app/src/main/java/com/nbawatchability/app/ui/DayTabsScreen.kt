@@ -19,8 +19,11 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -45,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.DayGames
+import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.BackgroundBase
@@ -57,6 +62,40 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 private val dayTabFormatter = DateTimeFormatter.ofPattern("MMM d")
+
+/**
+ * Replaces the static "NBA Watchability" title when the "Show WNBA" setting
+ * is on - tapping it reveals an NBA/WNBA choice. Off (the default), the title
+ * stays plain static text with no dropdown affordance at all.
+ */
+@Composable
+private fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGroup) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { expanded = true }
+        ) {
+            Text("${selectedLeague.displayName} Watchability", color = TextPrimary)
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = "Select league",
+                tint = TextPrimary
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            LeagueGroup.entries.forEach { league ->
+                DropdownMenuItem(
+                    text = { Text(league.displayName) },
+                    onClick = {
+                        onLeagueSelected(league)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
 
 private fun dayTabLabel(date: LocalDate, today: LocalDate): String = when (date) {
     today -> "Today"
@@ -78,7 +117,10 @@ fun DayTabsScreen(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     weights: RubricWeights,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    showWnba: Boolean,
+    selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
 
@@ -93,7 +135,13 @@ fun DayTabsScreen(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { Text("NBA Watchability", color = TextPrimary) },
+                title = {
+                    if (showWnba) {
+                        TitleLeagueSelector(selectedLeague = selectedLeague, onLeagueSelected = onLeagueSelected)
+                    } else {
+                        Text("NBA Watchability", color = TextPrimary)
+                    }
+                },
                 actions = {
                     IconToggleButton(checked = sortBestFirst, onCheckedChange = { onToggleSort() }) {
                         Icon(

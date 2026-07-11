@@ -22,6 +22,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.SurfaceCardElevated
@@ -57,6 +59,7 @@ fun AppRoot() {
     var selectedTab by rememberSaveable { mutableStateOf(BottomNavTab.GAMES) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     val settingsViewModel: RubricSettingsViewModel = viewModel()
+    val appSettingsViewModel: AppSettingsViewModel = viewModel()
 
     BackHandler(enabled = showSettings) { showSettings = false }
 
@@ -65,6 +68,8 @@ fun AppRoot() {
             weights = settingsViewModel.weights,
             onWeightChange = settingsViewModel::updateWeight,
             onReset = settingsViewModel::resetToDefaults,
+            showWnba = appSettingsViewModel.settings.showWnba,
+            onShowWnbaChange = appSettingsViewModel::setShowWnba,
             onBack = { showSettings = false }
         )
         return
@@ -96,7 +101,11 @@ fun AppRoot() {
             when (selectedTab) {
                 BottomNavTab.GAMES -> GamesTab(
                     weights = settingsViewModel.weights,
-                    onSettingsClick = { showSettings = true }
+                    onSettingsClick = { showSettings = true },
+                    showWnba = appSettingsViewModel.settings.showWnba,
+                    selectedLeague = appSettingsViewModel.settings.selectedLeague,
+                    onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                    effectiveLeagueGroup = appSettingsViewModel.settings.effectiveLeagueGroup
                 )
                 BottomNavTab.STANDINGS -> PlaceholderScreen("Standings — coming soon.")
                 BottomNavTab.STATS -> PlaceholderScreen("Stats — coming soon.")
@@ -108,11 +117,24 @@ fun AppRoot() {
 }
 
 @Composable
-private fun GamesTab(weights: RubricWeights, onSettingsClick: () -> Unit) {
+private fun GamesTab(
+    weights: RubricWeights,
+    onSettingsClick: () -> Unit,
+    showWnba: Boolean,
+    selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit,
+    effectiveLeagueGroup: LeagueGroup
+) {
     val viewModel: GameListViewModel = viewModel()
+
+    // Fires on first composition and again whenever the effective league
+    // changes (toggle flipped, or a different league picked from the
+    // dropdown) - a full fresh load, not a merge with whatever was showing.
+    LaunchedEffect(effectiveLeagueGroup) { viewModel.load(effectiveLeagueGroup) }
+
     when (val state = viewModel.uiState) {
         is ScheduleUiState.Loading -> LoadingScreen()
-        is ScheduleUiState.Error -> ErrorScreen(state.message, onRetry = viewModel::load)
+        is ScheduleUiState.Error -> ErrorScreen(state.message, onRetry = { viewModel.load(effectiveLeagueGroup) })
         is ScheduleUiState.Loaded -> DayTabsScreen(
             days = state.days,
             today = viewModel.today,
@@ -125,7 +147,10 @@ private fun GamesTab(weights: RubricWeights, onSettingsClick: () -> Unit) {
             isRefreshing = viewModel.isRefreshing,
             onRefresh = viewModel::refresh,
             weights = weights,
-            onSettingsClick = onSettingsClick
+            onSettingsClick = onSettingsClick,
+            showWnba = showWnba,
+            selectedLeague = selectedLeague,
+            onLeagueSelected = onLeagueSelected
         )
     }
 }

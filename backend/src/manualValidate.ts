@@ -9,7 +9,7 @@ async function main() {
   const events = await fetchScoreboard("20250115", "nba");
   for (const event of events) {
     const summary = await fetchSummary(event.id, "nba");
-    const mapped = mapEventToGame(event, summary);
+    const mapped = mapEventToGame(event, "nba", summary);
     const scoreBreakdown = computeWatchabilityScore(mapped.rubric, 5);
     const visible = isScoreVisible(mapped.status, mapped.rubric.period);
     console.log(

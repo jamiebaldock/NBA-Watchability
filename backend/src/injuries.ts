@@ -5,7 +5,17 @@
 // same parent NBA franchise team ID). Used once per game, at pregame-preview
 // generation time (gamesService.ts), to give the LLM real current context
 // instead of just static team names/records.
-const CORE_BASE = "https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba";
+//
+// WNBA teams are entirely separate franchises under their own core-API league
+// segment - reusing the NBA path with a WNBA team ID would silently 404 (this
+// fetch is best-effort and swallows errors, so it wouldn't crash, just quietly
+// return no injury context for every WNBA game).
+import { League } from "./espnClient";
+
+function coreLeagueSegment(league: League): "nba" | "wnba" {
+  return league === "wnba" ? "wnba" : "nba";
+}
+
 const MAX_INJURIES_PER_TEAM = 3;
 
 interface EspnRefList {
@@ -35,9 +45,10 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 /** Best-effort: a broken/slow injuries fetch should never block pregame-preview generation. */
-export async function fetchTeamInjuries(teamId: string): Promise<InjuryNote[]> {
+export async function fetchTeamInjuries(teamId: string, league: League): Promise<InjuryNote[]> {
   try {
-    const list = await getJson<EspnRefList>(`${CORE_BASE}/teams/${teamId}/injuries`);
+    const coreBase = `https://sports.core.api.espn.com/v2/sports/basketball/leagues/${coreLeagueSegment(league)}`;
+    const list = await getJson<EspnRefList>(`${coreBase}/teams/${teamId}/injuries`);
     const records = await Promise.all(
       list.items.slice(0, MAX_INJURIES_PER_TEAM).map((item) =>
         getJson<EspnInjuryRecord>(item.$ref).catch(() => null)
