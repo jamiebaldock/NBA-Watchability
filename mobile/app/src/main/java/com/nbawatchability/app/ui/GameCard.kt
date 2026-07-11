@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -146,9 +148,35 @@ private fun PitchSection(game: Game, modifier: Modifier = Modifier) {
         Text(text = game.hook, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
         pitch?.let {
             Spacer(modifier = Modifier.height(6.dp))
-            Text(text = it, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+            ExpandableText(text = it, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
         }
     }
+}
+
+/**
+ * Collapses to 2 lines with an ellipsis by default to keep upcoming-game
+ * tiles a consistent height; tapping the text toggles the full pitch open.
+ * Only becomes tappable once collapsing actually truncated something -
+ * a pitch that already fits in 2 lines has nothing to reveal.
+ */
+@Composable
+private fun ExpandableText(text: String, color: Color, style: TextStyle, modifier: Modifier = Modifier) {
+    var expanded by remember(text) { mutableStateOf(false) }
+    var isTruncated by remember(text) { mutableStateOf(false) }
+
+    Text(
+        text = text,
+        color = color,
+        style = style,
+        maxLines = if (expanded) Int.MAX_VALUE else 2,
+        overflow = TextOverflow.Ellipsis,
+        onTextLayout = { result ->
+            if (!expanded && result.hasVisualOverflow) isTruncated = true
+        },
+        modifier = modifier.then(
+            if (isTruncated || expanded) Modifier.clickable { expanded = !expanded } else Modifier
+        )
+    )
 }
 
 private val LOGO_SIZE = 20.dp
