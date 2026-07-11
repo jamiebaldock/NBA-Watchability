@@ -69,8 +69,14 @@ export async function searchHighlightsVideo(away: string, home: string, tipoffUt
     channelId: NBA_YOUTUBE_CHANNEL_ID,
     q: query,
     type: "video",
-    order: "date",
-    maxResults: "5",
+    // "date" sorts by newest-upload-first regardless of how well it matches
+    // the query - the NBA channel posts many videos a day (recaps, top
+    // plays, other games' highlights), so the actual match could easily
+    // fall outside the top 5 by recency alone. "relevance" (the default,
+    // and what actually matters here) ranks by how well each result matches
+    // q, which is what surfaces the right game's video.
+    order: "relevance",
+    maxResults: "10",
     publishedAfter: publishedAfter.toISOString(),
     publishedBefore: publishedBefore.toISOString(),
   });
