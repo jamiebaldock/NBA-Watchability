@@ -1,11 +1,17 @@
 import { CachedDay, loadDay, saveDay } from "./cache";
 import { EspnEvent, League, fetchScoreboard, fetchSummary, toEspnDate } from "./espnClient";
 import { mapEspnState, mapEventToGame } from "./gameMapper";
-import { fetchTeamInjuries, injuryNotesToText } from "./injuries";
 import { generateHookAndStakes } from "./llm";
 import { computeWatchabilityScore } from "./rubric";
 import { GameJson, LeagueGroup } from "./types";
-import { hasLocalFiveAmPassed, venueTimeZone } from "./venueTimezone";
+
+const PREVIEW_GATE_HOURS_BEFORE_TIPOFF = 24;
+
+/** Whether it's time to generate this game's pregame preview - a flat window before its own tipoff, not tied to any venue's local clock. */
+function hasReachedPreviewGate(tipoffUtc: string, now: Date = new Date()): boolean {
+  const gateTime = new Date(tipoffUtc).getTime() - PREVIEW_GATE_HOURS_BEFORE_TIPOFF * 60 * 60 * 1000;
+  return now.getTime() >= gateTime;
+}
 
 // NBA and WNBA are mutually-exclusive slates the client picks between (settings
 // toggle + top-left dropdown) - never unioned together like the Summer League
@@ -62,32 +68,19 @@ async function ensureBaseEntry(day: CachedDay, league: League, event: EspnEvent)
 
 /**
  * Generates the pregame preview (hook/stakes/pitch) exactly once per game -
- * not the first time the event is seen, but at/after 5am local time at the
- * venue, so it can reflect same-day news (starter ruled out, etc.) instead of
- * being locked in as soon as ESPN publishes the schedule. Before that gate,
- * or if generation already happened, this is a no-op.
+ * not the first time the event is seen, but starting 24 hours before its own
+ * tipoff, so games populate on a staggered schedule instead of every game at
+ * a venue clustering around the same wall-clock hour. Before that gate, or if
+ * generation already happened, this is a no-op.
  */
 async function ensurePregamePreview(day: CachedDay, league: League, event: EspnEvent): Promise<void> {
   const cached = day.games[event.id];
   if (cached.hook !== undefined) return; // already generated
+  if (!hasReachedPreviewGate(event.date)) return; // not time yet
 
   const competition = event.competitions[0];
   const away = competition.competitors.find((c) => c.homeAway === "away")!;
   const home = competition.competitors.find((c) => c.homeAway === "home")!;
-
-  const zone = venueTimeZone(event, home.team.displayName);
-  if (!hasLocalFiveAmPassed(event.date, zone)) return; // not time yet
-
-  const [awayInjuries, homeInjuries] = await Promise.all([
-    fetchTeamInjuries(away.team.id, league),
-    fetchTeamInjuries(home.team.id, league),
-  ]);
-  const injuryContext = [
-    injuryNotesToText(away.team.displayName, awayInjuries),
-    injuryNotesToText(home.team.displayName, homeInjuries),
-  ]
-    .filter((n): n is string => n !== null)
-    .join(" | ");
 
   const { hook, stakes, pitch } = await generateHookAndStakes({
     away: away.team.displayName,
@@ -97,7 +90,6 @@ async function ensurePregamePreview(day: CachedDay, league: League, event: EspnE
     notes: league.startsWith("nba-summer")
       ? "NBA Summer League exhibition game — rookies/prospects, not regular-season standings, no playoff implications"
       : undefined,
-    injuryContext: injuryContext || undefined,
   });
 
   cached.hook = hook;
