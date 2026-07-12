@@ -1,6 +1,9 @@
 package com.nbawatchability.app.ui
 
+import android.content.Context
 import android.view.ViewGroup
+import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,20 +81,150 @@ fun HighlightsPlayerScreen(videoId: String, onBack: () -> Unit) {
 // library's own internal WebViewClient/WebChromeClient bridge - reading the
 // WebView's load state must never replace that client, or the bridge (and
 // therefore all playback) breaks. This reflects into private fields
-// read-only, purely to log what the WebView is actually doing.
+// read-only, purely to locate the WebView so we can log/query it.
+private fun getInternalWebView(youTubePlayerView: YouTubePlayerView): WebView? = try {
+    val legacyField = YouTubePlayerView::class.java.getDeclaredField("legacyTubePlayerView")
+    legacyField.isAccessible = true
+    val legacyView = legacyField.get(youTubePlayerView)
+    val webViewField = legacyView.javaClass.getDeclaredField("webViewYouTubePlayer")
+    webViewField.isAccessible = true
+    webViewField.get(legacyView) as WebView
+} catch (e: Exception) {
+    HighlightsDebugLog.log("getInternalWebView failed (${e.javaClass.simpleName}: ${e.message})")
+    null
+}
+
 private fun logWebViewState(youTubePlayerView: YouTubePlayerView, label: String) {
-    val state = try {
-        val legacyField = YouTubePlayerView::class.java.getDeclaredField("legacyTubePlayerView")
-        legacyField.isAccessible = true
-        val legacyView = legacyField.get(youTubePlayerView)
-        val webViewField = legacyView.javaClass.getDeclaredField("webViewYouTubePlayer")
-        webViewField.isAccessible = true
-        val webView = webViewField.get(legacyView) as WebView
-        "progress=${webView.progress} url=${webView.url}"
-    } catch (e: Exception) {
-        "reflection failed (${e.javaClass.simpleName}: ${e.message})"
-    }
+    val webView = getInternalWebView(youTubePlayerView)
+    val state = if (webView != null) "progress=${webView.progress} url=${webView.url}" else "WebView unavailable"
     HighlightsDebugLog.log("WebView state [$label]: $state")
+}
+
+private const val DIAGNOSTICS_JS_INTERFACE = "AndroidDiagnostics"
+
+// A second, independently-named JS interface (the library's own is
+// "YouTubePlayerBridge") - Android allows multiple named interfaces on one
+// WebView with no conflict, so this is purely additive.
+private class WebViewDiagnosticsBridge(private val context: Context) {
+    @JavascriptInterface
+    fun log(message: String) {
+        HighlightsDebugLog.log("JS: $message")
+        HighlightsDebugLog.save(context)
+    }
+}
+
+/**
+ * One-time Android-side setup: registers a second, independently-named JS
+ * interface (safe - doesn't touch the library's own WebViewClient/
+ * WebChromeClient, which would risk breaking the onReady/onError bridge)
+ * and logs WebView settings that could plausibly affect YouTube embed
+ * behavior. addJavascriptInterface is a WebView-level binding, not a page
+ * script, so unlike evaluateJavascript it's safe to call before any page
+ * has loaded.
+ */
+private fun injectDiagnostics(youTubePlayerView: YouTubePlayerView, context: Context) {
+    val webView = getInternalWebView(youTubePlayerView) ?: return
+    HighlightsDebugLog.log(
+        "WebView settings: UA=${webView.settings.userAgentString} " +
+            "thirdPartyCookies=${CookieManager.getInstance().acceptThirdPartyCookies(webView)} " +
+            "cookiesForYoutube=${CookieManager.getInstance().getCookie("https://www.youtube.com") != null}"
+    )
+    HighlightsDebugLog.save(context)
+    webView.addJavascriptInterface(WebViewDiagnosticsBridge(context), DIAGNOSTICS_JS_INTERFACE)
+}
+
+/**
+ * Re-run every poll tick rather than once - evaluateJavascript needs an
+ * actual document loaded to do anything, and calling it immediately after
+ * initialize() (before the page has loaded) can silently no-op. The
+ * console/error-listener setup is guarded by a page-global flag so it only
+ * actually attaches once it succeeds, however many times this is called.
+ * Beyond typeof YT (confirms the IFrame API script itself loaded/ran),
+ * this checks whether the actual video embed iframe - a separate network
+ * request YT.Player() makes internally - ever got inserted into the DOM,
+ * since that's a more likely failure point once the outer API is confirmed
+ * working.
+ *
+ * [attemptRecovery] tests a specific hypothesis: that YouTube's iframe_api
+ * script defines the YT global but, for whatever reason, never actually
+ * invokes the pre-existing window.onYouTubeIframeAPIReady callback it's
+ * documented to auto-call. If YT is defined, player is still undefined, and
+ * the callback function exists, this manually invokes it once. If that
+ * makes the iframe appear (and onReady subsequently fires via the library's
+ * real bridge), the auto-invocation itself is the confirmed root cause and
+ * this recovery step is a genuine fix, not just a diagnostic.
+ */
+private fun queryPageState(youTubePlayerView: YouTubePlayerView, label: String, attemptRecovery: Boolean) {
+    val webView = getInternalWebView(youTubePlayerView) ?: return
+    webView.evaluateJavascript(
+        """
+        (function() {
+          if (!window.__nbaDiagnosticsAttached) {
+            try {
+              function relay(level, args) {
+                try {
+                  var msg = Array.prototype.slice.call(args).map(function(a) {
+                    try { return typeof a === 'object' ? JSON.stringify(a) : String(a); } catch (e) { return String(a); }
+                  }).join(' ');
+                  $DIAGNOSTICS_JS_INTERFACE.log('console.' + level + ': ' + msg);
+                } catch (e) {}
+              }
+              ['log', 'warn', 'error', 'info'].forEach(function(level) {
+                var orig = console[level];
+                console[level] = function() {
+                  relay(level, arguments);
+                  if (orig) orig.apply(console, arguments);
+                };
+              });
+              window.addEventListener('error', function(e) {
+                var target = e.target || e.srcElement;
+                if (target && target.tagName === 'SCRIPT') {
+                  $DIAGNOSTICS_JS_INTERFACE.log('SCRIPT LOAD ERROR: ' + (target.src || 'unknown src'));
+                } else {
+                  $DIAGNOSTICS_JS_INTERFACE.log('JS ERROR: ' + e.message + ' at ' + e.filename + ':' + e.lineno);
+                }
+              }, true);
+              window.__nbaDiagnosticsAttached = true;
+              $DIAGNOSTICS_JS_INTERFACE.log('diagnostics attached. location=' + location.href + ' origin=' + location.origin);
+            } catch (e) {
+              $DIAGNOSTICS_JS_INTERFACE.log('diagnostics attach failed: ' + e);
+            }
+          }
+          // YT.Player() replaces the target element outright rather than
+          // inserting a child into it, so check the element's own tag too -
+          // if it's already an IFRAME, .children.length alone would miss that.
+          var dom = document.getElementById('youTubePlayerDOM');
+          var domInfo = 'youTubePlayerDOM missing';
+          if (dom) {
+            domInfo = 'tag=' + dom.tagName + ' children=' + dom.children.length;
+            if (dom.tagName === 'IFRAME') domInfo += ' src=' + (dom.src || 'none');
+            else if (dom.children.length > 0) domInfo += ' firstChildTag=' + dom.children[0].tagName + ' firstChildSrc=' + (dom.children[0].src || 'none');
+          }
+          $DIAGNOSTICS_JS_INTERFACE.log(
+            '[$label] typeof YT=' + (typeof YT) +
+            ' typeof player=' + (typeof player) +
+            ' onLine=' + navigator.onLine + ' ' + domInfo
+          );
+          if (
+            $attemptRecovery &&
+            !window.__nbaManualRetryDone &&
+            typeof YT === 'object' &&
+            typeof player === 'undefined' &&
+            typeof onYouTubeIframeAPIReady === 'function'
+          ) {
+            window.__nbaManualRetryDone = true;
+            $DIAGNOSTICS_JS_INTERFACE.log('[$label] YT loaded but onYouTubeIframeAPIReady never auto-fired - manually invoking as recovery attempt');
+            try {
+              onYouTubeIframeAPIReady();
+              $DIAGNOSTICS_JS_INTERFACE.log('[$label] manual onYouTubeIframeAPIReady() call completed without throwing');
+            } catch (e) {
+              $DIAGNOSTICS_JS_INTERFACE.log('[$label] manual onYouTubeIframeAPIReady() THREW: ' + e);
+            }
+          }
+        })();
+        """.trimIndent(),
+        null
+    )
 }
 
 @Composable
@@ -113,14 +246,25 @@ private fun YoutubePlayer(videoId: String) {
     // infinite blank screen after a generous timeout.
     LaunchedEffect(videoId, playerView) {
         val view = playerView ?: return@LaunchedEffect
-        repeat(7) { attempt ->
+        injectDiagnostics(view, context)
+        queryPageState(view, "immediate", attemptRecovery = false)
+        // 10 polls (~20s) rather than 7 (~14s) - confirmed via the manual
+        // recovery attempt that onYouTubeIframeAPIReady often needs to be
+        // triggered by us around poll #2, which only leaves the *embed
+        // iframe itself* (a further network load) the remaining window to
+        // complete; the old 14s total left too little runway after that.
+        repeat(10) { attempt ->
             delay(2000)
             if (playerReady || errorMessage != null) return@LaunchedEffect
             logWebViewState(view, "poll #${attempt + 1}")
+            // One grace poll (attempt 0, ~2s) before trying the manual
+            // recovery, in case the callback is just slow rather than never
+            // firing at all.
+            queryPageState(view, "poll #${attempt + 1}", attemptRecovery = attempt >= 1)
             HighlightsDebugLog.save(context)
         }
         if (!playerReady && errorMessage == null) {
-            HighlightsDebugLog.log("TIMEOUT: no onReady/onError after 14s")
+            HighlightsDebugLog.log("TIMEOUT: no onReady/onError after 20s")
             logWebViewState(view, "timeout")
             HighlightsDebugLog.save(context)
             errorMessage = "Couldn't load the video player after waiting. This usually means the device's network blocked YouTube's player page — check for a DNS filter, ad-blocker, or firewall app, then try again."
