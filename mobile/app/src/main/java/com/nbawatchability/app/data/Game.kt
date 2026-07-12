@@ -44,6 +44,7 @@ data class Game(
     @SerialName("stt") val status: GameStatus,
     @SerialName("utc") val tipoffUtc: String,
     @SerialName("lg") val league: String = "nba",
+    @SerialName("cl") val competitionLabel: String? = null,
     @SerialName("q") val quarter: Int? = null,
     @SerialName("clk") val clock: String? = null,
     @SerialName("m") val margin: Int? = null,

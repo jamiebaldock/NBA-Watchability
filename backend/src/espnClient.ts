@@ -49,9 +49,17 @@ export interface EspnStatus {
 export interface EspnEvent {
   id: string;
   date: string;
+  // ESPN's own season classification - type 1/2/3 map to slug
+  // preseason/regular-season/post-season respectively. Read fresh off each
+  // scoreboard fetch rather than cached, since it's cheap and always current.
+  season?: { type: number; slug: string };
   competitions: Array<{
     status: EspnStatus;
     competitors: EspnCompetitor[];
+    // Only present for specially-designated games - e.g. NBA Cup (In-Season
+    // Tournament) group play/quarterfinals/semifinals/championship carry a
+    // headline like "NBA Cup - Group Play" here. Absent for ordinary games.
+    notes?: Array<{ type: string; headline: string }>;
     venue?: {
       fullName?: string;
       address?: { city?: string; state?: string };

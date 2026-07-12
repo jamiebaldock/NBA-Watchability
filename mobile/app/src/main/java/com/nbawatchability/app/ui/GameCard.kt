@@ -86,9 +86,14 @@ fun GameCard(
     ) {
         Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
             Column(modifier = Modifier.weight(1f).padding(16.dp)) {
-                if (game.isSummerLeague) {
+                // Summer League keeps its own static label; every other game's
+                // label (preseason/regular season/playoffs/NBA Cup) comes
+                // straight from the backend, which derives it from ESPN's own
+                // season + tournament data rather than calendar-date guesses.
+                val competitionLabel = if (game.isSummerLeague) "NBA SUMMER LEAGUE" else game.competitionLabel
+                if (competitionLabel != null) {
                     Text(
-                        text = "NBA SUMMER LEAGUE",
+                        text = competitionLabel,
                         color = TextMuted,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(bottom = 4.dp)

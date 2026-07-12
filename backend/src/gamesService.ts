@@ -1,6 +1,6 @@
 import { CachedDay, loadDay, saveDay } from "./cache";
 import { EspnEvent, League, fetchScoreboard, fetchSummary, toEspnDate } from "./espnClient";
-import { mapEspnState, mapEventToGame } from "./gameMapper";
+import { deriveCompetitionLabel, mapEspnState, mapEventToGame } from "./gameMapper";
 import { generateHookAndStakes } from "./llm";
 import { computeWatchabilityScore } from "./rubric";
 import { GameJson, LeagueGroup } from "./types";
@@ -144,6 +144,8 @@ export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "
     // Older cache entries predate Summer League support and have no stored league.
     const eventLeague: League = cached.league ?? league;
     const lg: GameJson["lg"] = eventLeague === "nba" ? "nba" : eventLeague === "wnba" ? "wnba" : "summer";
+    // Summer League keeps its own separate static label client-side (lg === "summer").
+    const cl = lg === "summer" ? undefined : deriveCompetitionLabel(event, lg);
     const status = mapEspnState(event.competitions[0].status.type.state);
     const hook = cached.hook ?? fallbackHook(cached);
     const stakes = cached.stakes ?? 0;
@@ -157,6 +159,7 @@ export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "
         stt: "upcoming",
         utc: cached.tipoffUtc,
         lg,
+        cl,
         ot: 0,
         c5: false,
         lcf: false,
@@ -183,6 +186,7 @@ export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "
         stt: "live",
         utc: cached.tipoffUtc,
         lg,
+        cl,
         q: period,
         clk: clock,
         ot: 0,
@@ -231,6 +235,7 @@ export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "
       stt: "final",
       utc: cached.tipoffUtc,
       lg,
+      cl,
       ot: rubric.overtimePeriods,
       m: rubric.finalMargin,
       cb: rubric.largestDeficitOvercome,

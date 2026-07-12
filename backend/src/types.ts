@@ -19,6 +19,7 @@ export interface GameJson {
   stt: GameStatus;
   utc: string;
   lg: "nba" | "wnba" | "summer";
+  cl?: string;
   q?: number;
   clk?: string;
   m?: number;
