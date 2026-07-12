@@ -79,6 +79,9 @@ app.get("/news", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`NBA Watchability backend dev server listening on http://localhost:${PORT}`);
   console.log(`Try: http://localhost:${PORT}/schedule?start=2025-01-15&end=2025-01-15`);
-  applySeedHighlights();
-  startHighlightsPoller();
+  // Both read-modify-write the same per-day cache files - run one at a time,
+  // not concurrently, or whichever finishes last silently wins and can
+  // clobber the other's result (this bit the seed once already: the poller's
+  // quota-exhausted "no match" save landed after the seed's real answer).
+  applySeedHighlights().then(startHighlightsPoller);
 });
