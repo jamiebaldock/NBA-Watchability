@@ -1,6 +1,7 @@
 package com.nbawatchability.app.ui
 
 import android.view.ViewGroup
+import android.webkit.WebView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +16,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +35,7 @@ import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.options.IFramePlayerOptions
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
+import kotlinx.coroutines.delay
 
 /**
  * Full-screen player for a game's official full-game-highlights video. A
@@ -71,11 +74,58 @@ fun HighlightsPlayerScreen(videoId: String, onBack: () -> Unit) {
     }
 }
 
+// Every callback (onReady/onError/onStateChange) is delivered by the
+// library's own internal WebViewClient/WebChromeClient bridge - reading the
+// WebView's load state must never replace that client, or the bridge (and
+// therefore all playback) breaks. This reflects into private fields
+// read-only, purely to log what the WebView is actually doing.
+private fun logWebViewState(youTubePlayerView: YouTubePlayerView, label: String) {
+    val state = try {
+        val legacyField = YouTubePlayerView::class.java.getDeclaredField("legacyTubePlayerView")
+        legacyField.isAccessible = true
+        val legacyView = legacyField.get(youTubePlayerView)
+        val webViewField = legacyView.javaClass.getDeclaredField("webViewYouTubePlayer")
+        webViewField.isAccessible = true
+        val webView = webViewField.get(legacyView) as WebView
+        "progress=${webView.progress} url=${webView.url}"
+    } catch (e: Exception) {
+        "reflection failed (${e.javaClass.simpleName}: ${e.message})"
+    }
+    HighlightsDebugLog.log("WebView state [$label]: $state")
+}
+
 @Composable
 private fun YoutubePlayer(videoId: String) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     var errorMessage by remember(videoId) { mutableStateOf<String?>(null) }
+    var playerReady by remember(videoId) { mutableStateOf(false) }
+    var playerView by remember(videoId) { mutableStateOf<YouTubePlayerView?>(null) }
+
+    // Playback depends entirely on the WebView loading
+    // https://www.youtube.com/iframe_api over the network (see the library's
+    // bundled ayp_youtube_player.html asset) - if that request is silently
+    // dropped (DNS filtering, an ad-blocker/firewall app) rather than
+    // hard-failing, neither onReady nor onError ever fires and the screen
+    // stays black forever with zero signal. This polls the WebView's real
+    // load state so the debug log shows definitively whether the page ever
+    // loaded, and surfaces an actual error to the user instead of an
+    // infinite blank screen after a generous timeout.
+    LaunchedEffect(videoId, playerView) {
+        val view = playerView ?: return@LaunchedEffect
+        repeat(7) { attempt ->
+            delay(2000)
+            if (playerReady || errorMessage != null) return@LaunchedEffect
+            logWebViewState(view, "poll #${attempt + 1}")
+            HighlightsDebugLog.save(context)
+        }
+        if (!playerReady && errorMessage == null) {
+            HighlightsDebugLog.log("TIMEOUT: no onReady/onError after 14s")
+            logWebViewState(view, "timeout")
+            HighlightsDebugLog.save(context)
+            errorMessage = "Couldn't load the video player after waiting. This usually means the device's network blocked YouTube's player page — check for a DNS filter, ad-blocker, or firewall app, then try again."
+        }
+    }
 
     if (errorMessage != null) {
         CenteredError(errorMessage!!) { errorMessage = null }
@@ -109,6 +159,7 @@ private fun YoutubePlayer(videoId: String) {
                             override fun onReady(youTubePlayer: YouTubePlayer) {
                                 HighlightsDebugLog.log("onReady called - loading video")
                                 HighlightsDebugLog.save(factoryContext)
+                                playerReady = true
                                 youTubePlayer.loadVideo(videoId, 0f)
                             }
 
@@ -126,6 +177,7 @@ private fun YoutubePlayer(videoId: String) {
                         true,
                         options
                     )
+                    playerView = this
                 }
             }
         )
