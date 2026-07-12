@@ -422,13 +422,35 @@ private fun YoutubePlayer(videoId: String) {
                         HighlightsDebugLog.log("Post-layout size: ${it.width}x${it.height} - calling initialize()")
                         HighlightsDebugLog.save(factoryContext)
                         val options = IFramePlayerOptions.Builder().controls(1).build()
+                        // Root cause, confirmed via decompiling the library:
+                        // the 3-arg initialize(listener, handleNetworkEvents,
+                        // options) overload passes a hardcoded null as the
+                        // initial videoId (javap showed an explicit aconst_null
+                        // pushed as the 4th arg to the internal call it
+                        // delegates to). The HTML template then substitutes the
+                        // literal unquoted token `undefined` for a null videoId
+                        // (also confirmed via decompile), producing
+                        // `new YT.Player('youTubePlayerDOM', { videoId:
+                        // undefined, ... })` - which is exactly what a
+                        // real-device log's captured stack trace showed
+                        // throwing "Invalid video id" synchronously inside
+                        // YouTube's own constructor, every single time,
+                        // regardless of video/device/WebView version. That
+                        // exception fires before `player = new YT.Player(...)`
+                        // ever completes, so player stays undefined and
+                        // onReady never fires via the real, automatic
+                        // invocation - explaining every symptom this
+                        // investigation chased. The 4-arg overload passes the
+                        // real videoId through to that same template slot, so
+                        // the player never throws in the first place - loading
+                        // the video separately via loadVideo() in onReady is
+                        // no longer necessary once it's already cued here.
                         initialize(
                             object : AbstractYouTubePlayerListener() {
                                 override fun onReady(youTubePlayer: YouTubePlayer) {
-                                    HighlightsDebugLog.log("onReady called - loading video")
+                                    HighlightsDebugLog.log("onReady called")
                                     HighlightsDebugLog.save(factoryContext)
                                     playerReady = true
-                                    youTubePlayer.loadVideo(videoId, 0f)
                                 }
 
                                 override fun onError(youTubePlayer: YouTubePlayer, error: PlayerConstants.PlayerError) {
@@ -443,7 +465,8 @@ private fun YoutubePlayer(videoId: String) {
                                 }
                             },
                             true,
-                            options
+                            options,
+                            videoId
                         )
                         // The WebView is only created inside initialize() (via
                         // initWebView), so if ON_RESUME already fired via
