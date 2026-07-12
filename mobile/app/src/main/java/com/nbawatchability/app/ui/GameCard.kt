@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -54,7 +55,6 @@ import com.nbawatchability.app.ui.theme.SurfaceCardElevated
 import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
-import com.nbawatchability.app.ui.theme.TierInstantClassicAccent
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -76,18 +76,10 @@ fun GameCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = SurfaceCardElevated),
-        shape = RoundedCornerShape(14.dp)
+        shape = RoundedCornerShape(14.dp),
+        border = tier?.let { BorderStroke(1.5.dp, it.color()) }
     ) {
         Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            if (tier == Tier.INSTANT_CLASSIC) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(4.dp)
-                        .background(TierInstantClassicAccent)
-                )
-            }
-
             Column(modifier = Modifier.weight(1f).padding(16.dp)) {
                 if (game.isSummerLeague) {
                     Text(
