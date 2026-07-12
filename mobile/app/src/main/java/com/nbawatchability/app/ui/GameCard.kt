@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayCircleFilled
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -55,6 +57,7 @@ import com.nbawatchability.app.ui.theme.SurfaceCardElevated
 import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
+import com.nbawatchability.app.ui.theme.TierInstantClassic
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -69,6 +72,8 @@ fun GameCard(
     showNumericScore: Boolean,
     weights: RubricWeights,
     modifier: Modifier = Modifier,
+    isStarred: Boolean = false,
+    onToggleStar: () -> Unit = {},
     onWatchHighlights: (String) -> Unit = {}
 ) {
     val tier = game.effectiveTier(weights)
@@ -92,25 +97,30 @@ fun GameCard(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                        TeamRow(logoUrl = game.awayLogo, name = game.away)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        TeamRow(logoUrl = game.homeLogo, name = game.home)
-                    }
+                    StatusIndicator(game)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    StarButton(isStarred = isStarred, onClick = onToggleStar)
+                }
 
-                    Column(horizontalAlignment = Alignment.End) {
-                        StatusIndicator(game)
-                        if (tier != null) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            TierBadge(
-                                tier = tier,
-                                numericScore = if (showNumericScore) game.effectiveScore(weights) else null
-                            )
-                        }
+                // Sits centered above the team names, on its own row, rather
+                // than squeezed alongside them - that used to force long team
+                // names to shrink to fit next to the badge.
+                if (tier != null) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.Center) {
+                        TierBadge(
+                            tier = tier,
+                            numericScore = if (showNumericScore) game.effectiveScore(weights) else null
+                        )
                     }
+                }
+
+                Column(modifier = Modifier.padding(top = 8.dp)) {
+                    TeamRow(logoUrl = game.awayLogo, name = game.away)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    TeamRow(logoUrl = game.homeLogo, name = game.home)
                 }
 
                 // Once the game is final, the pregame preview area is fully
@@ -184,6 +194,16 @@ private fun ExpandableText(text: String, color: Color, style: TextStyle, modifie
         modifier = modifier.then(
             if (isTruncated || expanded) Modifier.clickable { expanded = !expanded } else Modifier
         )
+    )
+}
+
+@Composable
+private fun StarButton(isStarred: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Icon(
+        imageVector = if (isStarred) Icons.Filled.Star else Icons.Filled.StarBorder,
+        contentDescription = if (isStarred) "Remove from starred" else "Add to starred",
+        tint = if (isStarred) TierInstantClassic else TextMuted,
+        modifier = modifier.size(22.dp).clickable(onClick = onClick)
     )
 }
 

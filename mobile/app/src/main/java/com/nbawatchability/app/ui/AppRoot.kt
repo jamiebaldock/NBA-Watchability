@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.SportsBasketball
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -46,6 +47,7 @@ private enum class BottomNavTab(val label: String, val icon: ImageVector) {
     STANDINGS("Standings", Icons.Default.Leaderboard),
     STATS("Stats", Icons.Default.BarChart),
     NEWS("News", Icons.AutoMirrored.Filled.Article),
+    STARRED("Starred", Icons.Default.Star),
     ABOUT("About", Icons.Default.Info)
 }
 
@@ -62,6 +64,7 @@ fun AppRoot() {
     var highlightsVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     val settingsViewModel: RubricSettingsViewModel = viewModel()
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
+    val starredGamesViewModel: StarredGamesViewModel = viewModel()
 
     // Persisted settings (last league, sort, numeric score) load from
     // DataStore asynchronously - rendering a tab before they arrive would
@@ -127,11 +130,21 @@ fun AppRoot() {
                     onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
                     sortBestFirst = appSettingsViewModel.settings.sortBestFirst,
                     onToggleSort = appSettingsViewModel::toggleSortBestFirst,
+                    starredIds = starredGamesViewModel.starredIds,
+                    onToggleStar = starredGamesViewModel::toggleStar,
                     onWatchHighlights = { videoId -> highlightsVideoId = videoId }
                 )
                 BottomNavTab.STANDINGS -> StandingsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
                 BottomNavTab.STATS -> StatsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
                 BottomNavTab.NEWS -> NewsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
+                BottomNavTab.STARRED -> StarredScreen(
+                    games = starredGamesViewModel.starredGames,
+                    showNumericScore = appSettingsViewModel.settings.showNumericScore,
+                    weights = settingsViewModel.weights,
+                    starredIds = starredGamesViewModel.starredIds,
+                    onToggleStar = starredGamesViewModel::toggleStar,
+                    onWatchHighlights = { videoId -> highlightsVideoId = videoId }
+                )
                 BottomNavTab.ABOUT -> PlaceholderScreen("About — coming soon.")
             }
         }
@@ -150,6 +163,8 @@ private fun GamesTab(
     onToggleNumericScore: () -> Unit,
     sortBestFirst: Boolean,
     onToggleSort: () -> Unit,
+    starredIds: Set<String>,
+    onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
     onWatchHighlights: (String) -> Unit
 ) {
     val viewModel: GameListViewModel = viewModel()
@@ -178,6 +193,8 @@ private fun GamesTab(
             showWnba = showWnba,
             selectedLeague = selectedLeague,
             onLeagueSelected = onLeagueSelected,
+            starredIds = starredIds,
+            onToggleStar = onToggleStar,
             onWatchHighlights = onWatchHighlights
         )
     }

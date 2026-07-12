@@ -142,6 +142,8 @@ fun DayTabsScreen(
     showWnba: Boolean,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    starredIds: Set<String>,
+    onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
     onWatchHighlights: (String) -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
@@ -212,6 +214,8 @@ fun DayTabsScreen(
                         sortBestFirst = sortBestFirst,
                         showNumericScore = showNumericScore,
                         weights = weights,
+                        starredIds = starredIds,
+                        onToggleStar = onToggleStar,
                         onWatchHighlights = onWatchHighlights
                     )
                 }
@@ -293,6 +297,8 @@ private fun DayGamesList(
     sortBestFirst: Boolean,
     showNumericScore: Boolean,
     weights: RubricWeights,
+    starredIds: Set<String>,
+    onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
     onWatchHighlights: (String) -> Unit
 ) {
     val ordered = if (sortBestFirst) {
@@ -328,6 +334,8 @@ private fun DayGamesList(
                 game = game,
                 showNumericScore = showNumericScore,
                 weights = weights,
+                isStarred = starredIds.contains(game.id),
+                onToggleStar = { onToggleStar(game) },
                 onWatchHighlights = onWatchHighlights
             )
         }
