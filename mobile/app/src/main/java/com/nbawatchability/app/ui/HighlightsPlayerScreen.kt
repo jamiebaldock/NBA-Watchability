@@ -89,14 +89,18 @@ private fun YoutubePlayer(videoId: String) {
                 HighlightsDebugLog.start(factoryContext, videoId)
                 YouTubePlayerView(factoryContext).apply {
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+
+                    // Must be set before addObserver() below - Lifecycle.addObserver
+                    // synchronously replays the current state to a new observer, so
+                    // if the screen is already resumed, addObserver would otherwise
+                    // immediately trigger automatic initialization (with no listener
+                    // attached) before we get a chance to disable it. That silently
+                    // steals the init, and our own initialize() call further down
+                    // becomes a no-op - explaining "initialize() logged, then nothing"
+                    // regardless of WebView version.
+                    enableAutomaticInitialization = false
                     lifecycleOwner.lifecycle.addObserver(this)
 
-                    // Automatic initialization silently stopped working after a
-                    // YouTube IFrame API change - it never calls onReady and
-                    // never errors, just leaves the player black forever.
-                    // Explicit initialize() + IFramePlayerOptions is the current
-                    // reliable path.
-                    enableAutomaticInitialization = false
                     HighlightsDebugLog.log("Calling initialize()")
                     HighlightsDebugLog.save(factoryContext)
                     val options = IFramePlayerOptions.Builder().controls(1).build()
