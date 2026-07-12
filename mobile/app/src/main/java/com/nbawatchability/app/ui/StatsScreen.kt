@@ -1,5 +1,6 @@
 package com.nbawatchability.app.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,14 +15,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -78,8 +87,14 @@ private fun StatsList(data: StatsResponse) {
     }
 }
 
+private const val COLLAPSED_LEADER_COUNT = 5
+
 @Composable
 private fun StatCategoryCard(category: StatCategory) {
+    var expanded by remember(category.key) { mutableStateOf(false) }
+    val visibleLeaders = if (expanded) category.leaders else category.leaders.take(COLLAPSED_LEADER_COUNT)
+    val canExpand = category.leaders.size > COLLAPSED_LEADER_COUNT
+
     Column {
         Text(
             text = category.label,
@@ -93,11 +108,40 @@ private fun StatCategoryCard(category: StatCategory) {
             shape = RoundedCornerShape(14.dp)
         ) {
             Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                category.leaders.forEachIndexed { index, leader ->
+                visibleLeaders.forEachIndexed { index, leader ->
                     StatLeaderRow(rank = index + 1, leader = leader, abbr = category.abbr)
+                }
+                if (canExpand) {
+                    ExpandToggleRow(expanded = expanded, onClick = { expanded = !expanded })
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ExpandToggleRow(expanded: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = if (expanded) "Show top 5" else "Show top 10",
+            color = TierWorthYourTime,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.bodySmall
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Icon(
+            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+            contentDescription = if (expanded) "Show fewer" else "Show more",
+            tint = TierWorthYourTime,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }
 

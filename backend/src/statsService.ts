@@ -18,7 +18,7 @@ const SHOWN_CATEGORIES: Array<{ key: string; label: string; abbr: string }> = [
   { key: "stealsPerGame", label: "Steals Per Game", abbr: "STL" },
   { key: "blocksPerGame", label: "Blocks Per Game", abbr: "BLK" },
 ];
-const LEADERS_PER_CATEGORY = 5;
+const LEADERS_PER_CATEGORY = 10;
 
 async function resolveLeader(
   entry: EspnLeaderEntry,
