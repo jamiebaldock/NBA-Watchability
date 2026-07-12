@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.doOnNextLayout
+import androidx.lifecycle.LifecycleEventObserver
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
@@ -182,9 +183,38 @@ private fun queryPageState(youTubePlayerView: YouTubePlayerView, label: String, 
                 if (target && target.tagName === 'SCRIPT') {
                   $DIAGNOSTICS_JS_INTERFACE.log('SCRIPT LOAD ERROR: ' + (target.src || 'unknown src'));
                 } else {
-                  $DIAGNOSTICS_JS_INTERFACE.log('JS ERROR: ' + e.message + ' at ' + e.filename + ':' + e.lineno);
+                  var stack = (e.error && e.error.stack) ? (' stack=' + e.error.stack) : ' (no stack available)';
+                  $DIAGNOSTICS_JS_INTERFACE.log('JS ERROR: ' + e.message + ' at ' + e.filename + ':' + e.lineno + stack);
                 }
               }, true);
+              // Tests whether something is triggering YouTube's own
+              // auto-pause-on-hidden logic (which would explain pauseVideo()
+              // being called before a player even exists) versus a genuine
+              // Android Activity lifecycle event - these fire purely from the
+              // WebView/page's own visibility state, independent of whatever
+              // the Android-side lifecycle observer sees.
+              ['visibilitychange', 'pagehide', 'pageshow', 'blur', 'focus'].forEach(function(evt) {
+                var target = (evt === 'blur' || evt === 'focus') ? window : document;
+                target.addEventListener(evt, function() {
+                  $DIAGNOSTICS_JS_INTERFACE.log('PAGE EVENT: ' + evt + ' (visibilityState=' + document.visibilityState + ' hasFocus=' + document.hasFocus() + ')');
+                }, true);
+              });
+              // Wraps the page's own "JAVA to WEB" pauseVideo() function (the
+              // one Android calls via evaluateJavascript to pause on
+              // lifecycle events) so every invocation logs a real JS stack
+              // trace - this shows definitively whether it's called fresh
+              // (stack bottoms out immediately, meaning an external
+              // evaluateJavascript("pauseVideo()") call) or from inside
+              // another JS function (e.g. a visibilitychange handler
+              // YouTube's own script installed), which the error listener
+              // above can't distinguish on its own.
+              if (typeof window.pauseVideo === 'function') {
+                var origPauseVideo = window.pauseVideo;
+                window.pauseVideo = function() {
+                  $DIAGNOSTICS_JS_INTERFACE.log('pauseVideo() invoked. typeof player=' + (typeof player) + ' stack=' + (new Error().stack));
+                  return origPauseVideo.apply(this, arguments);
+                };
+              }
               window.__nbaDiagnosticsAttached = true;
               $DIAGNOSTICS_JS_INTERFACE.log('diagnostics attached. location=' + location.href + ' origin=' + location.origin);
             } catch (e) {
@@ -261,6 +291,7 @@ private fun YoutubePlayer(videoId: String) {
     var errorMessage by remember(videoId) { mutableStateOf<String?>(null) }
     var playerReady by remember(videoId) { mutableStateOf(false) }
     var playerView by remember(videoId) { mutableStateOf<YouTubePlayerView?>(null) }
+    var lifecycleObserver by remember(videoId) { mutableStateOf<LifecycleEventObserver?>(null) }
 
     // Playback depends entirely on the WebView loading
     // https://www.youtube.com/iframe_api over the network (see the library's
@@ -321,7 +352,22 @@ private fun YoutubePlayer(videoId: String) {
                     // becomes a no-op - explaining "initialize() logged, then nothing"
                     // regardless of WebView version.
                     enableAutomaticInitialization = false
-                    lifecycleOwner.lifecycle.addObserver(this)
+
+                    // Wrapped rather than registering `this` directly, so every
+                    // real Activity lifecycle event gets logged before being
+                    // forwarded to the library's own handling (onStateChanged
+                    // is public, so this changes nothing about its behavior) -
+                    // this is how we tell a genuine Android-level pause (screen
+                    // lock, backgrounding) apart from something purely inside
+                    // the WebView/JS layer triggering YouTube's own
+                    // auto-pause-on-hidden logic.
+                    val observer = LifecycleEventObserver { source, event ->
+                        HighlightsDebugLog.log("Lifecycle event: $event")
+                        HighlightsDebugLog.save(factoryContext)
+                        onStateChanged(source, event)
+                    }
+                    lifecycleObserver = observer
+                    lifecycleOwner.lifecycle.addObserver(observer)
 
                     // Deferred to the next layout pass rather than called
                     // synchronously here: at this point the View has just been
@@ -363,7 +409,7 @@ private fun YoutubePlayer(videoId: String) {
                     }
                 }
             },
-            // Without this, the view's lifecycle observer (added above) stays
+            // Without this, the wrapped lifecycle observer (added above) stays
             // registered on the Activity's lifecycle even after Compose
             // disposes this View (e.g. once the timeout sets errorMessage and
             // this leaves composition) - a real, separate bug found via a
@@ -371,7 +417,7 @@ private fun YoutubePlayer(videoId: String) {
             // seconds after a timeout, coming from the orphaned instance
             // reacting to a later lifecycle event with a still-broken player.
             onRelease = { view ->
-                lifecycleOwner.lifecycle.removeObserver(view)
+                lifecycleObserver?.let { lifecycleOwner.lifecycle.removeObserver(it) }
                 view.release()
             }
         )
