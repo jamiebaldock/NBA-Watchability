@@ -61,6 +61,7 @@ fun AppRoot() {
     var selectedTab by rememberSaveable { mutableStateOf(BottomNavTab.GAMES) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showAbout by rememberSaveable { mutableStateOf(false) }
+    var showRubricWeights by rememberSaveable { mutableStateOf(false) }
     var highlightsVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     val settingsViewModel: RubricSettingsViewModel = viewModel()
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
@@ -76,9 +77,11 @@ fun AppRoot() {
     }
 
     BackHandler(enabled = showSettings) { showSettings = false }
-    // Declared after showSettings's handler so it sits higher on the back
-    // stack - back from About returns to Settings, not straight past it.
+    // Declared after showSettings's handler so they sit higher on the back
+    // stack - back from About/rating weights returns to Settings, not
+    // straight past it.
     BackHandler(enabled = showAbout) { showAbout = false }
+    BackHandler(enabled = showRubricWeights) { showRubricWeights = false }
     BackHandler(enabled = highlightsVideoId != null) { highlightsVideoId = null }
 
     if (showAbout) {
@@ -86,13 +89,21 @@ fun AppRoot() {
         return
     }
 
-    if (showSettings) {
-        SettingsScreen(
+    if (showRubricWeights) {
+        RubricWeightsScreen(
             weights = settingsViewModel.weights,
             onWeightChange = settingsViewModel::updateWeight,
             onReset = settingsViewModel::resetToDefaults,
+            onBack = { showRubricWeights = false }
+        )
+        return
+    }
+
+    if (showSettings) {
+        SettingsScreen(
             showWnba = appSettingsViewModel.settings.showWnba,
             onShowWnbaChange = appSettingsViewModel::setShowWnba,
+            onRubricWeightsClick = { showRubricWeights = true },
             onAboutClick = { showAbout = true },
             onBack = { showSettings = false }
         )
@@ -149,6 +160,9 @@ fun AppRoot() {
                 BottomNavTab.STARRED -> StarredScreen(
                     games = starredGamesViewModel.starredGames,
                     showNumericScore = appSettingsViewModel.settings.showNumericScore,
+                    onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
+                    sortBestFirst = appSettingsViewModel.settings.sortBestFirst,
+                    onToggleSort = appSettingsViewModel::toggleSortBestFirst,
                     weights = settingsViewModel.weights,
                     starredIds = starredGamesViewModel.starredIds,
                     onToggleStar = starredGamesViewModel::toggleStar,

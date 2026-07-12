@@ -64,6 +64,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val localTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
+private val localDateFormatter = DateTimeFormatter.ofPattern("MMM d")
 private const val TABULAR_NUMS = "tnum"
 
 @Composable
@@ -74,7 +75,11 @@ fun GameCard(
     modifier: Modifier = Modifier,
     isStarred: Boolean = false,
     onToggleStar: () -> Unit = {},
-    onWatchHighlights: (String) -> Unit = {}
+    onWatchHighlights: (String) -> Unit = {},
+    // Only meaningful on the Starred tab, which combines games from many
+    // different dates in one list - elsewhere the day-tab context already
+    // makes the date obvious, so this defaults off.
+    showDate: Boolean = false
 ) {
     val tier = game.effectiveTier(weights)
 
@@ -91,13 +96,21 @@ fun GameCard(
                 // straight from the backend, which derives it from ESPN's own
                 // season + tournament data rather than calendar-date guesses.
                 val competitionLabel = if (game.isSummerLeague) "NBA SUMMER LEAGUE" else game.competitionLabel
-                if (competitionLabel != null) {
-                    Text(
-                        text = competitionLabel,
-                        color = TextMuted,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
+                if (competitionLabel != null || showDate) {
+                    Row(
+                        modifier = Modifier.padding(bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (competitionLabel != null) {
+                            Text(text = competitionLabel, color = TextMuted, style = MaterialTheme.typography.labelSmall)
+                        }
+                        if (showDate) {
+                            if (competitionLabel != null) {
+                                Text(text = " · ", color = TextMuted, style = MaterialTheme.typography.labelSmall)
+                            }
+                            Text(text = localDate(game.tipoffUtc), color = TextMuted, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
                 }
 
                 // Badge left-justified so status ("FINAL"/live clock/tipoff
@@ -360,3 +373,6 @@ private fun periodLabel(quarter: Int?): String = when {
 // default ISO_OFFSET_DATE_TIME format treats seconds as optional.
 private fun localTipoff(utc: String): String =
     OffsetDateTime.parse(utc).atZoneSameInstant(ZoneId.systemDefault()).format(localTimeFormatter)
+
+private fun localDate(utc: String): String =
+    OffsetDateTime.parse(utc).atZoneSameInstant(ZoneId.systemDefault()).format(localDateFormatter)
