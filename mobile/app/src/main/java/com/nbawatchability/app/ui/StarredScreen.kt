@@ -1,7 +1,6 @@
 package com.nbawatchability.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,12 +12,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Tag
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -36,28 +31,18 @@ import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.BackgroundBase
-import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
-import java.time.LocalDate
-import java.time.OffsetDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-
-private val dateFilterFormatter = DateTimeFormatter.ofPattern("EEE, MMM d")
-
-private fun localDateOf(tipoffUtc: String): LocalDate =
-    OffsetDateTime.parse(tipoffUtc).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate()
 
 /**
  * Combines NBA and WNBA starred games in one list (most recent tipoff
- * first, or best-rated first when toggled), unlike every other tab which
- * is scoped to a single league group - a personal favorites list has no
- * reason to split by league. Sort/numeric-score toggles are the same
- * app-wide preference the Games tab uses, so flipping one affects both.
- * The date filter is Starred-specific (no other tab mixes dates in one
- * list) and purely a local view filter, not a persisted setting.
+ * first by default, or best-rated first when toggled), unlike every other
+ * tab which is scoped to a single league group - a personal favorites list
+ * has no reason to split by league. Sort/numeric-score toggles are the
+ * same app-wide preference the Games tab uses, so flipping one affects
+ * both. The date-order toggle is Starred-specific (no other tab mixes
+ * dates in one list) and purely a local view preference, not persisted.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,7 +57,7 @@ fun StarredScreen(
     onToggleStar: (Game) -> Unit,
     onWatchHighlights: (String) -> Unit
 ) {
-    var dateFilter by remember { mutableStateOf<LocalDate?>(null) }
+    var dateAscending by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = BackgroundBase,
@@ -80,11 +65,13 @@ fun StarredScreen(
             TopAppBar(
                 title = { Text("Starred", color = TextPrimary) },
                 actions = {
-                    DateFilterButton(
-                        availableDates = games.map { localDateOf(it.tipoffUtc) }.distinct().sortedDescending(),
-                        selectedDate = dateFilter,
-                        onDateSelected = { dateFilter = it }
-                    )
+                    IconToggleButton(checked = dateAscending, onCheckedChange = { dateAscending = it }) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = if (dateAscending) "Oldest game first" else "Newest game first",
+                            tint = if (dateAscending) TierWorthYourTime else TextSecondary
+                        )
+                    }
                     IconToggleButton(checked = sortBestFirst, onCheckedChange = { onToggleSort() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Sort,
@@ -119,13 +106,13 @@ fun StarredScreen(
             return@Scaffold
         }
 
-        val filtered = dateFilter?.let { date -> games.filter { localDateOf(it.tipoffUtc) == date } } ?: games
+        fun List<Game>.byDate() = if (dateAscending) sortedBy { it.tipoffUtc } else sortedByDescending { it.tipoffUtc }
 
         val ordered = if (sortBestFirst) {
-            val (scored, unscored) = filtered.partition { it.effectiveScore(weights) != null }
-            scored.sortedByDescending { it.effectiveScore(weights) } + unscored.sortedByDescending { it.tipoffUtc }
+            val (scored, unscored) = games.partition { it.effectiveScore(weights) != null }
+            scored.sortedByDescending { it.effectiveScore(weights) } + unscored.byDate()
         } else {
-            filtered.sortedByDescending { it.tipoffUtc }
+            games.byDate()
         }
 
         LazyColumn(
@@ -142,50 +129,6 @@ fun StarredScreen(
                     onToggleStar = { onToggleStar(game) },
                     onWatchHighlights = onWatchHighlights,
                     showDate = true
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DateFilterButton(
-    availableDates: List<LocalDate>,
-    selectedDate: LocalDate?,
-    onDateSelected: (LocalDate?) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(
-                imageVector = Icons.Default.CalendarToday,
-                contentDescription = "Filter by date",
-                tint = if (selectedDate != null) TierWorthYourTime else TextSecondary
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("All dates", color = if (selectedDate == null) TierWorthYourTime else TextPrimary) },
-                onClick = {
-                    onDateSelected(null)
-                    expanded = false
-                }
-            )
-            if (availableDates.isNotEmpty()) {
-                HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
-            }
-            availableDates.forEach { date ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = date.format(dateFilterFormatter),
-                            color = if (date == selectedDate) TierWorthYourTime else TextPrimary
-                        )
-                    },
-                    onClick = {
-                        onDateSelected(date)
-                        expanded = false
-                    }
                 )
             }
         }
