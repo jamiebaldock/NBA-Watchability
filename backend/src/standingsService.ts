@@ -7,13 +7,35 @@ function statValueByName(entry: EspnStandingsEntry, name: string): string {
   return entry.stats.find((s) => s.name === name)?.displayValue ?? "-";
 }
 
+function numericStatValueByName(entry: EspnStandingsEntry, name: string): number {
+  return entry.stats.find((s) => s.name === name)?.value ?? -Infinity;
+}
+
+/**
+ * ESPN's own entries array is NOT returned in rank order (verified against
+ * the live endpoint - e.g. the #1 team can be last in the raw array), and
+ * the "playoffSeed" stat some entries carry is a BPI power-index *projected*
+ * seed, not the actual current standings rank, so neither can be trusted
+ * directly. Sorting by the full-precision winPercent value (not the rounded
+ * 3-decimal displayValue, which isn't precise enough to break ties) via a
+ * stable sort reproduces the real standings order exactly, including every
+ * observed win%-tied pair (e.g. POR/LAC both .512) - ESPN's raw array
+ * already preserves the correct relative order for those, even though the
+ * array as a whole isn't sorted.
+ */
+function sortByWinPercentDescending(entries: EspnStandingsEntry[]): EspnStandingsEntry[] {
+  return [...entries].sort(
+    (a, b) => numericStatValueByName(b, "winPercent") - numericStatValueByName(a, "winPercent")
+  );
+}
+
 function flattenGroups(groups: EspnStandingsGroup[]): StandingsGroupJson[] {
   const result: StandingsGroupJson[] = [];
   for (const group of groups) {
     if (group.standings?.entries?.length) {
       result.push({
         name: group.name,
-        teams: group.standings.entries.map(
+        teams: sortByWinPercentDescending(group.standings.entries).map(
           (entry): StandingsTeamJson => ({
             id: entry.team.id,
             n: entry.team.shortDisplayName,
@@ -41,7 +63,11 @@ export async function getStandings(leagueGroup: LeagueGroup): Promise<StandingsR
   const now = new Date();
   const dateKey = todayKey(now);
 
-  const cached = loadLeagueCache<StandingsResponseJson>("standings", leagueGroup, dateKey);
+  // Cache kind bumped to "standings2" to bypass any pre-existing cached
+  // response from before entries were sorted by win% - those files have the
+  // correct team data but the wrong (unsorted) order baked in, and would
+  // otherwise keep being served as-is until the dateKey rolls over.
+  const cached = loadLeagueCache<StandingsResponseJson>("standings2", leagueGroup, dateKey);
   if (cached) return cached;
 
   const resolved = await resolveSeasonYear(league, now, (year) => fetchStandings(league, year));
@@ -52,6 +78,6 @@ export async function getStandings(leagueGroup: LeagueGroup): Promise<StandingsR
       }
     : { season: "", groups: [] };
 
-  saveLeagueCache("standings", leagueGroup, dateKey, response);
+  saveLeagueCache("standings2", leagueGroup, dateKey, response);
   return response;
 }

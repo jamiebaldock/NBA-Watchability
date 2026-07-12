@@ -136,7 +136,9 @@ export interface EspnStandingsEntry {
     abbreviation: string;
     logos?: Array<{ href: string }>;
   };
-  stats: Array<{ name: string; displayValue: string }>;
+  // value is the full-precision number (e.g. winPercent 0.5121951); displayValue
+  // is a rounded display string (".512") - not precise enough to break ties.
+  stats: Array<{ name: string; value?: number; displayValue: string }>;
 }
 
 export interface EspnStandingsGroup {
