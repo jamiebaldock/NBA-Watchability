@@ -7,6 +7,7 @@ import {
   getStandingsForLeagueGroup,
   getStatsForLeagueGroup,
 } from "./httpHandler";
+import { startHighlightsPoller } from "./highlightsPoller";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
@@ -77,4 +78,5 @@ app.get("/news", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`NBA Watchability backend dev server listening on http://localhost:${PORT}`);
   console.log(`Try: http://localhost:${PORT}/schedule?start=2025-01-15&end=2025-01-15`);
+  startHighlightsPoller();
 });
