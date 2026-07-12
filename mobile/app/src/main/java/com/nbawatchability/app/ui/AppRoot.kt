@@ -157,15 +157,13 @@ fun AppRoot() {
                 BottomNavTab.STANDINGS -> StandingsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
                 BottomNavTab.STATS -> StatsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
                 BottomNavTab.NEWS -> NewsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
-                BottomNavTab.STARRED -> StarredScreen(
-                    games = starredGamesViewModel.starredGames,
+                BottomNavTab.STARRED -> StarredTab(
+                    starredGamesViewModel = starredGamesViewModel,
                     showNumericScore = appSettingsViewModel.settings.showNumericScore,
                     onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
                     sortBestFirst = appSettingsViewModel.settings.sortBestFirst,
                     onToggleSort = appSettingsViewModel::toggleSortBestFirst,
                     weights = settingsViewModel.weights,
-                    starredIds = starredGamesViewModel.starredIds,
-                    onToggleStar = starredGamesViewModel::toggleStar,
                     onWatchHighlights = { videoId -> highlightsVideoId = videoId }
                 )
             }
@@ -220,6 +218,37 @@ private fun GamesTab(
             onWatchHighlights = onWatchHighlights
         )
     }
+}
+
+@Composable
+private fun StarredTab(
+    starredGamesViewModel: StarredGamesViewModel,
+    showNumericScore: Boolean,
+    onToggleNumericScore: () -> Unit,
+    sortBestFirst: Boolean,
+    onToggleSort: () -> Unit,
+    weights: RubricWeights,
+    onWatchHighlights: (String) -> Unit
+) {
+    // Fires on first composition and again whenever the starred set changes
+    // (a star added/removed anywhere in the app) - re-fetches live data for
+    // whatever's currently starred, same idea as GamesTab reloading on
+    // league change.
+    LaunchedEffect(starredGamesViewModel.starredIds) { starredGamesViewModel.refreshLiveData() }
+
+    StarredScreen(
+        games = starredGamesViewModel.starredGames,
+        showNumericScore = showNumericScore,
+        onToggleNumericScore = onToggleNumericScore,
+        sortBestFirst = sortBestFirst,
+        onToggleSort = onToggleSort,
+        weights = weights,
+        starredIds = starredGamesViewModel.starredIds,
+        onToggleStar = starredGamesViewModel::toggleStar,
+        onWatchHighlights = onWatchHighlights,
+        isRefreshing = starredGamesViewModel.isRefreshing,
+        onRefresh = starredGamesViewModel::refreshLiveData
+    )
 }
 
 @Composable

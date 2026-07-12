@@ -6,13 +6,32 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.nbawatchability.app.data.BACKEND_BASE_URL
 import com.nbawatchability.app.data.Game
+import com.nbawatchability.app.data.LeagueGroup
+import com.nbawatchability.app.data.NetworkGameRepository
 import com.nbawatchability.app.data.StarredGamesRepository
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
+
+// Matches GameListViewModel's own buffer: the backend buckets games by
+// ESPN's US-Eastern scoreboard day, not the viewer's local date, so a plain
+// start==end query for a game's local date can miss it. Doesn't matter here
+// since games are matched back by id (not by which day they land under),
+// but the fetch still needs to cover the real date either way.
+private const val QUERY_BUFFER_DAYS = 2L
 
 class StarredGamesViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = StarredGamesRepository(application.applicationContext)
+
+    // The persisted snapshot from whenever each game was starred - frozen in
+    // time (a live game stays showing its pregame tipoff time forever)
+    // unless refreshed against freshById below.
+    private var storedGames: List<Game> = emptyList()
+    private var freshById: Map<String, Game> = emptyMap()
 
     var starredGames by mutableStateOf<List<Game>>(emptyList())
         private set
@@ -22,11 +41,15 @@ class StarredGamesViewModel(application: Application) : AndroidViewModel(applica
     var starredIds by mutableStateOf<Set<String>>(emptySet())
         private set
 
+    var isRefreshing by mutableStateOf(false)
+        private set
+
     init {
         viewModelScope.launch {
             repository.starredGames.collect {
-                starredGames = it
+                storedGames = it
                 starredIds = it.map { game -> game.id }.toSet()
+                recomputeDisplayList()
             }
         }
     }
@@ -34,4 +57,52 @@ class StarredGamesViewModel(application: Application) : AndroidViewModel(applica
     fun toggleStar(game: Game) {
         viewModelScope.launch { repository.toggleStar(game) }
     }
+
+    /**
+     * There's no backend endpoint to look up a single game by id, so this
+     * re-fetches the schedule range each starred game's date falls within
+     * (per league group, since NBA/WNBA are separate queries) and swaps in
+     * whatever comes back matching by id - the same LIVE/quarter/clock data
+     * the Games tab shows, instead of the frozen star-time snapshot. A game
+     * outside the fetched range (very old, or a fetch failure) just keeps
+     * showing its last-known snapshot rather than disappearing.
+     */
+    fun refreshLiveData() {
+        if (isRefreshing || storedGames.isEmpty()) return
+        isRefreshing = true
+        viewModelScope.launch {
+            try {
+                val fresh = mutableMapOf<String, Game>()
+                storedGames.groupBy(::leagueGroupOf).forEach { (leagueGroup, games) ->
+                    val dates = games.map { localDateOf(it) }
+                    val days = NetworkGameRepository.schedule(
+                        baseUrl = BACKEND_BASE_URL,
+                        start = dates.min().minusDays(QUERY_BUFFER_DAYS),
+                        end = dates.max().plusDays(QUERY_BUFFER_DAYS),
+                        leagueGroup = leagueGroup
+                    )
+                    days.flatMap { it.games }.forEach { fresh[it.id] = it }
+                }
+                freshById = fresh
+                recomputeDisplayList()
+            } catch (e: Exception) {
+                // Keep showing whatever was already displayed - a failed
+                // refresh shouldn't blow away the last-known state.
+            } finally {
+                isRefreshing = false
+            }
+        }
+    }
+
+    private fun recomputeDisplayList() {
+        starredGames = storedGames.map { stored -> freshById[stored.id] ?: stored }
+    }
 }
+
+// NBA Summer League games are unioned into the "nba" LeagueGroup server-side
+// (there's no separate SUMMER case), so a starred Summer League game must be
+// queried under LeagueGroup.NBA too.
+private fun leagueGroupOf(game: Game): LeagueGroup = if (game.league == "wnba") LeagueGroup.WNBA else LeagueGroup.NBA
+
+private fun localDateOf(game: Game): LocalDate =
+    OffsetDateTime.parse(game.tipoffUtc).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate()
