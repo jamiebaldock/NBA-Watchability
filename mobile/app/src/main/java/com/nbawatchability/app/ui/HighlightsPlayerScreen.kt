@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.doOnNextLayout
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
@@ -189,6 +190,31 @@ private fun queryPageState(youTubePlayerView: YouTubePlayerView, label: String, 
             } catch (e) {
               $DIAGNOSTICS_JS_INTERFACE.log('diagnostics attach failed: ' + e);
             }
+            // YouTube's IFrame API is known to silently stall if the target
+            // element has zero width/height when YT.Player() constructs its
+            // embed iframe - the target div here has no CSS sizing at all
+            // (height:100% only applies to html/body, it doesn't cascade to
+            // nested block elements), so it likely collapses to 0 height.
+            // Forcing explicit pixel dimensions before any YT.Player() call
+            // (auto-fired or our own manual recovery below) rules this in or
+            // out directly, and fixes it if this is in fact the cause.
+            try {
+              var target = document.getElementById('youTubePlayerDOM');
+              if (target && target.tagName !== 'IFRAME') {
+                $DIAGNOSTICS_JS_INTERFACE.log(
+                  'pre-fix container size: offsetWidth=' + target.offsetWidth + ' offsetHeight=' + target.offsetHeight +
+                  ' window=' + window.innerWidth + 'x' + window.innerHeight
+                );
+                target.style.width = window.innerWidth + 'px';
+                target.style.height = window.innerHeight + 'px';
+                target.style.position = 'absolute';
+                target.style.top = '0';
+                target.style.left = '0';
+                $DIAGNOSTICS_JS_INTERFACE.log('post-fix container size: ' + target.style.width + ' x ' + target.style.height);
+              }
+            } catch (e) {
+              $DIAGNOSTICS_JS_INTERFACE.log('container sizing fix failed: ' + e);
+            }
           }
           // YT.Player() replaces the target element outright rather than
           // inserting a child into it, so check the element's own tag too -
@@ -196,7 +222,8 @@ private fun queryPageState(youTubePlayerView: YouTubePlayerView, label: String, 
           var dom = document.getElementById('youTubePlayerDOM');
           var domInfo = 'youTubePlayerDOM missing';
           if (dom) {
-            domInfo = 'tag=' + dom.tagName + ' children=' + dom.children.length;
+            domInfo = 'tag=' + dom.tagName + ' children=' + dom.children.length +
+              ' offsetSize=' + dom.offsetWidth + 'x' + dom.offsetHeight;
             if (dom.tagName === 'IFRAME') domInfo += ' src=' + (dom.src || 'none');
             else if (dom.children.length > 0) domInfo += ' firstChildTag=' + dom.children[0].tagName + ' firstChildSrc=' + (dom.children[0].src || 'none');
           }
@@ -283,6 +310,7 @@ private fun YoutubePlayer(videoId: String) {
                 HighlightsDebugLog.start(factoryContext, videoId)
                 YouTubePlayerView(factoryContext).apply {
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    HighlightsDebugLog.log("View created, pre-layout size: ${width}x$height")
 
                     // Must be set before addObserver() below - Lifecycle.addObserver
                     // synchronously replays the current state to a new observer, so
@@ -295,34 +323,56 @@ private fun YoutubePlayer(videoId: String) {
                     enableAutomaticInitialization = false
                     lifecycleOwner.lifecycle.addObserver(this)
 
-                    HighlightsDebugLog.log("Calling initialize()")
-                    HighlightsDebugLog.save(factoryContext)
-                    val options = IFramePlayerOptions.Builder().controls(1).build()
-                    initialize(
-                        object : AbstractYouTubePlayerListener() {
-                            override fun onReady(youTubePlayer: YouTubePlayer) {
-                                HighlightsDebugLog.log("onReady called - loading video")
-                                HighlightsDebugLog.save(factoryContext)
-                                playerReady = true
-                                youTubePlayer.loadVideo(videoId, 0f)
-                            }
+                    // Deferred to the next layout pass rather than called
+                    // synchronously here: at this point the View has just been
+                    // constructed and has never been through Android's
+                    // measure/layout, so it's 0x0. YouTube's IFrame API is
+                    // known to silently stall if the target element is 0x0 when
+                    // YT.Player() constructs its embed iframe - loading the page
+                    // (which happens inside initialize()) before the WebView has
+                    // real dimensions risks baking that 0x0 size into the page's
+                    // own initial viewport.
+                    doOnNextLayout {
+                        HighlightsDebugLog.log("Post-layout size: ${it.width}x${it.height} - calling initialize()")
+                        HighlightsDebugLog.save(factoryContext)
+                        val options = IFramePlayerOptions.Builder().controls(1).build()
+                        initialize(
+                            object : AbstractYouTubePlayerListener() {
+                                override fun onReady(youTubePlayer: YouTubePlayer) {
+                                    HighlightsDebugLog.log("onReady called - loading video")
+                                    HighlightsDebugLog.save(factoryContext)
+                                    playerReady = true
+                                    youTubePlayer.loadVideo(videoId, 0f)
+                                }
 
-                            override fun onError(youTubePlayer: YouTubePlayer, error: PlayerConstants.PlayerError) {
-                                HighlightsDebugLog.log("onError: ${error.name}")
-                                HighlightsDebugLog.save(factoryContext)
-                                errorMessage = "Couldn't play this video (${error.name.lowercase().replace('_', ' ')})."
-                            }
+                                override fun onError(youTubePlayer: YouTubePlayer, error: PlayerConstants.PlayerError) {
+                                    HighlightsDebugLog.log("onError: ${error.name}")
+                                    HighlightsDebugLog.save(factoryContext)
+                                    errorMessage = "Couldn't play this video (${error.name.lowercase().replace('_', ' ')})."
+                                }
 
-                            override fun onStateChange(youTubePlayer: YouTubePlayer, state: PlayerConstants.PlayerState) {
-                                HighlightsDebugLog.log("onStateChange: ${state.name}")
-                                HighlightsDebugLog.save(factoryContext)
-                            }
-                        },
-                        true,
-                        options
-                    )
-                    playerView = this
+                                override fun onStateChange(youTubePlayer: YouTubePlayer, state: PlayerConstants.PlayerState) {
+                                    HighlightsDebugLog.log("onStateChange: ${state.name}")
+                                    HighlightsDebugLog.save(factoryContext)
+                                }
+                            },
+                            true,
+                            options
+                        )
+                        playerView = this
+                    }
                 }
+            },
+            // Without this, the view's lifecycle observer (added above) stays
+            // registered on the Activity's lifecycle even after Compose
+            // disposes this View (e.g. once the timeout sets errorMessage and
+            // this leaves composition) - a real, separate bug found via a
+            // stray "player.pauseVideo is not a function" crash several
+            // seconds after a timeout, coming from the orphaned instance
+            // reacting to a later lifecycle event with a still-broken player.
+            onRelease = { view ->
+                lifecycleOwner.lifecycle.removeObserver(view)
+                view.release()
             }
         )
 
