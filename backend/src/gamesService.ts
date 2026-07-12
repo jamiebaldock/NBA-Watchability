@@ -4,7 +4,7 @@ import { mapEspnState, mapEventToGame } from "./gameMapper";
 import { generateHookAndStakes } from "./llm";
 import { computeWatchabilityScore } from "./rubric";
 import { GameJson, LeagueGroup } from "./types";
-import { isYoutubeSearchConfigured, searchHighlightsVideo } from "./youtubeClient";
+import { HighlightsLeague, isYoutubeSearchConfigured, searchHighlightsVideo } from "./youtubeClient";
 
 const PREVIEW_GATE_HOURS_BEFORE_TIPOFF = 24;
 
@@ -99,20 +99,19 @@ async function ensurePregamePreview(day: CachedDay, league: League, event: EspnE
 }
 
 /**
- * Looks up the official NBA full-game-highlights video exactly once per
- * game, ever - not on every request for a final game, since search.list has
- * its own hard 100-calls/day quota bucket (youtubeClient.ts). WNBA games are
- * skipped: the NBA's channel doesn't cover them, and matching against the
- * separate @WNBA channel isn't built yet.
+ * Looks up the official full-game-highlights video exactly once per game,
+ * ever - not on every request for a final game, since search.list has its
+ * own hard 100-calls/day quota bucket (youtubeClient.ts). NBA (and its
+ * Summer League variants) search the @NBA channel; WNBA searches @WNBA.
  */
 async function ensureHighlightsVideo(day: CachedDay, league: League, event: EspnEvent): Promise<void> {
-  if (league === "wnba") return;
   if (!isYoutubeSearchConfigured()) return; // no key yet - leave unchecked so it's retried once one's added
 
   const cached = day.games[event.id];
   if (cached.ytChecked) return;
 
-  const match = await searchHighlightsVideo(cached.away, cached.home, cached.tipoffUtc);
+  const highlightsLeague: HighlightsLeague = league === "wnba" ? "wnba" : "nba";
+  const match = await searchHighlightsVideo(highlightsLeague, cached.away, cached.home, cached.tipoffUtc);
   cached.ytChecked = true;
   if (match) cached.yt = match.videoId;
 }

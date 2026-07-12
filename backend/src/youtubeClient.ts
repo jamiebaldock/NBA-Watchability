@@ -1,8 +1,16 @@
 // Matches a finished game to its official "FULL GAME HIGHLIGHTS" video on
-// the NBA's own YouTube channel. Channel ID confirmed via the canonical link
-// on youtube.com/@NBA (not to be confused with unofficial reuploader
-// channels/playlists that reuse the same "FULL GAME HIGHLIGHTS" phrase).
+// the league's own YouTube channel. Channel IDs confirmed via the canonical
+// link on youtube.com/@NBA and youtube.com/@WNBA respectively (not to be
+// confused with unofficial reuploader channels/playlists that reuse the
+// same "FULL GAME HIGHLIGHTS" phrase).
 const NBA_YOUTUBE_CHANNEL_ID = "UCWJ2lWNubArHWmf3FIHbfcQ";
+const WNBA_YOUTUBE_CHANNEL_ID = "UCO9a_ryN_l7DIDS-VIt-zmw";
+
+export type HighlightsLeague = "nba" | "wnba";
+
+function channelIdFor(league: HighlightsLeague): string {
+  return league === "wnba" ? WNBA_YOUTUBE_CHANNEL_ID : NBA_YOUTUBE_CHANNEL_ID;
+}
 
 // search.list has its own dedicated daily quota bucket (separate from the
 // general 10,000-unit pool), hard-capped at 100 calls/day as of Google's
@@ -11,6 +19,17 @@ const NBA_YOUTUBE_CHANNEL_ID = "UCWJ2lWNubArHWmf3FIHbfcQ";
 // flag), never re-searching on every request.
 const YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
 
+// videos.list draws from the general 10,000-unit pool at 1 unit/call, not
+// the scarce 100/day search bucket - safe to spend on every candidate
+// batch without threatening the search quota.
+const YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos";
+
+// Real full-game-highlights reels from both channels run well under this
+// (observed 9-15 min) - a plain broadcast replay, condensed classic, or
+// unrelated long-form video matching the team names on text alone would
+// blow past it, so this catches false positives text matching alone can't.
+const MAX_HIGHLIGHTS_SECONDS = 15 * 60;
+
 interface YoutubeSearchItem {
   id?: { videoId?: string };
   snippet?: { title?: string };
@@ -18,6 +37,15 @@ interface YoutubeSearchItem {
 
 interface YoutubeSearchResponse {
   items?: YoutubeSearchItem[];
+}
+
+interface YoutubeVideoItem {
+  id?: string;
+  contentDetails?: { duration?: string };
+}
+
+interface YoutubeVideosResponse {
+  items?: YoutubeVideoItem[];
 }
 
 export interface HighlightsMatch {
@@ -35,24 +63,70 @@ export function isYoutubeSearchConfigured(): boolean {
 }
 
 /**
- * NBA's official titles use just the team nickname ("HORNETS at JAZZ"), not
- * the full "city + nickname" display name - the last word of the display
- * name matches this for every team except "Trail Blazers", where "Blazers"
+ * Both channels' official titles use just the team nickname ("HORNETS at
+ * JAZZ", "...Golden State Valkyries vs. Connecticut Sun..."), not the
+ * "city + nickname" display name alone - the last word of the display name
+ * matches this for every team except "Trail Blazers", where "Blazers"
  * alone is still a safe substring match against either spelling.
  */
 function teamNickname(displayName: string): string {
   return displayName.trim().split(/\s+/).pop() ?? displayName;
 }
 
+/** Parses ISO 8601 durations (e.g. "PT9M37S", "PT1H13M") into total seconds. */
+function parseIsoDurationSeconds(duration: string): number | null {
+  const match = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(duration);
+  if (!match) return null;
+  const hours = Number(match[1] ?? 0);
+  const minutes = Number(match[2] ?? 0);
+  const seconds = Number(match[3] ?? 0);
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+/** Fetches durations for a batch of video IDs in a single call (comma-joined, 1 quota unit total regardless of count). */
+async function fetchDurationsSeconds(apiKey: string, videoIds: string[]): Promise<Map<string, number>> {
+  const durations = new Map<string, number>();
+  if (videoIds.length === 0) return durations;
+
+  const params = new URLSearchParams({
+    key: apiKey,
+    part: "contentDetails",
+    id: videoIds.join(","),
+  });
+
+  try {
+    const res = await fetch(`${YOUTUBE_VIDEOS_URL}?${params.toString()}`);
+    if (!res.ok) return durations;
+    const data = (await res.json()) as YoutubeVideosResponse;
+    for (const item of data.items ?? []) {
+      const duration = item.contentDetails?.duration;
+      const seconds = duration ? parseIsoDurationSeconds(duration) : null;
+      if (item.id && seconds !== null) durations.set(item.id, seconds);
+    }
+  } catch (err) {
+    console.error("YouTube videos.list (duration check) failed", err);
+  }
+
+  return durations;
+}
+
 /**
- * Searches the NBA's channel for this game's full-game-highlights video,
- * scoped to a tight window around the game date to disambiguate from other
- * seasons' matchups of the same two teams. Returns null (not an error) if
- * YOUTUBE_API_KEY isn't set, the request fails, or nothing in the results
- * actually looks like a match - callers should treat that as "no highlights
+ * Searches [league]'s official channel for this game's full-game-highlights
+ * video, scoped to a tight window around the game date to disambiguate from
+ * other seasons' matchups of the same two teams. Candidates must match both
+ * team nicknames and the "full game highlights" phrase in the title, AND
+ * run under 15 minutes (a real highlights reel's length - filters out
+ * unrelated long-form videos that happen to match on text alone). Returns
+ * null (not an error) if YOUTUBE_API_KEY isn't set, the request fails, or
+ * nothing qualifies - callers should treat that as "no highlights
  * available" rather than retrying, to stay well under the 100/day cap.
  */
-export async function searchHighlightsVideo(away: string, home: string, tipoffUtc: string): Promise<HighlightsMatch | null> {
+export async function searchHighlightsVideo(
+  league: HighlightsLeague,
+  away: string,
+  home: string,
+  tipoffUtc: string
+): Promise<HighlightsMatch | null> {
   const apiKey = getApiKey();
   if (!apiKey) return null;
 
@@ -71,15 +145,15 @@ export async function searchHighlightsVideo(away: string, home: string, tipoffUt
     // candidate's title was silently coming through as undefined and
     // failing the match check no matter what the results actually were.
     part: "snippet",
-    channelId: NBA_YOUTUBE_CHANNEL_ID,
+    channelId: channelIdFor(league),
     q: query,
     type: "video",
     // "date" sorts by newest-upload-first regardless of how well it matches
-    // the query - the NBA channel posts many videos a day (recaps, top
-    // plays, other games' highlights), so the actual match could easily
-    // fall outside the top 5 by recency alone. "relevance" (the default,
-    // and what actually matters here) ranks by how well each result matches
-    // q, which is what surfaces the right game's video.
+    // the query - the channel posts many videos a day (recaps, top plays,
+    // other games' highlights), so the actual match could easily fall
+    // outside the top 5 by recency alone. "relevance" (the default, and
+    // what actually matters here) ranks by how well each result matches q,
+    // which is what surfaces the right game's video.
     order: "relevance",
     maxResults: "10",
     publishedAfter: publishedAfter.toISOString(),
@@ -99,6 +173,7 @@ export async function searchHighlightsVideo(away: string, home: string, tipoffUt
     return null;
   }
 
+  const textMatches: HighlightsMatch[] = [];
   for (const item of data.items ?? []) {
     const videoId = item.id?.videoId;
     const title = item.snippet?.title;
@@ -110,7 +185,19 @@ export async function searchHighlightsVideo(away: string, home: string, tipoffUt
       upperTitle.includes(awayNickname.toUpperCase()) &&
       upperTitle.includes(homeNickname.toUpperCase());
 
-    if (isMatch) return { videoId, title };
+    if (isMatch) textMatches.push({ videoId, title });
+  }
+
+  if (textMatches.length === 0) return null;
+
+  const durations = await fetchDurationsSeconds(
+    apiKey,
+    textMatches.map((m) => m.videoId)
+  );
+
+  for (const candidate of textMatches) {
+    const seconds = durations.get(candidate.videoId);
+    if (seconds !== undefined && seconds <= MAX_HIGHLIGHTS_SECONDS) return candidate;
   }
 
   return null;
