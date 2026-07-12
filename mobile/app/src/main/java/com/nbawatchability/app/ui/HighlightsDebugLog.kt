@@ -2,6 +2,7 @@ package com.nbawatchability.app.ui
 
 import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -24,8 +25,37 @@ object HighlightsDebugLog {
     private val timestampFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
     private val lines = mutableListOf<String>()
 
+    // Created once per session and reused for every save() in it - the
+    // original code ran a fresh delete-by-name + insert on every single
+    // save() call (dozens per session), and MediaStore's delete not always
+    // being visible to the very next insert (a real race under how often
+    // this logs) meant most saves silently landed in an auto-numbered
+    // duplicate ("nba_watchability_highlights_debug (12).txt") instead of
+    // overwriting the original - so both we and the user kept reading a
+    // stale file without any indication it was stale. Caching the URI and
+    // doing a truncating overwrite avoids the repeated delete/insert races
+    // entirely.
+    private var sessionUri: Uri? = null
+
     fun start(context: Context, videoId: String) {
         lines.clear()
+        sessionUri = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Clears out every leftover duplicate from prior sessions (not
+            // just an exact-name match) so there's only ever one debug file
+            // present - otherwise a stale duplicate from a previous run can
+            // sit there indefinitely looking exactly as plausible as the
+            // current one.
+            try {
+                context.contentResolver.delete(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
+                    arrayOf("nba_watchability_highlights_debug%")
+                )
+            } catch (e: Exception) {
+                // Best-effort cleanup only.
+            }
+        }
         log("=== Highlights debug log started ===")
         log("videoId=$videoId")
         log(deviceInfo())
@@ -42,18 +72,18 @@ object HighlightsDebugLog {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val resolver = context.contentResolver
-                resolver.delete(
-                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                    "${MediaStore.MediaColumns.DISPLAY_NAME}=?",
-                    arrayOf(FILE_NAME)
-                )
-                val values = ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, FILE_NAME)
-                    put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                val uri = sessionUri ?: run {
+                    val values = ContentValues().apply {
+                        put(MediaStore.MediaColumns.DISPLAY_NAME, FILE_NAME)
+                        put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                    }
+                    resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)?.also { sessionUri = it }
                 }
-                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                uri?.let { resolver.openOutputStream(it)?.use { out -> out.write(content.toByteArray()) } }
+                // "wt" truncates before writing, so every call fully replaces
+                // the previous content in the same row rather than appending
+                // or needing a delete+insert cycle.
+                uri?.let { resolver.openOutputStream(it, "wt")?.use { out -> out.write(content.toByteArray()) } }
             } else {
                 @Suppress("DEPRECATION")
                 val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)

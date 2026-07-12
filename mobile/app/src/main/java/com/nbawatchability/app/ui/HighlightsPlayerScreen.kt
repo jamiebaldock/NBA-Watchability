@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.doOnNextLayout
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.BackgroundBase
@@ -199,6 +200,30 @@ private fun queryPageState(youTubePlayerView: YouTubePlayerView, label: String, 
                   $DIAGNOSTICS_JS_INTERFACE.log('PAGE EVENT: ' + evt + ' (visibilityState=' + document.visibilityState + ' hasFocus=' + document.hasFocus() + ')');
                 }, true);
               });
+              // Confirmed via decompiling the library that it never calls
+              // Android's WebView.onResume()/onPause() (only manages its own
+              // internal canPlay flag) - Chromium's Page Visibility API can
+              // be left reporting hidden/unfocused even though the Activity
+              // is fully resumed and the WebView is correctly laid out,
+              // which would make YouTube's own script defer/skip the embed
+              // handshake (many sites, including YouTube, intentionally
+              // throttle video setup on a page that thinks it's hidden).
+              // Overriding the getters (not just dispatching one event)
+              // means any later re-check also sees visible/focused, not
+              // just the very first one.
+              try {
+                Object.defineProperty(document, 'visibilityState', { get: function() { return 'visible'; }, configurable: true });
+                Object.defineProperty(document, 'hidden', { get: function() { return false; }, configurable: true });
+                document.hasFocus = function() { return true; };
+                document.dispatchEvent(new Event('visibilitychange'));
+                window.dispatchEvent(new Event('focus'));
+                $DIAGNOSTICS_JS_INTERFACE.log(
+                  'forced visibility+focus. now visibilityState=' + document.visibilityState +
+                  ' hidden=' + document.hidden + ' hasFocus=' + document.hasFocus()
+                );
+              } catch (e) {
+                $DIAGNOSTICS_JS_INTERFACE.log('forcing visibility failed: ' + e);
+              }
               // Wraps the page's own "JAVA to WEB" pauseVideo() function (the
               // one Android calls via evaluateJavascript to pause on
               // lifecycle events) so every invocation logs a real JS stack
@@ -360,11 +385,26 @@ private fun YoutubePlayer(videoId: String) {
                     // this is how we tell a genuine Android-level pause (screen
                     // lock, backgrounding) apart from something purely inside
                     // the WebView/JS layer triggering YouTube's own
-                    // auto-pause-on-hidden logic.
+                    // auto-pause-on-hidden logic. Also explicitly calls the
+                    // WebView's own onResume()/onPause() here, since decompiling
+                    // the library confirmed it never does - those Android APIs
+                    // are what actually tell Chromium's engine the page is
+                    // visible/foregrounded, separate from the Activity lifecycle
+                    // reaching the View through normal attachment callbacks.
                     val observer = LifecycleEventObserver { source, event ->
                         HighlightsDebugLog.log("Lifecycle event: $event")
                         HighlightsDebugLog.save(factoryContext)
                         onStateChanged(source, event)
+                        getInternalWebView(this)?.let { wv ->
+                            when (event) {
+                                Lifecycle.Event.ON_RESUME -> {
+                                    wv.onResume()
+                                    wv.resumeTimers()
+                                }
+                                Lifecycle.Event.ON_PAUSE -> wv.onPause()
+                                else -> {}
+                            }
+                        }
                     }
                     lifecycleObserver = observer
                     lifecycleOwner.lifecycle.addObserver(observer)
@@ -405,6 +445,15 @@ private fun YoutubePlayer(videoId: String) {
                             true,
                             options
                         )
+                        // The WebView is only created inside initialize() (via
+                        // initWebView), so if ON_RESUME already fired via
+                        // addObserver()'s synchronous replay above, the observer
+                        // had no WebView yet to call onResume() on - covers that
+                        // case explicitly, right as soon as one exists.
+                        getInternalWebView(this)?.let { wv ->
+                            wv.onResume()
+                            wv.resumeTimers()
+                        }
                         playerView = this
                     }
                 }
