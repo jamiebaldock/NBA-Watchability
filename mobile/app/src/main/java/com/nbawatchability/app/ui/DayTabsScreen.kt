@@ -51,6 +51,7 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.nbawatchability.app.data.DayGames
 import com.nbawatchability.app.data.LeagueGroup
@@ -80,11 +81,16 @@ private fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.clickable { expanded = true }
         ) {
-            Text("${selectedLeague.displayName} Watchability", color = TextPrimary)
+            Text(
+                text = "${selectedLeague.displayName} Watchability",
+                color = TextPrimary,
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 24.sp)
+            )
             Icon(
                 imageVector = Icons.Default.ArrowDropDown,
                 contentDescription = "Select league",
-                tint = TextPrimary
+                tint = TextPrimary,
+                modifier = Modifier.size(30.dp)
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
