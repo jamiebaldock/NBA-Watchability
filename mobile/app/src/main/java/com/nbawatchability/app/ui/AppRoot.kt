@@ -63,6 +63,15 @@ fun AppRoot() {
     val settingsViewModel: RubricSettingsViewModel = viewModel()
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
 
+    // Persisted settings (last league, sort, numeric score) load from
+    // DataStore asynchronously - rendering a tab before they arrive would
+    // fire a request for the hardcoded default (NBA) that can then race
+    // against, and sometimes overwrite, the real persisted choice.
+    if (!appSettingsViewModel.isLoaded) {
+        LoadingScreen()
+        return
+    }
+
     BackHandler(enabled = showSettings) { showSettings = false }
     BackHandler(enabled = highlightsVideoId != null) { highlightsVideoId = null }
 
@@ -114,6 +123,10 @@ fun AppRoot() {
                     selectedLeague = appSettingsViewModel.settings.selectedLeague,
                     onLeagueSelected = appSettingsViewModel::setSelectedLeague,
                     effectiveLeagueGroup = appSettingsViewModel.settings.effectiveLeagueGroup,
+                    showNumericScore = appSettingsViewModel.settings.showNumericScore,
+                    onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
+                    sortBestFirst = appSettingsViewModel.settings.sortBestFirst,
+                    onToggleSort = appSettingsViewModel::toggleSortBestFirst,
                     onWatchHighlights = { videoId -> highlightsVideoId = videoId }
                 )
                 BottomNavTab.STANDINGS -> StandingsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
@@ -133,6 +146,10 @@ private fun GamesTab(
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     effectiveLeagueGroup: LeagueGroup,
+    showNumericScore: Boolean,
+    onToggleNumericScore: () -> Unit,
+    sortBestFirst: Boolean,
+    onToggleSort: () -> Unit,
     onWatchHighlights: (String) -> Unit
 ) {
     val viewModel: GameListViewModel = viewModel()
@@ -150,10 +167,10 @@ private fun GamesTab(
             today = viewModel.today,
             selectedDayIndex = viewModel.selectedDayIndex,
             onDaySelected = viewModel::selectDay,
-            showNumericScore = viewModel.showNumericScore,
-            onToggleNumericScore = viewModel::toggleNumericScore,
-            sortBestFirst = viewModel.sortBestFirst,
-            onToggleSort = viewModel::toggleSortBestFirst,
+            showNumericScore = showNumericScore,
+            onToggleNumericScore = onToggleNumericScore,
+            sortBestFirst = sortBestFirst,
+            onToggleSort = onToggleSort,
             isRefreshing = viewModel.isRefreshing,
             onRefresh = viewModel::refresh,
             weights = weights,

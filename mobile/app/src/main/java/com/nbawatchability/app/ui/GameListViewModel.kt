@@ -47,12 +47,6 @@ class GameListViewModel : ViewModel() {
     var selectedDayIndex by mutableStateOf(0)
         private set
 
-    var showNumericScore by mutableStateOf(false)
-        private set
-
-    var sortBestFirst by mutableStateOf(false)
-        private set
-
     // Which league's slate is currently loaded - set by load(), reused by
     // refresh()/fetchGamesForLocalDate() so callers don't need to keep
     // threading it through on every pull-to-refresh.
@@ -129,14 +123,6 @@ class GameListViewModel : ViewModel() {
 
     fun selectDay(index: Int) {
         selectedDayIndex = index
-    }
-
-    fun toggleNumericScore() {
-        showNumericScore = !showNumericScore
-    }
-
-    fun toggleSortBestFirst() {
-        sortBestFirst = !sortBestFirst
     }
 }
 

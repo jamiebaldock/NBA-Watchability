@@ -18,9 +18,20 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
     var settings by mutableStateOf(AppSettings())
         private set
 
+    // Starts false because [settings] is a hardcoded default (NBA, sort off,
+    // etc.) until DataStore's first emission arrives asynchronously - callers
+    // must wait for this before reading [settings], otherwise a persisted
+    // WNBA/sort/numeric-score choice loses a race against a request already
+    // fired for the wrong (default) league on cold start.
+    var isLoaded by mutableStateOf(false)
+        private set
+
     init {
         viewModelScope.launch {
-            repository.settings.collect { settings = it }
+            repository.settings.collect {
+                settings = it
+                isLoaded = true
+            }
         }
     }
 
@@ -30,5 +41,13 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
 
     fun setSelectedLeague(league: LeagueGroup) {
         viewModelScope.launch { repository.setSelectedLeague(league) }
+    }
+
+    fun toggleSortBestFirst() {
+        viewModelScope.launch { repository.setSortBestFirst(!settings.sortBestFirst) }
+    }
+
+    fun toggleShowNumericScore() {
+        viewModelScope.launch { repository.setShowNumericScore(!settings.showNumericScore) }
     }
 }
