@@ -59,7 +59,11 @@ export async function applySeedHighlights(): Promise<void> {
       let changed = false;
       for (const entry of entries) {
         const cached = day.games[entry.eventId];
-        if (!cached || cached.ytChecked) continue; // don't clobber a real search result
+        // Skip only if a real match already exists - never overwrite a
+        // genuine search success. A prior "checked, no match" result (the
+        // poller ran before this seed and hit the quota wall) is fair game
+        // to override with a human-confirmed video.
+        if (!cached || cached.yt) continue;
         cached.yt = entry.videoId;
         cached.ytChecked = true;
         changed = true;
