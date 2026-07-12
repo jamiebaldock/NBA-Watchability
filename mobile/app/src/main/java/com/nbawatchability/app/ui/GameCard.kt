@@ -95,25 +95,30 @@ fun GameCard(
                     )
                 }
 
+                // Badge left-justified so status ("FINAL"/live clock/tipoff
+                // time) and the star toggle can share this same row on the
+                // right, instead of each getting its own dedicated row -
+                // keeps the tile more compact. An empty zero-size spacer
+                // stands in for the badge when there's no tier yet, so
+                // SpaceBetween still pushes the status+star group to the
+                // right edge.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    StatusIndicator(game)
-                    Spacer(modifier = Modifier.width(10.dp))
-                    StarButton(isStarred = isStarred, onClick = onToggleStar)
-                }
-
-                // Sits centered above the team names, on its own row, rather
-                // than squeezed alongside them - that used to force long team
-                // names to shrink to fit next to the badge.
-                if (tier != null) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.Center) {
+                    if (tier != null) {
                         TierBadge(
                             tier = tier,
                             numericScore = if (showNumericScore) game.effectiveScore(weights) else null
                         )
+                    } else {
+                        Spacer(modifier = Modifier.size(0.dp))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        StatusIndicator(game)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        StarButton(isStarred = isStarred, onClick = onToggleStar)
                     }
                 }
 

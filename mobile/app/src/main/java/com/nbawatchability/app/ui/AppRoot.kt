@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.SportsBasketball
 import androidx.compose.material.icons.filled.Star
@@ -44,23 +43,24 @@ import com.nbawatchability.app.ui.theme.TierWorthYourTime
 
 private enum class BottomNavTab(val label: String, val icon: ImageVector) {
     GAMES("Games", Icons.Default.SportsBasketball),
+    STARRED("Starred", Icons.Default.Star),
     STANDINGS("Standings", Icons.Default.Leaderboard),
     STATS("Stats", Icons.Default.BarChart),
-    NEWS("News", Icons.AutoMirrored.Filled.Article),
-    STARRED("Starred", Icons.Default.Star),
-    ABOUT("About", Icons.Default.Info)
+    NEWS("News", Icons.AutoMirrored.Filled.Article)
 }
 
 /**
  * App-wide root: a persistent bottom navigation bar with 5 tabs. Games,
  * Standings, Stats, and News all react to the same global league selection
- * (Settings' "Show WNBA" toggle + the title dropdown); "About" remains a
- * placeholder.
+ * (Settings' "Show WNBA" toggle + the title dropdown). "About" isn't a tab -
+ * it's a slot's worth of nav real estate that Starred needed more, so it
+ * lives one level deeper, opened from Settings instead.
  */
 @Composable
 fun AppRoot() {
     var selectedTab by rememberSaveable { mutableStateOf(BottomNavTab.GAMES) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showAbout by rememberSaveable { mutableStateOf(false) }
     var highlightsVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     val settingsViewModel: RubricSettingsViewModel = viewModel()
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
@@ -76,7 +76,15 @@ fun AppRoot() {
     }
 
     BackHandler(enabled = showSettings) { showSettings = false }
+    // Declared after showSettings's handler so it sits higher on the back
+    // stack - back from About returns to Settings, not straight past it.
+    BackHandler(enabled = showAbout) { showAbout = false }
     BackHandler(enabled = highlightsVideoId != null) { highlightsVideoId = null }
+
+    if (showAbout) {
+        AboutScreen(onBack = { showAbout = false })
+        return
+    }
 
     if (showSettings) {
         SettingsScreen(
@@ -85,6 +93,7 @@ fun AppRoot() {
             onReset = settingsViewModel::resetToDefaults,
             showWnba = appSettingsViewModel.settings.showWnba,
             onShowWnbaChange = appSettingsViewModel::setShowWnba,
+            onAboutClick = { showAbout = true },
             onBack = { showSettings = false }
         )
         return
@@ -145,7 +154,6 @@ fun AppRoot() {
                     onToggleStar = starredGamesViewModel::toggleStar,
                     onWatchHighlights = { videoId -> highlightsVideoId = videoId }
                 )
-                BottomNavTab.ABOUT -> PlaceholderScreen("About — coming soon.")
             }
         }
     }
@@ -252,22 +260,5 @@ private fun ErrorScreen(message: String, onRetry: () -> Unit) {
             modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
         )
         Button(onClick = onRetry) { Text("Retry") }
-    }
-}
-
-@Composable
-private fun PlaceholderScreen(text: String) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = text,
-            color = TextSecondary,
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(24.dp)
-        )
     }
 }
