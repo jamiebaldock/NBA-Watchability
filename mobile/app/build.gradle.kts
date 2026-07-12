@@ -81,6 +81,13 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+    // A hand-rolled WebView+iframe embed hit YouTube's "error 152" on a real
+    // device (not just the emulator's outdated WebView) - this is the
+    // standard, actively-maintained library for playing YouTube videos in a
+    // WebView on Android and handles the IFrame Player API correctly.
+    // Pinned below 13.x: that pulls transitive Compose/lifecycle deps
+    // requiring compileSdk 35 + AGP 8.6+, which this project isn't on.
+    implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:12.1.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
