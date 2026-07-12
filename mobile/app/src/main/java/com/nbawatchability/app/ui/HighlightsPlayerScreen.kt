@@ -25,6 +25,7 @@ import com.nbawatchability.app.ui.theme.TextPrimary
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.options.IFramePlayerOptions
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
 
 /**
@@ -80,15 +81,27 @@ private fun YoutubePlayer(videoId: String) {
             YouTubePlayerView(context).apply {
                 layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 lifecycleOwner.lifecycle.addObserver(this)
-                addYouTubePlayerListener(object : AbstractYouTubePlayerListener() {
-                    override fun onReady(youTubePlayer: YouTubePlayer) {
-                        youTubePlayer.loadVideo(videoId, 0f)
-                    }
 
-                    override fun onError(youTubePlayer: YouTubePlayer, error: PlayerConstants.PlayerError) {
-                        errorMessage = "Couldn't play this video (${error.name.lowercase().replace('_', ' ')})."
-                    }
-                })
+                // Automatic initialization silently stopped working after a
+                // YouTube IFrame API change - it never calls onReady and
+                // never errors, just leaves the player black forever.
+                // Explicit initialize() + IFramePlayerOptions is the current
+                // reliable path.
+                enableAutomaticInitialization = false
+                val options = IFramePlayerOptions.Builder().controls(1).build()
+                initialize(
+                    object : AbstractYouTubePlayerListener() {
+                        override fun onReady(youTubePlayer: YouTubePlayer) {
+                            youTubePlayer.loadVideo(videoId, 0f)
+                        }
+
+                        override fun onError(youTubePlayer: YouTubePlayer, error: PlayerConstants.PlayerError) {
+                            errorMessage = "Couldn't play this video (${error.name.lowercase().replace('_', ' ')})."
+                        }
+                    },
+                    true,
+                    options
+                )
             }
         }
     )

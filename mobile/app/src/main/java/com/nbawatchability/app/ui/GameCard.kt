@@ -206,6 +206,12 @@ private fun HighlightsRow(onClick: () -> Unit, modifier: Modifier = Modifier) {
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.bodyMedium
         )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "· Spoiler alert",
+            color = TextMuted,
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 
