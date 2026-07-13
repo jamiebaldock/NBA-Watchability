@@ -16,7 +16,15 @@ interface HistoricalGame {
   awayScore: number;
   homeScore: number;
   finalMargin: number;
+  // Optional: absent for entries this process's migrateHistoricalRubricFields.ts
+  // run hasn't reached yet (it patches historicalWatchability.json in place,
+  // progressively) - default to 0/false below rather than crash mid-migration.
+  largestDeficitOvercome?: number;
+  leadChanges?: number;
   overtimePeriods: number;
+  closeInFinalTwoMin?: boolean;
+  leadChangeInFinalMin?: boolean;
+  decidedOnFinalPossession?: boolean;
   starPerformance: StarPerformance;
   buzzerBeater: boolean;
   score: number;
@@ -85,10 +93,12 @@ export async function getHistory(start: string, end: string): Promise<HistoryRes
     m: g.finalMargin,
     as: g.awayScore,
     hs: g.homeScore,
+    cb: g.largestDeficitOvercome,
+    lc: g.leadChanges,
     ot: g.overtimePeriods,
-    c5: false,
-    lcf: false,
-    fp: false,
+    c5: g.closeInFinalTwoMin ?? false,
+    lcf: g.leadChangeInFinalMin ?? false,
+    fp: g.decidedOnFinalPossession ?? false,
     bz: g.buzzerBeater,
     st: g.starPerformance,
     hook: `${g.away} at ${g.home}.`,

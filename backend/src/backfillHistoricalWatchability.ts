@@ -50,7 +50,12 @@ export interface HistoricalGame {
   awayScore: number;
   homeScore: number;
   finalMargin: number;
+  largestDeficitOvercome: number;
+  leadChanges: number;
   overtimePeriods: number;
+  closeInFinalTwoMin: boolean;
+  leadChangeInFinalMin: boolean;
+  decidedOnFinalPossession: boolean;
   starPerformance: string | null;
   buzzerBeater: boolean;
   score: number;
@@ -155,7 +160,12 @@ async function main() {
           awayScore: parseFloat(away.score),
           homeScore: parseFloat(home.score),
           finalMargin: mapped.rubric.finalMargin,
+          largestDeficitOvercome: mapped.rubric.largestDeficitOvercome ?? 0,
+          leadChanges: mapped.rubric.leadChanges ?? 0,
           overtimePeriods: mapped.rubric.overtimePeriods,
+          closeInFinalTwoMin: mapped.rubric.closeInFinalTwoMin,
+          leadChangeInFinalMin: mapped.rubric.leadChangeInFinalMin,
+          decidedOnFinalPossession: mapped.rubric.decidedOnFinalPossession,
           starPerformance: mapped.rubric.starPerformance,
           buzzerBeater: mapped.rubric.buzzerBeater,
           score: breakdown.total,
