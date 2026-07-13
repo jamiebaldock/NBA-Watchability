@@ -81,8 +81,14 @@ private fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.clickable { expanded = true }
         ) {
+            AsyncImage(
+                model = selectedLeague.logoUrl,
+                contentDescription = null,
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "${selectedLeague.displayName} Watchability",
+                text = selectedLeague.displayName,
                 color = TextPrimary,
                 style = MaterialTheme.typography.titleLarge.copy(fontSize = 24.sp)
             )
