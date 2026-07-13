@@ -116,8 +116,22 @@ const YT_GIVE_UP_AFTER_MS = 48 * 60 * 60 * 1000;
  * until YT_GIVE_UP_AFTER_MS has elapsed since tipoff. NBA (and its Summer
  * League variants) search the @NBA channel; WNBA searches @WNBA.
  */
+// Logged once, not per-call, since ensureHighlightsVideo runs on every final
+// game on every request - without a memoized guard this would spam the same
+// line into Render's logs all day. This one line is the only thing that
+// distinguishes "search is silently never running" from "search runs and
+// keeps missing" from the outside - both look identical as yt: undefined in
+// the API response.
+let loggedMissingApiKey = false;
+
 async function ensureHighlightsVideo(day: CachedDay, league: League, event: EspnEvent): Promise<void> {
-  if (!isYoutubeSearchConfigured()) return; // no key yet - leave unchecked so it's retried once one's added
+  if (!isYoutubeSearchConfigured()) {
+    if (!loggedMissingApiKey) {
+      loggedMissingApiKey = true;
+      console.warn("ensureHighlightsVideo: YOUTUBE_API_KEY not set - highlights search is disabled entirely");
+    }
+    return;
+  }
 
   const cached = day.games[event.id];
   if (cached.yt) return;
@@ -132,9 +146,15 @@ async function ensureHighlightsVideo(day: CachedDay, league: League, event: Espn
   }
 
   const highlightsLeague: HighlightsLeague = league === "wnba" ? "wnba" : "nba";
+  console.log(`ensureHighlightsVideo: searching for ${cached.away} @ ${cached.home} (${event.id}, ${highlightsLeague})`);
   const match = await searchHighlightsVideo(highlightsLeague, cached.away, cached.home, cached.tipoffUtc);
   cached.ytCheckedAt = new Date(now).toISOString();
-  if (match) cached.yt = match.videoId;
+  if (match) {
+    cached.yt = match.videoId;
+    console.log(`ensureHighlightsVideo: matched "${match.title}" (${match.videoId})`);
+  } else {
+    console.log(`ensureHighlightsVideo: no match for ${cached.away} @ ${cached.home} (${event.id})`);
+  }
 }
 
 /**
