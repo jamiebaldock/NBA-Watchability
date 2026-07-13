@@ -2,6 +2,7 @@ import compression from "compression";
 import express from "express";
 import {
   BadRequestError,
+  getHistoryForRange,
   getNewsForLeagueGroup,
   getSchedule,
   getStandingsForLeagueGroup,
@@ -52,6 +53,21 @@ app.get("/stats", async (req, res) => {
   try {
     const leagueGroup = String(req.query.leagueGroup ?? "nba");
     res.json(await getStatsForLeagueGroup(leagueGroup));
+  } catch (err) {
+    if (err instanceof BadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
+});
+
+app.get("/api/history", async (req, res) => {
+  try {
+    const start = String(req.query.start ?? "");
+    const end = String(req.query.end ?? "");
+    res.json(await getHistoryForRange(start, end));
   } catch (err) {
     if (err instanceof BadRequestError) {
       res.status(400).json({ error: err.message });

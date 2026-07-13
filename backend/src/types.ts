@@ -25,6 +25,14 @@ export interface GameJson {
   m?: number;
   cb?: number;
   lc?: number;
+  // Absolute final score - only ever populated by historyService.ts. Every
+  // other tab deliberately never sends these (spec section 2 point 8: never
+  // reveal the winner or final score for a game the viewer might not have
+  // watched yet), but a game the user is intentionally browsing in the
+  // History tab has nothing left to spoil, so showing it plainly is the
+  // point rather than a leak.
+  as?: number;
+  hs?: number;
   ot: number;
   c5: boolean;
   lcf: boolean;

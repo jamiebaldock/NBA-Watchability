@@ -1,5 +1,6 @@
 import { dateStringsBetween } from "./dateRange";
 import { getGamesForDate } from "./gamesService";
+import { earliestHistoryDate, getHistory, HistoryResult } from "./historyService";
 import { getNews } from "./newsService";
 import { getStandings } from "./standingsService";
 import { getStats } from "./statsService";
@@ -54,4 +55,25 @@ export async function getStatsForLeagueGroup(leagueGroupRaw = "nba"): Promise<St
 
 export async function getNewsForLeagueGroup(leagueGroupRaw = "nba"): Promise<NewsResponseJson> {
   return getNews(parseLeagueGroup(leagueGroupRaw));
+}
+
+/**
+ * Silently clamps rather than rejecting (spec latitude: "grey out or just
+ * clamp, whichever is simpler") - a client-side preset like "All Time" is
+ * built from today's date and the dataset's actual earliest date can shift
+ * as future backfills extend it, so the client shouldn't need to know that
+ * boundary precisely to ask for it.
+ */
+export async function getHistoryForRange(startRaw: string, endRaw: string): Promise<HistoryResult> {
+  if (!DATE_RE.test(startRaw) || !DATE_RE.test(endRaw)) {
+    throw new BadRequestError("start and end must be YYYY-MM-DD");
+  }
+
+  const earliest = earliestHistoryDate();
+  const today = new Date().toISOString().slice(0, 10);
+  const start = startRaw < earliest ? earliest : startRaw;
+  const end = endRaw > today ? today : endRaw;
+  if (end < start) throw new BadRequestError("end must not be before start");
+
+  return getHistory(start, end);
 }
