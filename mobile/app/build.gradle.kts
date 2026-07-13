@@ -16,7 +16,7 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "com.nbawatchability.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.nbawatchability.app"
@@ -85,9 +85,12 @@ dependencies {
     // device (not just the emulator's outdated WebView) - this is the
     // standard, actively-maintained library for playing YouTube videos in a
     // WebView on Android and handles the IFrame Player API correctly.
-    // Pinned below 13.x: that pulls transitive Compose/lifecycle deps
-    // requiring compileSdk 35 + AGP 8.6+, which this project isn't on.
-    implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:12.1.1")
+    // 12.1.1 hardcodes origin=https://www.youtube.com with no override,
+    // which YouTube's embedder-identity check now rejects as self-spoofed
+    // (same error 152 all over again) - 13.0.0's breaking change "use app's
+    // package as origin" fixes this at the root, but requires compileSdk 35
+    // + AGP 8.6+ (bumped alongside this).
+    implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:13.0.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
