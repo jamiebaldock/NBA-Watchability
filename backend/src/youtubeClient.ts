@@ -25,10 +25,13 @@ const YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
 const YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos";
 
 // Real full-game-highlights reels from both channels run well under this
-// (observed 9-15 min) - a plain broadcast replay, condensed classic, or
-// unrelated long-form video matching the team names on text alone would
-// blow past it, so this catches false positives text matching alone can't.
-const MAX_HIGHLIGHTS_SECONDS = 15 * 60;
+// (observed 9-15 min in the regular season, but Summer League reels have
+// been confirmed as long as 15:38 - higher-scoring, sloppier games run
+// longer highlight packages) - a plain broadcast replay, condensed classic,
+// or unrelated long-form video matching the team names on text alone would
+// blow past this, so it still catches false positives text matching alone
+// can't, without rejecting genuine highlights videos that run a bit long.
+const MAX_HIGHLIGHTS_SECONDS = 20 * 60;
 
 interface YoutubeSearchItem {
   id?: { videoId?: string };
@@ -115,8 +118,8 @@ async function fetchDurationsSeconds(apiKey: string, videoIds: string[]): Promis
  * video, scoped to a tight window around the game date to disambiguate from
  * other seasons' matchups of the same two teams. Candidates must match both
  * team nicknames and the "full game highlights" phrase in the title, AND
- * run under 15 minutes (a real highlights reel's length - filters out
- * unrelated long-form videos that happen to match on text alone). Returns
+ * run under MAX_HIGHLIGHTS_SECONDS (a real highlights reel's length - filters
+ * out unrelated long-form videos that happen to match on text alone). Returns
  * null (not an error) if YOUTUBE_API_KEY isn't set, the request fails, or
  * nothing qualifies - callers should treat that as "no highlights
  * available" rather than retrying, to stay well under the 100/day cap.
@@ -136,7 +139,15 @@ export async function searchHighlightsVideo(
 
   const awayNickname = teamNickname(away);
   const homeNickname = teamNickname(home);
-  const query = `${away} ${home} full game highlights`;
+  // Both channels' official titles use nickname-only ("CAVALIERS vs PACERS
+  // | ... | FULL GAME HIGHLIGHTS"), never the "City Nickname" display name -
+  // querying with the full display name ("Cleveland Cavaliers Indiana
+  // Pacers...") was diluting relevance ranking against the channel's dense
+  // day-to-day upload volume (recaps, top plays, other games) and could push
+  // the actual match outside maxResults, especially during Summer League
+  // where the channel posts far more same-day videos than a regular-season
+  // day. Querying with what the title actually contains ranks it correctly.
+  const query = `${awayNickname} ${homeNickname} full game highlights`;
 
   const params = new URLSearchParams({
     key: apiKey,
@@ -155,7 +166,10 @@ export async function searchHighlightsVideo(
     // what actually matters here) ranks by how well each result matches q,
     // which is what surfaces the right game's video.
     order: "relevance",
-    maxResults: "10",
+    // maxResults doesn't affect search.list's quota cost (still 100 units
+    // regardless of count) - a wider net costs nothing and gives a real
+    // margin against the denser Summer League candidate pool.
+    maxResults: "20",
     publishedAfter: publishedAfter.toISOString(),
     publishedBefore: publishedBefore.toISOString(),
   });
