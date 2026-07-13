@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.SportsBasketball
 import androidx.compose.material.icons.filled.Star
@@ -46,15 +47,17 @@ private enum class BottomNavTab(val label: String, val icon: ImageVector) {
     STARRED("Starred", Icons.Default.Star),
     STANDINGS("Standings", Icons.Default.Leaderboard),
     STATS("Stats", Icons.Default.BarChart),
-    NEWS("News", Icons.AutoMirrored.Filled.Article)
+    NEWS("News", Icons.AutoMirrored.Filled.Article),
+    HISTORY("History", Icons.Default.History)
 }
 
 /**
- * App-wide root: a persistent bottom navigation bar with 5 tabs. Games,
+ * App-wide root: a persistent bottom navigation bar with 6 tabs. Games,
  * Standings, Stats, and News all react to the same global league selection
- * (Settings' "Show WNBA" toggle + the title dropdown). "About" isn't a tab -
- * it's a slot's worth of nav real estate that Starred needed more, so it
- * lives one level deeper, opened from Settings instead.
+ * (Settings' "Show WNBA" toggle + the title dropdown). History is NBA-only
+ * regardless of that toggle - the backfill it reads from is NBA-only. "About"
+ * isn't a tab - it's a slot's worth of nav real estate that Starred needed
+ * more, so it lives one level deeper, opened from Settings instead.
  */
 @Composable
 fun AppRoot() {
@@ -166,6 +169,14 @@ fun AppRoot() {
                     weights = settingsViewModel.weights,
                     onWatchHighlights = { videoId -> highlightsVideoId = videoId }
                 )
+                BottomNavTab.HISTORY -> HistoryTab(
+                    weights = settingsViewModel.weights,
+                    showNumericScore = appSettingsViewModel.settings.showNumericScore,
+                    onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
+                    starredIds = starredGamesViewModel.starredIds,
+                    onToggleStar = starredGamesViewModel::toggleStar,
+                    onWatchHighlights = { videoId -> highlightsVideoId = videoId }
+                )
             }
         }
     }
@@ -248,6 +259,33 @@ private fun StarredTab(
         onWatchHighlights = onWatchHighlights,
         isRefreshing = starredGamesViewModel.isRefreshing,
         onRefresh = starredGamesViewModel::refreshLiveData
+    )
+}
+
+@Composable
+private fun HistoryTab(
+    weights: RubricWeights,
+    showNumericScore: Boolean,
+    onToggleNumericScore: () -> Unit,
+    starredIds: Set<String>,
+    onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
+    onWatchHighlights: (String) -> Unit
+) {
+    val viewModel: HistoryViewModel = viewModel()
+    LaunchedEffect(Unit) { viewModel.load() }
+
+    HistoryScreen(
+        uiState = viewModel.uiState,
+        selectedPreset = viewModel.selectedPreset,
+        earliestDate = viewModel.earliestDate,
+        onPresetSelected = viewModel::load,
+        onRetry = viewModel::retry,
+        showNumericScore = showNumericScore,
+        onToggleNumericScore = onToggleNumericScore,
+        weights = weights,
+        starredIds = starredIds,
+        onToggleStar = onToggleStar,
+        onWatchHighlights = onWatchHighlights
     )
 }
 

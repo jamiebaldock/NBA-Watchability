@@ -7,10 +7,11 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.LocalDate
 
 private val json = Json { ignoreUnknownKeys = true }
 
-/** Talks to the Standings/Stats/News endpoints - same request shape and error handling as [NetworkGameRepository]. */
+/** Talks to the Standings/Stats/News/History endpoints - same request shape and error handling as [NetworkGameRepository]. */
 object NetworkLeagueContentRepository {
 
     suspend fun standings(baseUrl: String, leagueGroup: LeagueGroup): StandingsResponse =
@@ -21,6 +22,11 @@ object NetworkLeagueContentRepository {
 
     suspend fun news(baseUrl: String, leagueGroup: LeagueGroup): NewsResponse =
         get("$baseUrl/news?leagueGroup=${leagueGroup.apiValue}")
+
+    // NBA-only for now (the backfill this serves is NBA-only) - no
+    // leagueGroup param unlike the others above.
+    suspend fun history(baseUrl: String, start: LocalDate, end: LocalDate): HistoryResponse =
+        get("$baseUrl/api/history?start=$start&end=$end")
 
     private suspend inline fun <reified T> get(url: String): T =
         withContext(Dispatchers.IO) {

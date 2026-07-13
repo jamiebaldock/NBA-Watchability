@@ -79,9 +79,19 @@ fun GameCard(
     // Only meaningful on the Starred tab, which combines games from many
     // different dates in one list - elsewhere the day-tab context already
     // makes the date obvious, so this defaults off.
-    showDate: Boolean = false
+    showDate: Boolean = false,
+    // History tab only: these are old, already-finished games the user is
+    // intentionally browsing to pick one to watch, not a live/recent game
+    // that could still be spoiled - so the breakdown starts revealed instead
+    // of blurred behind its own reveal tap.
+    spoilerFree: Boolean = false,
+    // History tab only: a "browse blind" preference, distinct from
+    // spoilerFree/scoreVisible - this hides the watchability rating (tier
+    // badge + breakdown) specifically, not the final score/teams, which stay
+    // visible either way (that's just "what game is this", not a rating).
+    showScore: Boolean = true
 ) {
-    val tier = game.effectiveTier(weights)
+    val tier = if (showScore) game.effectiveTier(weights) else null
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -141,9 +151,9 @@ fun GameCard(
                 }
 
                 Column(modifier = Modifier.padding(top = 8.dp)) {
-                    TeamRow(logoUrl = game.awayLogo, name = game.away)
+                    TeamRow(logoUrl = game.awayLogo, name = game.away, score = game.awayScore)
                     Spacer(modifier = Modifier.height(4.dp))
-                    TeamRow(logoUrl = game.homeLogo, name = game.home)
+                    TeamRow(logoUrl = game.homeLogo, name = game.home, score = game.homeScore)
                 }
 
                 // Once the game is final, the pregame preview area is fully
@@ -152,9 +162,14 @@ fun GameCard(
                     PitchSection(game = game, modifier = Modifier.padding(top = 10.dp))
                 }
 
-                if (game.hasBreakdown) {
+                if (showScore && game.hasBreakdown) {
                     val breakdownTopPadding = if (game.status == GameStatus.FINAL) 10.dp else 12.dp
-                    FullBreakdownSection(game = game, weights = weights, modifier = Modifier.padding(top = breakdownTopPadding))
+                    FullBreakdownSection(
+                        game = game,
+                        weights = weights,
+                        spoilerFree = spoilerFree,
+                        modifier = Modifier.padding(top = breakdownTopPadding)
+                    )
                 }
 
                 // Not spoiler-sensitive like the breakdown above - the video
@@ -262,8 +277,11 @@ private val LOGO_SIZE = 20.dp
 
 // Away listed above home, each with its logo before the name — standard
 // scoreboard convention, so no "at"/"@" separator needed between them.
+// [score] is only ever non-null on the History tab (see Game.awayScore/
+// homeScore) - every other tab leaves it null and this row renders exactly
+// as before.
 @Composable
-private fun TeamRow(logoUrl: String?, name: String) {
+private fun TeamRow(logoUrl: String?, name: String, score: Int? = null) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (logoUrl != null) {
             AsyncImage(
@@ -280,6 +298,15 @@ private fun TeamRow(logoUrl: String?, name: String) {
             baseStyle = MaterialTheme.typography.titleMedium,
             modifier = Modifier.weight(1f, fill = false)
         )
+        if (score != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = score.toString(),
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = TABULAR_NUMS)
+            )
+        }
     }
 }
 

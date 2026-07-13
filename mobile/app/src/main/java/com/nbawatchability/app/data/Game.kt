@@ -48,6 +48,12 @@ data class Game(
     @SerialName("q") val quarter: Int? = null,
     @SerialName("clk") val clock: String? = null,
     @SerialName("m") val margin: Int? = null,
+    // Absolute final score - only ever sent by the History tab's endpoint.
+    // Every other tab deliberately never reveals the winner or exact score
+    // (spec section 2 point 8), but a game the user is intentionally
+    // browsing in History has nothing left to spoil.
+    @SerialName("as") val awayScore: Int? = null,
+    @SerialName("hs") val homeScore: Int? = null,
     @SerialName("cb") val comeback: Int? = null,
     @SerialName("lc") val leadChanges: Int? = null,
     @SerialName("ot") val overtimePeriods: Int = 0,

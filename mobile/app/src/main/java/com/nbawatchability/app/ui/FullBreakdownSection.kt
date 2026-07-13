@@ -52,10 +52,15 @@ private val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
  * (via redacted placeholder bars) by default, with its own reveal tap
  * separate from the always-visible hook above it, matching the reference
  * prototype.
+ *
+ * [spoilerFree] (History tab only) starts this revealed instead of blurred -
+ * an old game the user is intentionally browsing to pick one to watch has
+ * nothing left to spoil. Still collapsible via the same toggle, just not
+ * hidden by default.
  */
 @Composable
-fun FullBreakdownSection(game: Game, weights: RubricWeights, modifier: Modifier = Modifier) {
-    var revealed by remember(game.id) { mutableStateOf(false) }
+fun FullBreakdownSection(game: Game, weights: RubricWeights, modifier: Modifier = Modifier, spoilerFree: Boolean = false) {
+    var revealed by remember(game.id) { mutableStateOf(spoilerFree) }
 
     // The toggle text stays anchored at the bottom in both states - only its
     // label swaps - rather than moving from bottom (collapsed) to top
