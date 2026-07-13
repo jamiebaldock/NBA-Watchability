@@ -1,32 +1,41 @@
 package com.nbawatchability.app.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import android.view.ViewGroup
 import android.webkit.WebView
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.doOnNextLayout
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.nbawatchability.app.ui.theme.BackgroundBase
-import com.nbawatchability.app.ui.theme.TextPrimary
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
@@ -34,40 +43,94 @@ import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.options.IFram
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
 import kotlinx.coroutines.delay
 
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
 /**
- * Full-screen player for a game's official full-game-highlights video. Uses
- * android-youtube-player rather than a hand-rolled WebView+iframe embed,
- * which handles the IFrame Player API's postMessage handshake correctly.
- * Pinned to 13.0.0+: earlier versions hardcode the embed's origin to
- * https://www.youtube.com, which YouTube's embedder-identity check now
- * rejects as self-spoofed (error 152) - 13.x derives the origin from the
- * app's own package name instead. A dedicated screen (rather than an inline
- * player on the game card) so only one player is ever alive at a time,
- * mounted while this is open and torn down on back - a scrolling list of
- * finished-game cards could otherwise hold many expensive WebView instances
- * at once.
+ * Locks the screen to landscape and hides the system bars for as long as
+ * this is composed, restoring both on dispose. Relies on MainActivity's
+ * android:configChanges (orientation|screenSize|...) to keep the orientation
+ * change from recreating the Activity - without that, flipping
+ * requestedOrientation would tear down and rebuild the whole app's state.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LockLandscapeFullscreen() {
+    val activity = LocalView.current.context.findActivity() ?: return
+    DisposableEffect(activity) {
+        val window = activity.window
+        val decorView = window.decorView
+        val originalOrientation = activity.requestedOrientation
+        val insetsController = WindowCompat.getInsetsController(window, decorView)
+
+        fun hideSystemBars() {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        }
+
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        hideSystemBars()
+
+        // The orientation flip above triggers its own decorView relayout,
+        // which reliably clobbers the hide() call just made above (the
+        // system re-shows the bars as part of that relayout, a well-known
+        // quirk of driving immersive mode and requestedOrientation from the
+        // same frame) - reasserting on every subsequent layout pass, not
+        // just once up front, is what actually keeps the bars hidden once
+        // the rotation itself settles.
+        val layoutListener = android.view.View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> hideSystemBars() }
+        decorView.addOnLayoutChangeListener(layoutListener)
+
+        onDispose {
+            decorView.removeOnLayoutChangeListener(layoutListener)
+            activity.requestedOrientation = originalOrientation
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+            insetsController.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+}
+
+/**
+ * Full-screen, edge-to-edge, landscape-locked player for a game's official
+ * full-game-highlights video - no title bar, so the video itself is the
+ * whole screen. Uses android-youtube-player rather than a hand-rolled
+ * WebView+iframe embed, which handles the IFrame Player API's postMessage
+ * handshake correctly. Pinned to 13.0.0+: earlier versions hardcode the
+ * embed's origin to https://www.youtube.com, which YouTube's
+ * embedder-identity check now rejects as self-spoofed (error 152) - 13.x
+ * derives the origin from the app's own package name instead. A dedicated
+ * screen (rather than an inline player on the game card) so only one player
+ * is ever alive at a time, mounted while this is open and torn down on back
+ * - a scrolling list of finished-game cards could otherwise hold many
+ * expensive WebView instances at once.
+ */
 @Composable
 fun HighlightsPlayerScreen(videoId: String, onBack: () -> Unit) {
-    Scaffold(
-        containerColor = BackgroundBase,
-        topBar = {
-            TopAppBar(
-                title = { Text("Highlights", color = TextPrimary) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                }
+    LockLandscapeFullscreen()
+
+    Box(modifier = Modifier.fillMaxSize().background(BackgroundBase)) {
+        YoutubePlayer(videoId = videoId)
+
+        // A small floating affordance rather than a title bar - the system
+        // back gesture/button already exits this screen (AppRoot.kt's
+        // BackHandler), but not every device has gesture nav, and hiding the
+        // system bars (LockLandscapeFullscreen) also hides the nav bar's
+        // own back button.
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+                .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = Color.White
             )
-        }
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            YoutubePlayer(videoId = videoId)
         }
     }
 }

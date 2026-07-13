@@ -3,8 +3,8 @@
 // rather than found via search.list - lets specific games show a working
 // highlights link immediately without spending any of the 100/day search
 // quota. Safe to run on every startup: applySeedHighlights only ever sets
-// yt/ytChecked, never touches anything a real search may have already found
-// (checked via ytChecked, so a genuine search result is never clobbered).
+// yt, never touches anything a real search may have already found (checked
+// via yt itself, so a genuine search result is never clobbered).
 import { loadDay, saveDay } from "./cache";
 import { getGamesForDate } from "./gamesService";
 import { LeagueGroup } from "./types";
@@ -65,7 +65,6 @@ export async function applySeedHighlights(): Promise<void> {
         // to override with a human-confirmed video.
         if (!cached || cached.yt) continue;
         cached.yt = entry.videoId;
-        cached.ytChecked = true;
         changed = true;
       }
       if (changed) saveDay(day);

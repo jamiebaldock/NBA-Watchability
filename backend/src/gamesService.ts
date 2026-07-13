@@ -98,21 +98,42 @@ async function ensurePregamePreview(day: CachedDay, league: League, event: EspnE
   cached.pitch = pitch;
 }
 
+// The official channel rarely has a game's highlights video up within
+// minutes of it going final (observed same-day, but not immediately), so a
+// miss is retried on this cadence rather than being permanent - not on
+// every request, since search.list has its own hard 100-calls/day quota
+// bucket (youtubeClient.ts) and this app's low traffic means "every
+// request" and "every 30 minutes" are similar in practice anyway.
+const YT_RETRY_INTERVAL_MS = 30 * 60 * 1000;
+// Bounds quota spend on games that never get an official upload (rare, but
+// not impossible for Summer League) - by 48h after tipoff, the video is
+// either up or it isn't coming.
+const YT_GIVE_UP_AFTER_MS = 48 * 60 * 60 * 1000;
+
 /**
- * Looks up the official full-game-highlights video exactly once per game,
- * ever - not on every request for a final game, since search.list has its
- * own hard 100-calls/day quota bucket (youtubeClient.ts). NBA (and its
- * Summer League variants) search the @NBA channel; WNBA searches @WNBA.
+ * Looks up the official full-game-highlights video for a final game,
+ * retrying a miss periodically (see YT_RETRY_INTERVAL_MS) until found or
+ * until YT_GIVE_UP_AFTER_MS has elapsed since tipoff. NBA (and its Summer
+ * League variants) search the @NBA channel; WNBA searches @WNBA.
  */
 async function ensureHighlightsVideo(day: CachedDay, league: League, event: EspnEvent): Promise<void> {
   if (!isYoutubeSearchConfigured()) return; // no key yet - leave unchecked so it's retried once one's added
 
   const cached = day.games[event.id];
-  if (cached.ytChecked) return;
+  if (cached.yt) return;
+
+  const now = Date.now();
+  if (cached.ytCheckedAt) {
+    const sinceTipoffMs = now - new Date(cached.tipoffUtc).getTime();
+    if (sinceTipoffMs > YT_GIVE_UP_AFTER_MS) return;
+
+    const sinceLastCheckMs = now - new Date(cached.ytCheckedAt).getTime();
+    if (sinceLastCheckMs < YT_RETRY_INTERVAL_MS) return;
+  }
 
   const highlightsLeague: HighlightsLeague = league === "wnba" ? "wnba" : "nba";
   const match = await searchHighlightsVideo(highlightsLeague, cached.away, cached.home, cached.tipoffUtc);
-  cached.ytChecked = true;
+  cached.ytCheckedAt = new Date(now).toISOString();
   if (match) cached.yt = match.videoId;
 }
 

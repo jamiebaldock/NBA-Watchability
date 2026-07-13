@@ -14,9 +14,9 @@ function channelIdFor(league: HighlightsLeague): string {
 
 // search.list has its own dedicated daily quota bucket (separate from the
 // general 10,000-unit pool), hard-capped at 100 calls/day as of Google's
-// June 2026 quota change - this is only safe because gamesService.ts calls
-// it once per game ever, caching the result forever (cache.ts's ytChecked
-// flag), never re-searching on every request.
+// June 2026 quota change - this is only safe because gamesService.ts caches
+// a match forever and gates retries of a miss on a cooldown (cache.ts's
+// ytCheckedAt), never re-searching on every single request.
 const YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
 
 // videos.list draws from the general 10,000-unit pool at 1 unit/call, not

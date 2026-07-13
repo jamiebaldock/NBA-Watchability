@@ -1,17 +1,20 @@
 // Proactively triggers the highlights search shortly after a game finishes,
 // instead of waiting for a user to happen to browse to that date first.
 // getGamesForDate (gamesService.ts) already does the actual search+cache
-// work via ensureHighlightsVideo, gated so a game is only ever searched
-// once - this just calls it on a timer instead of relying on an HTTP
-// request to trigger it, so a finished game's link shows up for whoever's
-// already looking at the app, not just the next person to load that date.
+// work via ensureHighlightsVideo, gated so a found match is never re-searched
+// and a miss is retried only on its own cooldown (YT_RETRY_INTERVAL_MS) -
+// this just calls it on a timer instead of relying on an HTTP request to
+// trigger it, so a finished game's link shows up for whoever's already
+// looking at the app, not just the next person to load that date.
 import { getGamesForDate } from "./gamesService";
 import { LeagueGroup } from "./types";
 
 const POLL_INTERVAL_MS = 15 * 60 * 1000;
 // Covers a game that finished late (crossing midnight UTC) or was missed
-// by a prior tick - cheap to re-check since already-searched games are a
-// no-op (cache.ts's ytChecked flag), so a small buffer costs nothing extra.
+// by a prior tick - cheap to re-check since an already-found match is a
+// no-op and a still-unmatched game is skipped until its own retry cooldown
+// elapses (both in gamesService.ts's ensureHighlightsVideo), so a small
+// buffer costs nothing extra.
 const LOOKBACK_DAYS = 2;
 const LEAGUE_GROUPS: LeagueGroup[] = ["nba", "wnba"];
 

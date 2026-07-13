@@ -26,13 +26,18 @@ export interface CachedGame {
   stakes?: number;
   hook?: string;
   pitch?: string;
-  // Matched YouTube video ID for the official full-game-highlights video,
-  // searched once (ever) after the game goes final. ytChecked distinguishes
-  // "searched, nothing matched" from "not searched yet" so a miss doesn't
-  // get retried on every request - both are optional for the old reason:
-  // cache files written before this feature existed have neither.
+  // Matched YouTube video ID for the official full-game-highlights video.
+  // ytCheckedAt (ISO timestamp of the most recent search attempt) lets a
+  // miss be retried periodically instead of being cached as permanent - the
+  // official channel usually doesn't have the video up within minutes of a
+  // game going final, so a single check-and-never-again (the old ytChecked
+  // boolean) silently locked in "no highlights" for most games, forever.
+  // Both are optional for the old reason: cache files written before this
+  // feature existed have neither, and files written by the old boolean
+  // scheme have ytChecked but not ytCheckedAt, which reads as "never
+  // checked" under the new scheme and self-heals on the next request.
   yt?: string;
-  ytChecked?: boolean;
+  ytCheckedAt?: string;
   finalRubric?: {
     finalMargin: number;
     largestDeficitOvercome: number;
