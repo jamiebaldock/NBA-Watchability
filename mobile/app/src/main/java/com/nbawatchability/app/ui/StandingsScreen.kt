@@ -16,11 +16,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,30 +28,26 @@ import coil.compose.AsyncImage
 import com.nbawatchability.app.data.StandingsGroup
 import com.nbawatchability.app.data.StandingsResponse
 import com.nbawatchability.app.data.StandingsTeam
-import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.SurfaceCardElevated
 import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
 
-@OptIn(ExperimentalMaterial3Api::class)
+// No Scaffold/TopAppBar of its own - this is one page of the merged
+// Leaders tab (LeadersScreen.kt), which provides a single shared app bar
+// and TabRow above the Standings/Stats HorizontalPager.
 @Composable
 fun StandingsScreen(uiState: StandingsUiState, onRetry: () -> Unit) {
-    Scaffold(
-        containerColor = BackgroundBase,
-        topBar = { TopAppBar(title = { Text("Standings", color = TextPrimary) }) }
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (uiState) {
-                is StandingsUiState.Loading -> CenteredSpinner()
-                is StandingsUiState.Error -> CenteredError(uiState.message, onRetry)
-                is StandingsUiState.Loaded ->
-                    if (uiState.data.groups.isEmpty()) {
-                        CenteredMessage("No standings available yet - check back once the season's underway.")
-                    } else {
-                        StandingsList(uiState.data)
-                    }
-            }
+    Box(modifier = Modifier.fillMaxSize()) {
+        when (uiState) {
+            is StandingsUiState.Loading -> CenteredSpinner()
+            is StandingsUiState.Error -> CenteredError(uiState.message, onRetry)
+            is StandingsUiState.Loaded ->
+                if (uiState.data.groups.isEmpty()) {
+                    CenteredMessage("No standings available yet - check back once the season's underway.")
+                } else {
+                    StandingsList(uiState.data)
+                }
         }
     }
 }

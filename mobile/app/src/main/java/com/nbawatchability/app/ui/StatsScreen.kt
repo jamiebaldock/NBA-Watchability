@@ -20,12 +20,9 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,31 +37,27 @@ import coil.compose.AsyncImage
 import com.nbawatchability.app.data.StatCategory
 import com.nbawatchability.app.data.StatLeader
 import com.nbawatchability.app.data.StatsResponse
-import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.SurfaceCardElevated
 import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 
-@OptIn(ExperimentalMaterial3Api::class)
+// No Scaffold/TopAppBar of its own - this is one page of the merged
+// Leaders tab (LeadersScreen.kt), which provides a single shared app bar
+// and TabRow above the Standings/Stats HorizontalPager.
 @Composable
 fun StatsScreen(uiState: StatsUiState, onRetry: () -> Unit) {
-    Scaffold(
-        containerColor = BackgroundBase,
-        topBar = { TopAppBar(title = { Text("League Leaders", color = TextPrimary) }) }
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (uiState) {
-                is StatsUiState.Loading -> CenteredSpinner()
-                is StatsUiState.Error -> CenteredError(uiState.message, onRetry)
-                is StatsUiState.Loaded ->
-                    if (uiState.data.categories.isEmpty()) {
-                        CenteredMessage("No stats available yet - check back once the season's underway.")
-                    } else {
-                        StatsList(uiState.data)
-                    }
-            }
+    Box(modifier = Modifier.fillMaxSize()) {
+        when (uiState) {
+            is StatsUiState.Loading -> CenteredSpinner()
+            is StatsUiState.Error -> CenteredError(uiState.message, onRetry)
+            is StatsUiState.Loaded ->
+                if (uiState.data.categories.isEmpty()) {
+                    CenteredMessage("No stats available yet - check back once the season's underway.")
+                } else {
+                    StatsList(uiState.data)
+                }
         }
     }
 }

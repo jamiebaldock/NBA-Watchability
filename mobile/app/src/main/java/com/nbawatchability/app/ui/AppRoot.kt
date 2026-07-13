@@ -8,9 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Leaderboard
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.SportsBasketball
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
@@ -45,15 +44,19 @@ import com.nbawatchability.app.ui.theme.TierWorthYourTime
 private enum class BottomNavTab(val label: String, val icon: ImageVector) {
     GAMES("Games", Icons.Default.SportsBasketball),
     STARRED("Starred", Icons.Default.Star),
-    STANDINGS("Standings", Icons.Default.Leaderboard),
-    STATS("Stats", Icons.Default.BarChart),
-    NEWS("News", Icons.AutoMirrored.Filled.Article),
-    HISTORY("History", Icons.Default.History)
+    // Icon is a flame ("barn burner") even though the nav label stays
+    // "History" - the in-screen title is the one that says "Past Barn
+    // Burners" (HistoryScreen.kt).
+    HISTORY("History", Icons.Default.LocalFireDepartment),
+    // Standings + Stats merged into one swipeable tab (LeadersScreen.kt) -
+    // "3 horizontal lines" reads as a list/menu, matching what's inside.
+    LEADERS("Leaders", Icons.Default.Menu),
+    NEWS("News", Icons.AutoMirrored.Filled.Article)
 }
 
 /**
- * App-wide root: a persistent bottom navigation bar with 6 tabs. Games,
- * Standings, Stats, and News all react to the same global league selection
+ * App-wide root: a persistent bottom navigation bar with 5 tabs. Games,
+ * Leaders, and News all react to the same global league selection
  * (Settings' "Show WNBA" toggle + the title dropdown). History is NBA-only
  * regardless of that toggle - the backfill it reads from is NBA-only. "About"
  * isn't a tab - it's a slot's worth of nav real estate that Starred needed
@@ -157,8 +160,7 @@ fun AppRoot() {
                     onToggleStar = starredGamesViewModel::toggleStar,
                     onWatchHighlights = { videoId -> highlightsVideoId = videoId }
                 )
-                BottomNavTab.STANDINGS -> StandingsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
-                BottomNavTab.STATS -> StatsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
+                BottomNavTab.LEADERS -> LeadersTab(appSettingsViewModel.settings.effectiveLeagueGroup)
                 BottomNavTab.NEWS -> NewsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
                 BottomNavTab.STARRED -> StarredTab(
                     starredGamesViewModel = starredGamesViewModel,
@@ -290,17 +292,19 @@ private fun HistoryTab(
 }
 
 @Composable
-private fun StandingsTab(leagueGroup: LeagueGroup) {
-    val viewModel: StandingsViewModel = viewModel()
-    LaunchedEffect(leagueGroup) { viewModel.load(leagueGroup) }
-    StandingsScreen(uiState = viewModel.uiState, onRetry = viewModel::retry)
-}
-
-@Composable
-private fun StatsTab(leagueGroup: LeagueGroup) {
-    val viewModel: StatsViewModel = viewModel()
-    LaunchedEffect(leagueGroup) { viewModel.load(leagueGroup) }
-    StatsScreen(uiState = viewModel.uiState, onRetry = viewModel::retry)
+private fun LeadersTab(leagueGroup: LeagueGroup) {
+    val standingsViewModel: StandingsViewModel = viewModel()
+    val statsViewModel: StatsViewModel = viewModel()
+    LaunchedEffect(leagueGroup) {
+        standingsViewModel.load(leagueGroup)
+        statsViewModel.load(leagueGroup)
+    }
+    LeadersScreen(
+        standingsUiState = standingsViewModel.uiState,
+        onStandingsRetry = standingsViewModel::retry,
+        statsUiState = statsViewModel.uiState,
+        onStatsRetry = statsViewModel::retry
+    )
 }
 
 @Composable

@@ -91,7 +91,7 @@ fun HistoryScreen(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { Text("History", color = TextPrimary) },
+                title = { Text("Past Barn Burners", color = TextPrimary) },
                 actions = {
                     IconToggleButton(checked = sortByDate, onCheckedChange = { sortByDate = it }) {
                         Icon(
