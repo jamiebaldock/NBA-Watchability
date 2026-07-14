@@ -57,12 +57,13 @@ private enum class BottomNavTab(val label: String, val icon: ImageVector) {
 }
 
 /**
- * App-wide root: a persistent bottom navigation bar with 5 tabs. Games,
- * Leaders, and News all react to the same global league selection
- * (Settings' "Show WNBA" toggle + the title dropdown). History is NBA-only
- * regardless of that toggle - the backfill it reads from is NBA-only. "About"
- * isn't a tab - it's a slot's worth of nav real estate that Starred needed
- * more, so it lives one level deeper, opened from Settings instead.
+ * App-wide root: a persistent bottom navigation bar with 5 tabs. Every tab's
+ * top bar shows the same tappable league selector (Settings' "Show WNBA"
+ * toggle + the title dropdown) so the league can be switched from anywhere,
+ * not just Games. History's backfill is NBA-only for now - selecting WNBA
+ * there shows a plain "not built yet" empty state instead of an error.
+ * "About" isn't a tab - it's a slot's worth of nav real estate that Starred
+ * needed more, so it lives one level deeper, opened from Settings instead.
  */
 @Composable
 fun AppRoot() {
@@ -156,16 +157,27 @@ fun AppRoot() {
                     effectiveLeagueGroup = appSettingsViewModel.settings.effectiveLeagueGroup,
                     showNumericScore = appSettingsViewModel.settings.showNumericScore,
                     onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
-                    sortBestFirst = appSettingsViewModel.settings.sortBestFirst,
-                    onToggleSort = appSettingsViewModel::toggleSortBestFirst,
                     starredIds = starredGamesViewModel.starredIds,
                     onToggleStar = starredGamesViewModel::toggleStar,
                     onWatchHighlights = { videoId -> highlightsVideoId = videoId }
                 )
-                BottomNavTab.LEADERS -> LeadersTab(appSettingsViewModel.settings.effectiveLeagueGroup)
-                BottomNavTab.NEWS -> NewsTab(appSettingsViewModel.settings.effectiveLeagueGroup)
+                BottomNavTab.LEADERS -> LeadersTab(
+                    showWnba = appSettingsViewModel.settings.showWnba,
+                    selectedLeague = appSettingsViewModel.settings.selectedLeague,
+                    onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                    effectiveLeagueGroup = appSettingsViewModel.settings.effectiveLeagueGroup
+                )
+                BottomNavTab.NEWS -> NewsTab(
+                    showWnba = appSettingsViewModel.settings.showWnba,
+                    selectedLeague = appSettingsViewModel.settings.selectedLeague,
+                    onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                    effectiveLeagueGroup = appSettingsViewModel.settings.effectiveLeagueGroup
+                )
                 BottomNavTab.STARRED -> StarredTab(
                     starredGamesViewModel = starredGamesViewModel,
+                    showWnba = appSettingsViewModel.settings.showWnba,
+                    selectedLeague = appSettingsViewModel.settings.selectedLeague,
+                    onLeagueSelected = appSettingsViewModel::setSelectedLeague,
                     showNumericScore = appSettingsViewModel.settings.showNumericScore,
                     onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
                     sortBestFirst = appSettingsViewModel.settings.sortBestFirst,
@@ -175,6 +187,10 @@ fun AppRoot() {
                 )
                 BottomNavTab.HISTORY -> HistoryTab(
                     weights = settingsViewModel.weights,
+                    showWnba = appSettingsViewModel.settings.showWnba,
+                    selectedLeague = appSettingsViewModel.settings.selectedLeague,
+                    onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                    effectiveLeagueGroup = appSettingsViewModel.settings.effectiveLeagueGroup,
                     showNumericScore = appSettingsViewModel.settings.showNumericScore,
                     onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
                     starredIds = starredGamesViewModel.starredIds,
@@ -196,8 +212,6 @@ private fun GamesTab(
     effectiveLeagueGroup: LeagueGroup,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
-    sortBestFirst: Boolean,
-    onToggleSort: () -> Unit,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
     onWatchHighlights: (String) -> Unit
@@ -228,8 +242,6 @@ private fun GamesTab(
             onDaySelected = viewModel::selectDay,
             showNumericScore = showNumericScore,
             onToggleNumericScore = onToggleNumericScore,
-            sortBestFirst = sortBestFirst,
-            onToggleSort = onToggleSort,
             isRefreshing = viewModel.isRefreshing,
             onRefresh = viewModel::refresh,
             weights = weights,
@@ -247,6 +259,9 @@ private fun GamesTab(
 @Composable
 private fun StarredTab(
     starredGamesViewModel: StarredGamesViewModel,
+    showWnba: Boolean,
+    selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
     sortBestFirst: Boolean,
@@ -277,13 +292,20 @@ private fun StarredTab(
         onToggleStar = starredGamesViewModel::toggleStar,
         onWatchHighlights = onWatchHighlights,
         isRefreshing = starredGamesViewModel.isRefreshing,
-        onRefresh = starredGamesViewModel::refreshLiveData
+        onRefresh = starredGamesViewModel::refreshLiveData,
+        showWnba = showWnba,
+        selectedLeague = selectedLeague,
+        onLeagueSelected = onLeagueSelected
     )
 }
 
 @Composable
 private fun HistoryTab(
     weights: RubricWeights,
+    showWnba: Boolean,
+    selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit,
+    effectiveLeagueGroup: LeagueGroup,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
     starredIds: Set<String>,
@@ -291,7 +313,12 @@ private fun HistoryTab(
     onWatchHighlights: (String) -> Unit
 ) {
     val viewModel: HistoryViewModel = viewModel()
-    LaunchedEffect(Unit) { viewModel.load() }
+    // The backfill only covers NBA so far - don't fire a request for a
+    // league that has nothing to return; HistoryScreen shows a blank state
+    // instead once effectiveLeagueGroup isn't NBA.
+    LaunchedEffect(effectiveLeagueGroup) {
+        if (effectiveLeagueGroup == LeagueGroup.NBA) viewModel.load()
+    }
 
     HistoryScreen(
         uiState = viewModel.uiState,
@@ -304,31 +331,54 @@ private fun HistoryTab(
         weights = weights,
         starredIds = starredIds,
         onToggleStar = onToggleStar,
-        onWatchHighlights = onWatchHighlights
+        onWatchHighlights = onWatchHighlights,
+        showWnba = showWnba,
+        selectedLeague = selectedLeague,
+        onLeagueSelected = onLeagueSelected,
+        leagueGroup = effectiveLeagueGroup
     )
 }
 
 @Composable
-private fun LeadersTab(leagueGroup: LeagueGroup) {
+private fun LeadersTab(
+    showWnba: Boolean,
+    selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit,
+    effectiveLeagueGroup: LeagueGroup
+) {
     val standingsViewModel: StandingsViewModel = viewModel()
     val statsViewModel: StatsViewModel = viewModel()
-    LaunchedEffect(leagueGroup) {
-        standingsViewModel.load(leagueGroup)
-        statsViewModel.load(leagueGroup)
+    LaunchedEffect(effectiveLeagueGroup) {
+        standingsViewModel.load(effectiveLeagueGroup)
+        statsViewModel.load(effectiveLeagueGroup)
     }
     LeadersScreen(
         standingsUiState = standingsViewModel.uiState,
         onStandingsRetry = standingsViewModel::retry,
         statsUiState = statsViewModel.uiState,
-        onStatsRetry = statsViewModel::retry
+        onStatsRetry = statsViewModel::retry,
+        showWnba = showWnba,
+        selectedLeague = selectedLeague,
+        onLeagueSelected = onLeagueSelected
     )
 }
 
 @Composable
-private fun NewsTab(leagueGroup: LeagueGroup) {
+private fun NewsTab(
+    showWnba: Boolean,
+    selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit,
+    effectiveLeagueGroup: LeagueGroup
+) {
     val viewModel: NewsViewModel = viewModel()
-    LaunchedEffect(leagueGroup) { viewModel.load(leagueGroup) }
-    NewsScreen(uiState = viewModel.uiState, onRetry = viewModel::retry)
+    LaunchedEffect(effectiveLeagueGroup) { viewModel.load(effectiveLeagueGroup) }
+    NewsScreen(
+        uiState = viewModel.uiState,
+        onRetry = viewModel::retry,
+        showWnba = showWnba,
+        selectedLeague = selectedLeague,
+        onLeagueSelected = onLeagueSelected
+    )
 }
 
 @Composable

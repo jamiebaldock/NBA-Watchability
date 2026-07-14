@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.NewsArticle
 import com.nbawatchability.app.data.NewsResponse
 import com.nbawatchability.app.ui.theme.BackgroundBase
@@ -47,10 +48,16 @@ private val publishedFormatter = DateTimeFormatter.ofPattern("MMM d")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NewsScreen(uiState: NewsUiState, onRetry: () -> Unit) {
+fun NewsScreen(
+    uiState: NewsUiState,
+    onRetry: () -> Unit,
+    showWnba: Boolean,
+    selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit
+) {
     Scaffold(
         containerColor = BackgroundBase,
-        topBar = { TopAppBar(title = { Text("News", color = TextPrimary) }) }
+        topBar = { TopAppBar(title = { TabTitle(showWnba, selectedLeague, onLeagueSelected, "News") }) }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (uiState) {

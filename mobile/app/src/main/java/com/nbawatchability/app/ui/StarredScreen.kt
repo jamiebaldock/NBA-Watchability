@@ -1,6 +1,7 @@
 package com.nbawatchability.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,10 +26,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.Game
+import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.BackgroundBase
@@ -58,31 +61,53 @@ fun StarredScreen(
     onToggleStar: (Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
     isRefreshing: Boolean,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    showWnba: Boolean,
+    selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit
 ) {
     var dateAscending by remember { mutableStateOf(false) }
+    var actionLabel by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { Text("Starred", color = TextPrimary) },
+                title = { TabTitle(showWnba, selectedLeague, onLeagueSelected, "Starred") },
                 actions = {
-                    IconToggleButton(checked = dateAscending, onCheckedChange = { dateAscending = it }) {
+                    IconToggleButton(
+                        checked = dateAscending,
+                        onCheckedChange = {
+                            dateAscending = it
+                            actionLabel = if (it) "Oldest first" else "Newest first"
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Default.CalendarToday,
                             contentDescription = if (dateAscending) "Oldest game first" else "Newest game first",
                             tint = if (dateAscending) TierWorthYourTime else TextSecondary
                         )
                     }
-                    IconToggleButton(checked = sortBestFirst, onCheckedChange = { onToggleSort() }) {
+                    IconToggleButton(
+                        checked = sortBestFirst,
+                        onCheckedChange = {
+                            onToggleSort()
+                            actionLabel = if (it) "Sorted by rating" else "Sorted by date"
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Sort,
                             contentDescription = "Best first sort",
                             tint = if (sortBestFirst) TierWorthYourTime else TextSecondary
                         )
                     }
-                    IconToggleButton(checked = showNumericScore, onCheckedChange = { onToggleNumericScore() }) {
+                    IconToggleButton(
+                        checked = showNumericScore,
+                        onCheckedChange = {
+                            onToggleNumericScore()
+                            actionLabel = if (it) "Showing numeric score" else "Hiding numeric score"
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Tag,
                             contentDescription = "Show numeric score",
@@ -93,10 +118,11 @@ fun StarredScreen(
             )
         }
     ) { padding ->
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize().padding(padding)
+            modifier = Modifier.fillMaxSize()
         ) {
             if (games.isEmpty()) {
                 Column(
@@ -140,6 +166,11 @@ fun StarredScreen(
                     )
                 }
             }
+        }
+        ActionLabelOverlay(
+            label = actionLabel,
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp)
+        )
         }
     }
 }

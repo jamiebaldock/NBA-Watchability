@@ -14,6 +14,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
@@ -35,7 +36,10 @@ fun LeadersScreen(
     standingsUiState: StandingsUiState,
     onStandingsRetry: () -> Unit,
     statsUiState: StatsUiState,
-    onStatsRetry: () -> Unit
+    onStatsRetry: () -> Unit,
+    showWnba: Boolean,
+    selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = 0) { LEADERS_PAGE_TITLES.size }
     val scope = rememberCoroutineScope()
@@ -44,7 +48,7 @@ fun LeadersScreen(
         containerColor = BackgroundBase,
         topBar = {
             Column {
-                TopAppBar(title = { Text("Leaders", color = TextPrimary) })
+                TopAppBar(title = { TabTitle(showWnba, selectedLeague, onLeagueSelected, "Leaders") })
                 TabRow(
                     selectedTabIndex = pagerState.currentPage,
                     containerColor = BackgroundBase,

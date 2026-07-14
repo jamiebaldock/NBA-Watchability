@@ -2,6 +2,7 @@ package com.nbawatchability.app.ui
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -31,6 +32,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -38,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.Game
+import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
@@ -56,10 +59,17 @@ private val earliestDateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
  * rather than following live, so the breakdown is never spoiler-blurred
  * (GameCard's spoilerFree = true) - the tier/score/final result are the
  * point, not something to hide. [showScore] is a separate, purely local
- * "browse blind" preference (default on) - unlike spoilerFree/scoreVisible,
- * turning it off hides the rating itself (tier badge + breakdown) while
- * still showing the final score/teams, in case the user wants to pick a
- * game without the rating nudging them first.
+ * "browse blind" preference - unlike spoilerFree, turning it off only hides
+ * the two teams' final numeric score digits (tier badge, breakdown, and
+ * final result stay visible either way). Defaults to hidden (spoiler-safe)
+ * every time this screen is (re)composed - e.g. navigating back to History
+ * from another tab - rather than persisting a "showing scores" choice
+ * across tab switches, so a viewer can't accidentally get spoiled by
+ * whatever state they left it in last time.
+ *
+ * WNBA has no historical backfill yet (NBA only) - [leagueGroup] gates the
+ * whole screen to a plain blank state when WNBA is selected, rather than
+ * erroring or showing stale NBA data.
  *
  * No hook/pitch preview text is generated or shown here (unlike the
  * pregame preview on other tabs) - these are already-finished games, so
@@ -79,35 +89,62 @@ fun HistoryScreen(
     weights: RubricWeights,
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
-    onWatchHighlights: (String) -> Unit
+    onWatchHighlights: (String) -> Unit,
+    showWnba: Boolean,
+    selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit,
+    leagueGroup: LeagueGroup
 ) {
-    var showScore by rememberSaveable { mutableStateOf(true) }
+    // Plain remember (not rememberSaveable) - defaults to hidden every time
+    // this composable enters composition, e.g. switching back to History
+    // from another tab, so a "showing scores" choice never survives a tab
+    // switch and can't accidentally spoil something.
+    var showScore by remember { mutableStateOf(false) }
     // False (default) = server's own most-watchable-first order, left
     // untouched. True = newest game first - a local re-sort of the already-
     // fetched list, no re-fetch needed.
     var sortByDate by rememberSaveable { mutableStateOf(false) }
+    var actionLabel by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { Text("Past Barn Burners", color = TextPrimary) },
+                title = { TabTitle(showWnba, selectedLeague, onLeagueSelected, "Past Barn Burners") },
                 actions = {
-                    IconToggleButton(checked = sortByDate, onCheckedChange = { sortByDate = it }) {
+                    IconToggleButton(
+                        checked = sortByDate,
+                        onCheckedChange = {
+                            sortByDate = it
+                            actionLabel = if (it) "Sorted by date" else "Sorted by watchability"
+                        }
+                    ) {
                         Icon(
                             imageVector = if (sortByDate) Icons.Default.CalendarToday else Icons.AutoMirrored.Filled.Sort,
                             contentDescription = if (sortByDate) "Sorted by date - tap for most watchable first" else "Sorted by watchability - tap for date order",
                             tint = if (sortByDate) TierWorthYourTime else TextSecondary
                         )
                     }
-                    IconToggleButton(checked = showScore, onCheckedChange = { showScore = it }) {
+                    IconToggleButton(
+                        checked = showScore,
+                        onCheckedChange = {
+                            showScore = it
+                            actionLabel = if (it) "Showing scores" else "Hiding scores"
+                        }
+                    ) {
                         Icon(
                             imageVector = if (showScore) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                            contentDescription = if (showScore) "Hide watchability rating" else "Show watchability rating",
-                            tint = if (showScore) TierWorthYourTime else TextSecondary
+                            contentDescription = if (showScore) "Hide scores" else "Show scores",
+                            tint = if (!showScore) TierWorthYourTime else TextSecondary
                         )
                     }
-                    IconToggleButton(checked = showNumericScore, onCheckedChange = { onToggleNumericScore() }) {
+                    IconToggleButton(
+                        checked = showNumericScore,
+                        onCheckedChange = {
+                            onToggleNumericScore()
+                            actionLabel = if (it) "Showing numeric score" else "Hiding numeric score"
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Tag,
                             contentDescription = "Show numeric score",
@@ -118,7 +155,23 @@ fun HistoryScreen(
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        if (leagueGroup != LeagueGroup.NBA) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "History isn't built for WNBA yet - check back later.",
+                    color = TextSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+            return@Scaffold
+        }
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Column(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -213,6 +266,11 @@ fun HistoryScreen(
                     }
                 }
             }
+        }
+        ActionLabelOverlay(
+            label = actionLabel,
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp)
+        )
         }
     }
 }

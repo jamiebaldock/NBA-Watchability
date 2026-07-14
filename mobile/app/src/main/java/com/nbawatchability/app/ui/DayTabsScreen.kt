@@ -8,25 +8,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,12 +44,9 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.nbawatchability.app.data.DayGames
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
-import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
@@ -67,61 +57,6 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 private val dayTabFormatter = DateTimeFormatter.ofPattern("MMM d")
-
-/**
- * Replaces the static "NBA Watchability" title when the "Show WNBA" setting
- * is on - tapping it reveals an NBA/WNBA choice. Off (the default), the title
- * stays plain static text with no dropdown affordance at all.
- */
-@Composable
-private fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGroup) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { expanded = true }
-        ) {
-            AsyncImage(
-                model = selectedLeague.logoUrl,
-                contentDescription = null,
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = selectedLeague.displayName,
-                color = TextPrimary,
-                style = MaterialTheme.typography.titleLarge.copy(fontSize = 24.sp)
-            )
-            Icon(
-                imageVector = Icons.Default.ArrowDropDown,
-                contentDescription = "Select league",
-                tint = TextPrimary,
-                modifier = Modifier.size(30.dp)
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            LeagueGroup.entries.forEach { league ->
-                DropdownMenuItem(
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            AsyncImage(
-                                model = league.logoUrl,
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(league.displayName)
-                        }
-                    },
-                    onClick = {
-                        onLeagueSelected(league)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
 
 private fun dayTabLabel(date: LocalDate, today: LocalDate): String = when (date) {
     today -> "Today"
@@ -139,8 +74,6 @@ fun DayTabsScreen(
     onDaySelected: (Int) -> Unit,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
-    sortBestFirst: Boolean,
-    onToggleSort: () -> Unit,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     weights: RubricWeights,
@@ -153,6 +86,7 @@ fun DayTabsScreen(
     onWatchHighlights: (String) -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
+    var actionLabel by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(pagerState.currentPage) {
         if (pagerState.currentPage != selectedDayIndex) onDaySelected(pagerState.currentPage)
@@ -165,22 +99,15 @@ fun DayTabsScreen(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = {
-                    if (showWnba) {
-                        TitleLeagueSelector(selectedLeague = selectedLeague, onLeagueSelected = onLeagueSelected)
-                    } else {
-                        Text("NBA Watchability", color = TextPrimary)
-                    }
-                },
+                title = { TabTitle(showWnba, selectedLeague, onLeagueSelected, "NBA Watchability") },
                 actions = {
-                    IconToggleButton(checked = sortBestFirst, onCheckedChange = { onToggleSort() }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                            contentDescription = "Best first sort",
-                            tint = if (sortBestFirst) TierWorthYourTime else TextSecondary
-                        )
-                    }
-                    IconToggleButton(checked = showNumericScore, onCheckedChange = { onToggleNumericScore() }) {
+                    IconToggleButton(
+                        checked = showNumericScore,
+                        onCheckedChange = {
+                            onToggleNumericScore()
+                            actionLabel = if (it) "Showing numeric score" else "Hiding numeric score"
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Tag,
                             contentDescription = "Show numeric score",
@@ -198,34 +125,39 @@ fun DayTabsScreen(
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            CenteringDayTabRow(
-                days = days,
-                today = today,
-                selectedDayIndex = selectedDayIndex,
-                onDaySelected = onDaySelected
-            )
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                CenteringDayTabRow(
+                    days = days,
+                    today = today,
+                    selectedDayIndex = selectedDayIndex,
+                    onDaySelected = onDaySelected
+                )
 
-            PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = onRefresh,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                HorizontalPager(
-                    state = pagerState,
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = onRefresh,
                     modifier = Modifier.fillMaxSize()
-                ) { page ->
-                    DayGamesList(
-                        games = days[page].games,
-                        sortBestFirst = sortBestFirst,
-                        showNumericScore = showNumericScore,
-                        weights = weights,
-                        starredIds = starredIds,
-                        onToggleStar = onToggleStar,
-                        onWatchHighlights = onWatchHighlights
-                    )
+                ) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        DayGamesList(
+                            games = days[page].games,
+                            showNumericScore = showNumericScore,
+                            weights = weights,
+                            starredIds = starredIds,
+                            onToggleStar = onToggleStar,
+                            onWatchHighlights = onWatchHighlights
+                        )
+                    }
                 }
             }
+            ActionLabelOverlay(
+                label = actionLabel,
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 56.dp)
+            )
         }
     }
 }
@@ -297,24 +229,21 @@ private fun CenteringDayTabRow(
     }
 }
 
+// No best-first sort option here (unlike Starred/History) - every game on
+// this tab is already the same single day, so reordering by score doesn't
+// do anything a viewer couldn't already see at a glance across ~a handful
+// of tiles; it's only meaningful once games from different dates mix in
+// one list.
 @Composable
 private fun DayGamesList(
     games: List<com.nbawatchability.app.data.Game>,
-    sortBestFirst: Boolean,
     showNumericScore: Boolean,
     weights: RubricWeights,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
     onWatchHighlights: (String) -> Unit
 ) {
-    val ordered = if (sortBestFirst) {
-        val (scored, unscored) = games.partition { it.effectiveScore(weights) != null }
-        scored.sortedByDescending { it.effectiveScore(weights) } + unscored
-    } else {
-        games
-    }
-
-    if (ordered.isEmpty()) {
+    if (games.isEmpty()) {
         Column(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.Center
@@ -335,7 +264,7 @@ private fun DayGamesList(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(ordered, key = { it.id }) { game ->
+        items(games, key = { it.id }) { game ->
             GameCard(
                 game = game,
                 showNumericScore = showNumericScore,
