@@ -179,33 +179,6 @@ export async function checkPendingHighlights(): Promise<void> {
   }
 }
 
-// Temporary diagnostic (devServer.ts's /api/debug/highlights) - reports
-// whether search is configured and which pending games the schedule
-// currently considers due, without exposing the key itself. Remove once
-// the "no highlights firing at all" investigation is resolved.
-export function debugHighlightsStatus() {
-  const configured = isYoutubeSearchConfigured();
-  const pending = getFinalGamesMissingHighlights();
-  const now = Date.now();
-  const due = pending.filter((row) => isDueForHighlightsCheck(row, now));
-  return {
-    configured,
-    pendingCount: pending.length,
-    dueCount: due.length,
-    sample: pending.slice(0, 10).map((row) => ({
-      away: row.away,
-      home: row.home,
-      league: row.league,
-      ytCheckCount: row.ytCheckCount,
-      ytLastCheckedAt: row.ytLastCheckedAt,
-      finalAt: row.finalAt,
-      tipoffUtc: row.tipoffUtc,
-      sinceFinalMin: row.finalAt ? Math.round((now - new Date(row.finalAt).getTime()) / 60000) : null,
-      isDue: isDueForHighlightsCheck(row, now),
-    })),
-  };
-}
-
 function toGameJson(row: GameRow, status: "upcoming" | "live", cl: string | undefined, q?: number, clk?: string): GameJson {
   const lg: GameJson["lg"] = row.league === "nba" ? "nba" : row.league === "wnba" ? "wnba" : "summer";
   return {
