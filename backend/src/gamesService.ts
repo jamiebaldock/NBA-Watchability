@@ -143,15 +143,21 @@ async function checkGameHighlights(row: GameRow): Promise<void> {
   }
 }
 
+// Defense in depth alongside gameStore's recent-or-watchable filter: even
+// a legitimate backlog (e.g. after downtime) shouldn't be able to spend the
+// whole shared 100/day quota in one poller tick. Bounded per tick, not per
+// day - a real backlog just spreads across a few extra ticks instead.
+const MAX_CHECKS_PER_POLL = 20;
+
 /**
- * Checks every final game still missing a highlights match (globally, not
- * scoped to any date range - gameStore.getFinalGamesMissingHighlights is a
- * simple query, not a per-day file scan) and searches for whichever are due
- * per isDueForHighlightsCheck. Called by highlightsPoller.ts on a timer, as
- * a backstop for games nobody's actively looking at - getGamesForDate below
- * also triggers this inline for whatever a live request happens to touch,
- * so someone actively viewing a game doesn't have to wait for the next
- * poller tick.
+ * Checks final games still missing a highlights match that could actually
+ * be shown one (gameStore.getFinalGamesMissingHighlights already excludes
+ * games no tab would ever display a match for) and searches for whichever
+ * are due per isDueForHighlightsCheck, up to MAX_CHECKS_PER_POLL. Called by
+ * highlightsPoller.ts on a timer, as a backstop for games nobody's actively
+ * looking at - getGamesForDate below also triggers this inline for
+ * whatever a live request happens to touch, so someone actively viewing a
+ * game doesn't have to wait for the next poller tick.
  */
 export async function checkPendingHighlights(): Promise<void> {
   if (!isYoutubeSearchConfigured()) {
@@ -163,8 +169,13 @@ export async function checkPendingHighlights(): Promise<void> {
   }
 
   const now = Date.now();
+  let checksThisPoll = 0;
   for (const row of getFinalGamesMissingHighlights()) {
-    if (isDueForHighlightsCheck(row, now)) await checkGameHighlights(row);
+    if (checksThisPoll >= MAX_CHECKS_PER_POLL) break;
+    if (isDueForHighlightsCheck(row, now)) {
+      await checkGameHighlights(row);
+      checksThisPoll++;
+    }
   }
 }
 

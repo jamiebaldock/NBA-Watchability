@@ -405,21 +405,43 @@ export function getLagPercentiles(league: string, leagueGroup: string): LagPerce
   };
 }
 
+const WATCHABLE_TIERS = ["worth_your_time", "instant_classic"];
+
+// A highlights link is only ever actually shown for: (a) recent games
+// within the live app's realistic display window (Games/Starred tabs,
+// roughly +/-9 days), or (b) the History tab's Worth Your Time/Instant
+// Classic games. Everything else - the ~96% of the historical backfill
+// that's Skippable/Solid tier, or anything simply too old for any tab to
+// show - has no "Watch highlights" row anywhere in the app that could ever
+// use a match. Before this filter existed, every one of those ~2,550
+// never-displayed games competed in the same global search queue as actual
+// live games, and a single poller tick or server restart could burn through
+// the entire shared 100/day YouTube quota checking games nobody would ever
+// see, starving the games that actually needed it. Date comparison happens
+// in JS (matching getWatchableHistory below), not a SQL string comparison
+// on tipoff_utc, for the same mixed-ISO-precision reason.
+const RECENT_GAMES_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
 /**
- * Every final game still missing a highlights match - always a small set
- * (never more than a handful of days' worth of games), so it's simplest and
- * safest to filter/decide scheduling in JS (matching the rest of the
- * codebase's style) rather than encode retry-interval math in SQL date
- * functions. The caller (gamesService.ts's isDueForHighlightsCheck) decides
- * whether each row is actually due for a check, against getLagPercentiles'
- * learned per-league schedule.
+ * Final games missing a highlights match that could actually be shown one -
+ * always a small set in practice, so it's simplest and safest to
+ * filter/decide scheduling in JS (matching the rest of the codebase's
+ * style) rather than encode retry-interval math in SQL date functions. The
+ * caller (gamesService.ts's isDueForHighlightsCheck) decides whether each
+ * row is actually due for a check, against getLagPercentiles' learned
+ * per-league schedule.
  */
 export function getFinalGamesMissingHighlights(): GameRow[] {
+  const cutoffTime = Date.now() - RECENT_GAMES_WINDOW_MS;
   const raws = db.prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL`).all() as RawGameRow[];
-  return raws.map(mapRow);
+  return raws
+    .map(mapRow)
+    .filter((row) => {
+      const isRecent = new Date(row.tipoffUtc).getTime() >= cutoffTime;
+      const isWatchableHistory = row.tier !== null && WATCHABLE_TIERS.includes(row.tier);
+      return isRecent || isWatchableHistory;
+    });
 }
-
-const WATCHABLE_TIERS = ["worth_your_time", "instant_classic"];
 
 /**
  * Worth Your Time / Instant Classic games in [startDate, endDate], sorted
