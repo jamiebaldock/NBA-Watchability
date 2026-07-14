@@ -2,15 +2,16 @@
 // YouTube links, matched here to their exact ESPN event by team names/date)
 // rather than found via search.list - lets specific games show a working
 // highlights link immediately without spending any of the 100/day search
-// quota. Safe to run on every startup: applySeedHighlights only ever sets
-// yt, never touches anything a real search may have already found (checked
-// via yt itself, so a genuine search result is never clobbered).
-import { loadDay, saveDay } from "./cache";
+// quota. Safe to run on every startup: gameStore.setHighlights only ever
+// writes when yt_video_id is still NULL, so a genuine search result already
+// on file is never clobbered - the guard lives in the store itself now, not
+// in this file's own bookkeeping.
 import { getGamesForDate } from "./gamesService";
+import { setHighlights } from "./gameStore";
 import { LeagueGroup } from "./types";
 
 interface SeedEntry {
-  date: string; // YYYY-MM-DD cache key
+  date: string; // YYYY-MM-DD, just to know which schedule fetch surfaces this event
   leagueGroup: LeagueGroup;
   eventId: string;
   videoId: string;
@@ -51,23 +52,11 @@ export async function applySeedHighlights(): Promise<void> {
   for (const [key, entries] of byDate) {
     const [date, leagueGroup] = key.split("|") as [string, LeagueGroup];
     try {
-      // Ensures a real, fully-formed base entry exists (hook/pitch/finalRubric),
-      // via the exact same path every normal request uses - never hand-built.
+      // Ensures a real, fully-formed row exists for each event (via the
+      // exact same path every normal request uses - never hand-built),
+      // then layers the confirmed video ID on top.
       await getGamesForDate(date, leagueGroup);
-
-      const day = loadDay(date);
-      let changed = false;
-      for (const entry of entries) {
-        const cached = day.games[entry.eventId];
-        // Skip only if a real match already exists - never overwrite a
-        // genuine search success. A prior "checked, no match" result (the
-        // poller ran before this seed and hit the quota wall) is fair game
-        // to override with a human-confirmed video.
-        if (!cached || cached.yt) continue;
-        cached.yt = entry.videoId;
-        changed = true;
-      }
-      if (changed) saveDay(day);
+      for (const entry of entries) setHighlights(entry.eventId, entry.videoId);
     } catch (err) {
       console.error(`applySeedHighlights: failed for ${key}`, err);
     }

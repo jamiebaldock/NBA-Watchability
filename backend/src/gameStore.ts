@@ -1,0 +1,336 @@
+// Durable, single-source-of-truth store for every game the app has ever
+// seen - live schedule data and the historical backfill are the same thing
+// now, not two systems. One row per ESPN eventId (already globally unique
+// across leagues/sports - see gamesService.ts), accumulating fields
+// monotonically through a game's lifecycle:
+//
+//   scheduled -> preview added (24h out) -> live -> final rubric added
+//   -> highlights found -> "complete", never touched again
+//
+// Every setter below enforces "never overwrite" at the SQL layer itself
+// (a `WHERE x IS NULL` guard), not just by convention at call sites - this
+// is what actually prevents data loss from a re-run, a bug, or a race
+// between two concurrent requests touching the same game, unlike the old
+// cache.ts's whole-file read-modify-write (a known clobber risk, see the
+// comment this replaced in devServer.ts).
+//
+// Lives on disk at DATA_DIR/games.db - DATA_DIR must point at a persistent
+// Render Disk in production (set via the DATA_DIR env var) or every deploy
+// wipes it exactly like the old ephemeral cache did. Defaults to backend/data
+// for local dev, where losing it on a restart doesn't matter.
+import Database from "better-sqlite3";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { League } from "./espnClient";
+import { GameStatus, LeagueGroup, StarPerformance } from "./types";
+
+const DATA_DIR = process.env.DATA_DIR ?? join(__dirname, "..", "data");
+if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+
+const db = new Database(join(DATA_DIR, "games.db"));
+db.pragma("journal_mode = WAL");
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS games (
+    event_id TEXT PRIMARY KEY,
+    league TEXT NOT NULL,
+    league_group TEXT NOT NULL,
+    away TEXT NOT NULL,
+    home TEXT NOT NULL,
+    away_logo TEXT,
+    home_logo TEXT,
+    tipoff_utc TEXT NOT NULL,
+    status TEXT NOT NULL,
+
+    hook TEXT,
+    pitch TEXT,
+    stakes INTEGER,
+
+    away_score INTEGER,
+    home_score INTEGER,
+    final_margin INTEGER,
+    largest_deficit_overcome INTEGER,
+    lead_changes INTEGER,
+    overtime_periods INTEGER,
+    close_in_final_two_min INTEGER,
+    lead_change_in_final_min INTEGER,
+    decided_on_final_possession INTEGER,
+    buzzer_beater INTEGER,
+    star_performance TEXT,
+    score INTEGER,
+    tier TEXT,
+
+    yt_video_id TEXT,
+    yt_last_checked_at TEXT,
+
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_games_tipoff ON games(tipoff_utc);
+  CREATE INDEX IF NOT EXISTS idx_games_tier_score ON games(tier, score);
+`);
+
+function now(): string {
+  return new Date().toISOString();
+}
+
+export interface FinalRubric {
+  awayScore: number;
+  homeScore: number;
+  finalMargin: number;
+  largestDeficitOvercome: number;
+  leadChanges: number;
+  overtimePeriods: number;
+  closeInFinalTwoMin: boolean;
+  leadChangeInFinalMin: boolean;
+  decidedOnFinalPossession: boolean;
+  buzzerBeater: boolean;
+  starPerformance: StarPerformance;
+  score: number;
+  tier: string;
+}
+
+export interface GameRow {
+  eventId: string;
+  league: League;
+  leagueGroup: LeagueGroup;
+  away: string;
+  home: string;
+  awayLogo: string | null;
+  homeLogo: string | null;
+  tipoffUtc: string;
+  status: GameStatus;
+  hook: string | null;
+  pitch: string | null;
+  stakes: number | null;
+  awayScore: number | null;
+  homeScore: number | null;
+  finalMargin: number | null;
+  largestDeficitOvercome: number | null;
+  leadChanges: number | null;
+  overtimePeriods: number | null;
+  closeInFinalTwoMin: number | null;
+  leadChangeInFinalMin: number | null;
+  decidedOnFinalPossession: number | null;
+  buzzerBeater: number | null;
+  starPerformance: StarPerformance;
+  score: number | null;
+  tier: string | null;
+  ytVideoId: string | null;
+  ytLastCheckedAt: string | null;
+}
+
+/** Creates the row if this eventId has never been seen before; a no-op otherwise - never touches an existing row's already-collected fields. */
+export function upsertBaseEntry(entry: {
+  eventId: string;
+  league: League;
+  leagueGroup: LeagueGroup;
+  away: string;
+  home: string;
+  awayLogo?: string;
+  homeLogo?: string;
+  tipoffUtc: string;
+  status: GameStatus;
+}): void {
+  db.prepare(
+    `INSERT OR IGNORE INTO games
+       (event_id, league, league_group, away, home, away_logo, home_logo, tipoff_utc, status, updated_at)
+     VALUES (@eventId, @league, @leagueGroup, @away, @home, @awayLogo, @homeLogo, @tipoffUtc, @status, @updatedAt)`
+  ).run({
+    eventId: entry.eventId,
+    league: entry.league,
+    leagueGroup: entry.leagueGroup,
+    away: entry.away,
+    home: entry.home,
+    awayLogo: entry.awayLogo ?? null,
+    homeLogo: entry.homeLogo ?? null,
+    tipoffUtc: entry.tipoffUtc,
+    status: entry.status,
+    updatedAt: now(),
+  });
+}
+
+/** Status changes freely (upcoming -> live -> final) until final, which is sticky - a completed game's status is never downgraded. */
+export function updateStatus(eventId: string, status: GameStatus): void {
+  db.prepare(`UPDATE games SET status=?, updated_at=? WHERE event_id=? AND status != 'final'`).run(
+    status,
+    now(),
+    eventId
+  );
+}
+
+// better-sqlite3 returns raw column names as-is (snake_case) - it does not
+// auto-convert to camelCase, so every read has to go through this mapper
+// rather than a bare `as GameRow` cast (a cast doesn't validate anything at
+// runtime; without this, every field silently read as undefined).
+interface RawGameRow {
+  event_id: string;
+  league: League;
+  league_group: LeagueGroup;
+  away: string;
+  home: string;
+  away_logo: string | null;
+  home_logo: string | null;
+  tipoff_utc: string;
+  status: GameStatus;
+  hook: string | null;
+  pitch: string | null;
+  stakes: number | null;
+  away_score: number | null;
+  home_score: number | null;
+  final_margin: number | null;
+  largest_deficit_overcome: number | null;
+  lead_changes: number | null;
+  overtime_periods: number | null;
+  close_in_final_two_min: number | null;
+  lead_change_in_final_min: number | null;
+  decided_on_final_possession: number | null;
+  buzzer_beater: number | null;
+  star_performance: StarPerformance;
+  score: number | null;
+  tier: string | null;
+  yt_video_id: string | null;
+  yt_last_checked_at: string | null;
+}
+
+function mapRow(raw: RawGameRow): GameRow {
+  return {
+    eventId: raw.event_id,
+    league: raw.league,
+    leagueGroup: raw.league_group,
+    away: raw.away,
+    home: raw.home,
+    awayLogo: raw.away_logo,
+    homeLogo: raw.home_logo,
+    tipoffUtc: raw.tipoff_utc,
+    status: raw.status,
+    hook: raw.hook,
+    pitch: raw.pitch,
+    stakes: raw.stakes,
+    awayScore: raw.away_score,
+    homeScore: raw.home_score,
+    finalMargin: raw.final_margin,
+    largestDeficitOvercome: raw.largest_deficit_overcome,
+    leadChanges: raw.lead_changes,
+    overtimePeriods: raw.overtime_periods,
+    closeInFinalTwoMin: raw.close_in_final_two_min,
+    leadChangeInFinalMin: raw.lead_change_in_final_min,
+    decidedOnFinalPossession: raw.decided_on_final_possession,
+    buzzerBeater: raw.buzzer_beater,
+    starPerformance: raw.star_performance,
+    score: raw.score,
+    tier: raw.tier,
+    ytVideoId: raw.yt_video_id,
+    ytLastCheckedAt: raw.yt_last_checked_at,
+  };
+}
+
+export function getGame(eventId: string): GameRow | undefined {
+  const raw = db.prepare(`SELECT * FROM games WHERE event_id=?`).get(eventId) as RawGameRow | undefined;
+  return raw ? mapRow(raw) : undefined;
+}
+
+/** Pregame preview (hook/pitch/stakes) - set once, 24h before tipoff, permanent. */
+export function setPreview(eventId: string, hook: string, pitch: string, stakes: number): void {
+  db.prepare(`UPDATE games SET hook=?, pitch=?, stakes=?, updated_at=? WHERE event_id=? AND hook IS NULL`).run(
+    hook,
+    pitch,
+    stakes,
+    now(),
+    eventId
+  );
+}
+
+/** Final rubric + score/tier - set once, when the game goes final, permanent. */
+export function setFinalRubric(eventId: string, rubric: FinalRubric): void {
+  db.prepare(
+    `UPDATE games SET
+       status='final',
+       away_score=@awayScore, home_score=@homeScore, final_margin=@finalMargin,
+       largest_deficit_overcome=@largestDeficitOvercome, lead_changes=@leadChanges,
+       overtime_periods=@overtimePeriods, close_in_final_two_min=@closeInFinalTwoMin,
+       lead_change_in_final_min=@leadChangeInFinalMin, decided_on_final_possession=@decidedOnFinalPossession,
+       buzzer_beater=@buzzerBeater, star_performance=@starPerformance, score=@score, tier=@tier,
+       updated_at=@updatedAt
+     WHERE event_id=@eventId AND score IS NULL`
+  ).run({
+    eventId,
+    awayScore: rubric.awayScore,
+    homeScore: rubric.homeScore,
+    finalMargin: rubric.finalMargin,
+    largestDeficitOvercome: rubric.largestDeficitOvercome,
+    leadChanges: rubric.leadChanges,
+    overtimePeriods: rubric.overtimePeriods,
+    closeInFinalTwoMin: rubric.closeInFinalTwoMin ? 1 : 0,
+    leadChangeInFinalMin: rubric.leadChangeInFinalMin ? 1 : 0,
+    decidedOnFinalPossession: rubric.decidedOnFinalPossession ? 1 : 0,
+    buzzerBeater: rubric.buzzerBeater ? 1 : 0,
+    starPerformance: rubric.starPerformance,
+    score: rubric.score,
+    tier: rubric.tier,
+    updatedAt: now(),
+  });
+}
+
+/** Highlights video - set once found, permanent. */
+export function setHighlights(eventId: string, videoId: string): void {
+  db.prepare(`UPDATE games SET yt_video_id=?, updated_at=? WHERE event_id=? AND yt_video_id IS NULL`).run(
+    videoId,
+    now(),
+    eventId
+  );
+}
+
+/** Records a search attempt's timestamp regardless of outcome - drives retry pacing only, never gates the precious yt_video_id itself. */
+export function markHighlightsChecked(eventId: string, when: string): void {
+  db.prepare(`UPDATE games SET yt_last_checked_at=?, updated_at=? WHERE event_id=?`).run(when, now(), eventId);
+}
+
+/**
+ * Every final game still missing a highlights match - always a small set
+ * (never more than a handful of days' worth of games), so it's simplest and
+ * safest to filter/decide cooldowns in JS (matching the rest of the
+ * codebase's style) rather than encode retry-interval math in SQL date
+ * functions. The caller (gamesService.ts's ensureHighlightsVideo) applies
+ * the 30min-then-daily-after-48h policy against each row's
+ * tipoff_utc/yt_last_checked_at.
+ */
+export function getFinalGamesMissingHighlights(): GameRow[] {
+  const raws = db.prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL`).all() as RawGameRow[];
+  return raws.map(mapRow);
+}
+
+const WATCHABLE_TIERS = ["worth_your_time", "instant_classic"];
+
+/**
+ * Worth Your Time / Instant Classic games in [startDate, endDate], sorted
+ * score descending - backs the History tab. Date-range filtering happens in
+ * JS on real Date objects (not a SQL string comparison on tipoff_utc) -
+ * ESPN's timestamps omit seconds/milliseconds when they're :00 (e.g.
+ * "T01:00Z" vs a boundary like "T23:59:59.999Z"), and comparing ISO strings
+ * of different precision isn't reliably correct at exact boundaries the way
+ * numeric Date.getTime() comparison always is. The tier filter alone is
+ * cheap and exact in SQL, so only that's pushed down; the result set is
+ * always small (a season's worth of games, at most).
+ */
+export function getWatchableHistory(startDate: string, endDate: string): GameRow[] {
+  const startTime = new Date(`${startDate}T00:00:00Z`).getTime();
+  const endTime = new Date(`${endDate}T23:59:59.999Z`).getTime();
+  const placeholders = WATCHABLE_TIERS.map(() => "?").join(",");
+  const raws = db.prepare(`SELECT * FROM games WHERE tier IN (${placeholders})`).all(...WATCHABLE_TIERS) as RawGameRow[];
+  return raws
+    .map(mapRow)
+    .filter((row) => {
+      const t = new Date(row.tipoffUtc).getTime();
+      return t >= startTime && t <= endTime;
+    })
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+}
+
+export function earliestGameDate(): string | undefined {
+  const row = db.prepare(`SELECT MIN(tipoff_utc) as earliest FROM games`).get() as { earliest: string | null };
+  return row.earliest?.slice(0, 10) ?? undefined;
+}
+
+export function closeDb(): void {
+  db.close();
+}

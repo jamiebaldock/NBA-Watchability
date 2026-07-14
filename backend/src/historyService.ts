@@ -1,64 +1,12 @@
-// Serves the one-off NBA backfill (backfillHistoricalWatchability.ts's
-// output, backend/data/historicalWatchability.json) to the mobile app's
-// History tab - "which old games are actually worth going back to watch."
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { attachHistoricalHighlights } from "./historicalHighlights";
+// Serves the "which old games are actually worth going back to watch" query
+// for the mobile app's History tab, straight from gameStore - the same
+// durable table every live game graduates into once it's "complete"
+// (rated + highlights found). There's no separate historical dataset
+// anymore; a game finished a year ago and a game that finished five
+// minutes ago are the same kind of row.
+import { earliestGameDate, getWatchableHistory } from "./gameStore";
 import { teamLogoUrl } from "./teamLogos";
-import { GameJson, StarPerformance } from "./types";
-
-interface HistoricalGame {
-  eventId: string;
-  season: string;
-  date: string;
-  away: string;
-  home: string;
-  awayScore: number;
-  homeScore: number;
-  finalMargin: number;
-  // Optional: absent for entries this process's migrateHistoricalRubricFields.ts
-  // run hasn't reached yet (it patches historicalWatchability.json in place,
-  // progressively) - default to 0/false below rather than crash mid-migration.
-  largestDeficitOvercome?: number;
-  leadChanges?: number;
-  overtimePeriods: number;
-  closeInFinalTwoMin?: boolean;
-  leadChangeInFinalMin?: boolean;
-  decidedOnFinalPossession?: boolean;
-  starPerformance: StarPerformance;
-  buzzerBeater: boolean;
-  score: number;
-  tier: string;
-}
-
-interface HistoricalDataFile {
-  generatedAt: string;
-  games: HistoricalGame[];
-  completedDates: string[];
-}
-
-const DATA_PATH = join(__dirname, "..", "data", "historicalWatchability.json");
-
-// The backfill file is a static build artifact, never mutated at runtime -
-// read once per process instead of re-parsing ~1MB on every request.
-let dataCache: HistoricalDataFile | undefined;
-
-function loadData(): HistoricalDataFile {
-  if (!dataCache) dataCache = JSON.parse(readFileSync(DATA_PATH, "utf8")) as HistoricalDataFile;
-  return dataCache;
-}
-
-// Only these two tiers are "barn burners" worth surfacing - Solid/Skippable
-// games are in the dataset (for the tier-breakdown stats) but not what this
-// tab is for.
-const WATCHABLE_TIERS = new Set(["worth_your_time", "instant_classic"]);
-
-export function earliestHistoryDate(): string {
-  const games = loadData().games;
-  let earliest = games[0].date;
-  for (const g of games) if (g.date < earliest) earliest = g.date;
-  return earliest.slice(0, 10);
-}
+import { GameJson } from "./types";
 
 export interface HistoryResult {
   earliestDate: string;
@@ -66,46 +14,36 @@ export interface HistoryResult {
 }
 
 export async function getHistory(start: string, end: string): Promise<HistoryResult> {
-  const data = loadData();
-  const startMs = new Date(`${start}T00:00:00Z`).getTime();
-  const endMs = new Date(`${end}T23:59:59.999Z`).getTime();
+  const rows = getWatchableHistory(start, end);
 
-  const filtered = data.games
-    .filter((g) => WATCHABLE_TIERS.has(g.tier))
-    .filter((g) => {
-      const t = new Date(g.date).getTime();
-      return t >= startMs && t <= endMs;
-    })
-    .sort((a, b) => b.score - a.score);
-
-  const ytByEventId = await attachHistoricalHighlights(
-    filtered.map((g) => ({ eventId: g.eventId, away: g.away, home: g.home, date: g.date }))
-  );
-
-  const games: GameJson[] = filtered.map((g) => ({
-    a: g.away,
-    h: g.home,
-    al: teamLogoUrl(g.away),
-    hl: teamLogoUrl(g.home),
+  const games: GameJson[] = rows.map((row) => ({
+    a: row.away,
+    h: row.home,
+    // Historical rows migrated from the pre-gameStore backfill never had
+    // logos (that backfill only kept team display names) - fall back to
+    // the static name->abbreviation map for those; live-collected rows
+    // always have the real ESPN logo URL already.
+    al: row.awayLogo ?? teamLogoUrl(row.away),
+    hl: row.homeLogo ?? teamLogoUrl(row.home),
     stt: "final",
-    utc: g.date,
+    utc: row.tipoffUtc,
     lg: "nba",
-    m: g.finalMargin,
-    as: g.awayScore,
-    hs: g.homeScore,
-    cb: g.largestDeficitOvercome,
-    lc: g.leadChanges,
-    ot: g.overtimePeriods,
-    c5: g.closeInFinalTwoMin ?? false,
-    lcf: g.leadChangeInFinalMin ?? false,
-    fp: g.decidedOnFinalPossession ?? false,
-    bz: g.buzzerBeater,
-    st: g.starPerformance,
-    hook: `${g.away} at ${g.home}.`,
-    score: g.score,
+    m: row.finalMargin ?? undefined,
+    as: row.awayScore ?? undefined,
+    hs: row.homeScore ?? undefined,
+    cb: row.largestDeficitOvercome ?? undefined,
+    lc: row.leadChanges ?? undefined,
+    ot: row.overtimePeriods ?? 0,
+    c5: Boolean(row.closeInFinalTwoMin),
+    lcf: Boolean(row.leadChangeInFinalMin),
+    fp: Boolean(row.decidedOnFinalPossession),
+    bz: Boolean(row.buzzerBeater),
+    st: row.starPerformance,
+    hook: `${row.away} at ${row.home}.`,
+    score: row.score ?? undefined,
     score_visible: true,
-    yt: ytByEventId.get(g.eventId),
+    yt: row.ytVideoId ?? undefined,
   }));
 
-  return { earliestDate: earliestHistoryDate(), games };
+  return { earliestDate: earliestGameDate() ?? start, games };
 }

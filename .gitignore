@@ -1,8 +1,17 @@
 # Backend (Node/TS)
 backend/node_modules/
 backend/dist/
-backend/cache/*.json
 backend/.env
+# leagueCache.ts's Standings/Stats/News cache - cheap to refetch from ESPN,
+# legitimately fine to lose on any restart (unlike the durable store below).
+backend/cache/*.json
+# Durable game-record store (gameStore.ts) - local dev copy only. In
+# production this lives on a persistent Render Disk (DATA_DIR env var),
+# not in the repo; historicalWatchability.json stays tracked as the
+# immutable seed the store can always be rebuilt from.
+backend/data/games.db
+backend/data/games.db-wal
+backend/data/games.db-shm
 
 # Android / Gradle
 mobile/.gradle/

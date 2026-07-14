@@ -1,6 +1,7 @@
 import { dateStringsBetween } from "./dateRange";
+import { earliestGameDate } from "./gameStore";
 import { getGamesForDate } from "./gamesService";
-import { earliestHistoryDate, getHistory, HistoryResult } from "./historyService";
+import { getHistory, HistoryResult } from "./historyService";
 import { getNews } from "./newsService";
 import { getStandings } from "./standingsService";
 import { getStats } from "./statsService";
@@ -69,7 +70,7 @@ export async function getHistoryForRange(startRaw: string, endRaw: string): Prom
     throw new BadRequestError("start and end must be YYYY-MM-DD");
   }
 
-  const earliest = earliestHistoryDate();
+  const earliest = earliestGameDate() ?? startRaw;
   const today = new Date().toISOString().slice(0, 10);
   const start = startRaw < earliest ? earliest : startRaw;
   const end = endRaw > today ? today : endRaw;

@@ -1,8 +1,19 @@
-import { CachedDay, loadDay, saveDay } from "./cache";
 import { EspnEvent, League, fetchScoreboard, fetchSummary, toEspnDate } from "./espnClient";
 import { deriveCompetitionLabel, mapEspnState, mapEventToGame } from "./gameMapper";
+import {
+  FinalRubric,
+  GameRow,
+  getFinalGamesMissingHighlights,
+  getGame,
+  markHighlightsChecked,
+  setFinalRubric,
+  setHighlights,
+  setPreview,
+  updateStatus,
+  upsertBaseEntry,
+} from "./gameStore";
 import { generateHookAndStakes } from "./llm";
-import { computeWatchabilityScore } from "./rubric";
+import { computeWatchabilityScore, tierForScore } from "./rubric";
 import { GameJson, LeagueGroup } from "./types";
 import { HighlightsLeague, isYoutubeSearchConfigured, searchHighlightsVideo } from "./youtubeClient";
 
@@ -16,9 +27,9 @@ function hasReachedPreviewGate(tipoffUtc: string, now: Date = new Date()): boole
 
 // NBA and WNBA are mutually-exclusive slates the client picks between (settings
 // toggle + top-left dropdown) - never unioned together like the Summer League
-// variants are within the "nba" group. Cache entries are keyed by eventId
+// variants are within the "nba" group. gameStore rows are keyed by eventId
 // (globally unique across ESPN sports), so both groups safely share the same
-// per-date cache file with no risk of collision.
+// store with no risk of collision.
 const LEAGUE_GROUPS: Record<LeagueGroup, readonly League[]> = {
   nba: ["nba", "nba-summer-las-vegas", "nba-summer-utah", "nba-summer-sacramento"],
   wnba: ["wnba"],
@@ -45,26 +56,8 @@ async function fetchAllEvents(espnDate: string, leagueGroup: LeagueGroup): Promi
 }
 
 /** Plain, spoiler-free placeholder shown on the tile until the real pregame preview generates. */
-function fallbackHook(cached: Pick<CachedDay["games"][string], "away" | "home">): string {
-  return `${cached.away} at ${cached.home}.`;
-}
-
-async function ensureBaseEntry(day: CachedDay, league: League, event: EspnEvent): Promise<void> {
-  if (day.games[event.id]) return;
-
-  const competition = event.competitions[0];
-  const away = competition.competitors.find((c) => c.homeAway === "away")!;
-  const home = competition.competitors.find((c) => c.homeAway === "home")!;
-
-  day.games[event.id] = {
-    eventId: event.id,
-    away: away.team.displayName,
-    home: home.team.displayName,
-    awayLogo: away.team.logo,
-    homeLogo: home.team.logo,
-    tipoffUtc: event.date,
-    league,
-  };
+function fallbackHook(away: string, home: string): string {
+  return `${away} at ${home}.`;
 }
 
 /**
@@ -72,11 +65,12 @@ async function ensureBaseEntry(day: CachedDay, league: League, event: EspnEvent)
  * not the first time the event is seen, but starting 24 hours before its own
  * tipoff, so games populate on a staggered schedule instead of every game at
  * a venue clustering around the same wall-clock hour. Before that gate, or if
- * generation already happened, this is a no-op.
+ * generation already happened, this is a no-op. Permanent once set -
+ * gameStore.setPreview's own WHERE hook IS NULL guard is the actual
+ * enforcement, this check is just to avoid a wasted LLM call.
  */
-async function ensurePregamePreview(day: CachedDay, league: League, event: EspnEvent): Promise<void> {
-  const cached = day.games[event.id];
-  if (cached.hook !== undefined) return; // already generated
+async function ensurePregamePreview(row: GameRow, league: League, event: EspnEvent): Promise<void> {
+  if (row.hook !== null) return; // already generated
   if (!hasReachedPreviewGate(event.date)) return; // not time yet
 
   const competition = event.competitions[0];
@@ -93,68 +87,89 @@ async function ensurePregamePreview(day: CachedDay, league: League, event: EspnE
       : undefined,
   });
 
-  cached.hook = hook;
-  cached.stakes = stakes;
-  cached.pitch = pitch;
+  setPreview(row.eventId, hook, pitch, stakes);
 }
 
 // The official channel rarely has a game's highlights video up within
 // minutes of it going final (observed same-day, but not immediately), so a
 // miss is retried on this cadence rather than being permanent - not on
 // every request, since search.list has its own hard 100-calls/day quota
-// bucket (youtubeClient.ts) and this app's low traffic means "every
-// request" and "every 30 minutes" are similar in practice anyway.
+// bucket (youtubeClient.ts). Retries forever (lifecycle point: a game is
+// never permanently "unfindable") but slows down after 48h so one video
+// that's genuinely never posted (rare) doesn't quietly eat the shared quota
+// every 30 minutes indefinitely.
 const YT_RETRY_INTERVAL_MS = 30 * 60 * 1000;
-// Bounds quota spend on games that never get an official upload (rare, but
-// not impossible for Summer League) - by 48h after tipoff, the video is
-// either up or it isn't coming.
-const YT_GIVE_UP_AFTER_MS = 48 * 60 * 60 * 1000;
+const YT_SLOWDOWN_AFTER_MS = 48 * 60 * 60 * 1000;
+const YT_SLOW_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-/**
- * Looks up the official full-game-highlights video for a final game,
- * retrying a miss periodically (see YT_RETRY_INTERVAL_MS) until found or
- * until YT_GIVE_UP_AFTER_MS has elapsed since tipoff. NBA (and its Summer
- * League variants) search the @NBA channel; WNBA searches @WNBA.
- */
-// Logged once, not per-call, since ensureHighlightsVideo runs on every final
-// game on every request - without a memoized guard this would spam the same
-// line into Render's logs all day. This one line is the only thing that
-// distinguishes "search is silently never running" from "search runs and
-// keeps missing" from the outside - both look identical as yt: undefined in
-// the API response.
 let loggedMissingApiKey = false;
 
-async function ensureHighlightsVideo(day: CachedDay, league: League, event: EspnEvent): Promise<void> {
+/**
+ * Checks every final game still missing a highlights match (globally, not
+ * scoped to any date range - gameStore.getFinalGamesMissingHighlights is a
+ * simple query, not a per-day file scan) and searches for whichever are due
+ * a retry. Called by highlightsPoller.ts on a timer - live requests
+ * (getGamesForDate) no longer trigger this inline, since a game's highlights
+ * have nothing to do with the ESPN data a request happens to be fetching.
+ */
+export async function checkPendingHighlights(): Promise<void> {
   if (!isYoutubeSearchConfigured()) {
     if (!loggedMissingApiKey) {
       loggedMissingApiKey = true;
-      console.warn("ensureHighlightsVideo: YOUTUBE_API_KEY not set - highlights search is disabled entirely");
+      console.warn("checkPendingHighlights: YOUTUBE_API_KEY not set - highlights search is disabled entirely");
     }
     return;
   }
 
-  const cached = day.games[event.id];
-  if (cached.yt) return;
-
+  const pending = getFinalGamesMissingHighlights();
   const now = Date.now();
-  if (cached.ytCheckedAt) {
-    const sinceTipoffMs = now - new Date(cached.tipoffUtc).getTime();
-    if (sinceTipoffMs > YT_GIVE_UP_AFTER_MS) return;
 
-    const sinceLastCheckMs = now - new Date(cached.ytCheckedAt).getTime();
-    if (sinceLastCheckMs < YT_RETRY_INTERVAL_MS) return;
-  }
+  for (const row of pending) {
+    const sinceTipoffMs = now - new Date(row.tipoffUtc).getTime();
+    const cooldownMs = sinceTipoffMs > YT_SLOWDOWN_AFTER_MS ? YT_SLOW_RETRY_INTERVAL_MS : YT_RETRY_INTERVAL_MS;
 
-  const highlightsLeague: HighlightsLeague = league === "wnba" ? "wnba" : "nba";
-  console.log(`ensureHighlightsVideo: searching for ${cached.away} @ ${cached.home} (${event.id}, ${highlightsLeague})`);
-  const match = await searchHighlightsVideo(highlightsLeague, cached.away, cached.home, cached.tipoffUtc);
-  cached.ytCheckedAt = new Date(now).toISOString();
-  if (match) {
-    cached.yt = match.videoId;
-    console.log(`ensureHighlightsVideo: matched "${match.title}" (${match.videoId})`);
-  } else {
-    console.log(`ensureHighlightsVideo: no match for ${cached.away} @ ${cached.home} (${event.id})`);
+    if (row.ytLastCheckedAt) {
+      const sinceLastCheckMs = now - new Date(row.ytLastCheckedAt).getTime();
+      if (sinceLastCheckMs < cooldownMs) continue;
+    }
+
+    const highlightsLeague: HighlightsLeague = row.league === "wnba" ? "wnba" : "nba";
+    console.log(`checkPendingHighlights: searching for ${row.away} @ ${row.home} (${row.eventId}, ${highlightsLeague})`);
+    const match = await searchHighlightsVideo(highlightsLeague, row.away, row.home, row.tipoffUtc);
+    markHighlightsChecked(row.eventId, new Date(now).toISOString());
+    if (match) {
+      setHighlights(row.eventId, match.videoId);
+      console.log(`checkPendingHighlights: matched "${match.title}" (${match.videoId})`);
+    } else {
+      console.log(`checkPendingHighlights: no match for ${row.away} @ ${row.home} (${row.eventId})`);
+    }
   }
+}
+
+function toGameJson(row: GameRow, status: "upcoming" | "live", cl: string | undefined, q?: number, clk?: string): GameJson {
+  const lg: GameJson["lg"] = row.league === "nba" ? "nba" : row.league === "wnba" ? "wnba" : "summer";
+  return {
+    a: row.away,
+    h: row.home,
+    al: row.awayLogo ?? undefined,
+    hl: row.homeLogo ?? undefined,
+    stt: status,
+    utc: row.tipoffUtc,
+    lg,
+    cl,
+    q,
+    clk,
+    ot: 0,
+    c5: false,
+    lcf: false,
+    fp: false,
+    bz: false,
+    st: null,
+    sk: row.stakes ?? undefined,
+    hook: row.hook ?? fallbackHook(row.away, row.home),
+    pitch: row.pitch ?? undefined,
+    score_visible: false,
+  };
 }
 
 /**
@@ -163,95 +178,64 @@ async function ensureHighlightsVideo(day: CachedDay, league: League, event: Espn
  *
  * Bandwidth note: the one expensive ESPN call is fetchSummary (full
  * play-by-play + box score) - it's only ever made once per game, the first
- * time that game is seen as "final", and cached forever after via
- * finalRubric. While a game is live, period/clock come for free from the
- * same lightweight scoreboard listing already being fetched, so live games
- * show LIVE + quarter + clock but no watchability score - the score only
- * appears once, all at once, when the game ends (spec change: previously it
- * appeared progressively from Q4 onward, which required re-fetching the full
- * play-by-play on every single poll for as long as the game stayed live).
+ * time that game is seen as "final", and cached forever after via the
+ * gameStore final-rubric fields. While a game is live, period/clock come for
+ * free from the same lightweight scoreboard listing already being fetched,
+ * so live games show LIVE + quarter + clock but no watchability score - the
+ * score only appears once, all at once, when the game ends.
  */
 export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "nba"): Promise<GameJson[]> {
   const espnDate = toEspnDate(new Date(`${date}T12:00:00Z`));
   const leagueEvents = await fetchAllEvents(espnDate, leagueGroup);
-  const day = loadDay(date);
 
   const results: GameJson[] = [];
 
   for (const { league, event } of leagueEvents) {
-    await ensureBaseEntry(day, league, event);
-    await ensurePregamePreview(day, league, event);
-    const cached = day.games[event.id];
-    // Older cache entries predate Summer League support and have no stored league.
-    const eventLeague: League = cached.league ?? league;
-    const lg: GameJson["lg"] = eventLeague === "nba" ? "nba" : eventLeague === "wnba" ? "wnba" : "summer";
-    // Summer League keeps its own separate static label client-side (lg === "summer").
-    const cl = lg === "summer" ? undefined : deriveCompetitionLabel(event, lg);
-    const status = mapEspnState(event.competitions[0].status.type.state);
-    const hook = cached.hook ?? fallbackHook(cached);
-    const stakes = cached.stakes ?? 0;
+    const competition = event.competitions[0];
+    const away = competition.competitors.find((c) => c.homeAway === "away")!;
+    const home = competition.competitors.find((c) => c.homeAway === "home")!;
+    const status = mapEspnState(competition.status.type.state);
+
+    upsertBaseEntry({
+      eventId: event.id,
+      league,
+      leagueGroup,
+      away: away.team.displayName,
+      home: home.team.displayName,
+      awayLogo: away.team.logo,
+      homeLogo: home.team.logo,
+      tipoffUtc: event.date,
+      status,
+    });
+    updateStatus(event.id, status);
+
+    let row = getGame(event.id)!;
+    // Summer League keeps its own separate static label client-side.
+    const cl = league.startsWith("nba-summer") ? undefined : deriveCompetitionLabel(event, league === "wnba" ? "wnba" : "nba");
+
+    if (status !== "final") {
+      await ensurePregamePreview(row, league, event);
+      row = getGame(event.id)!;
+    }
 
     if (status === "upcoming") {
-      results.push({
-        a: cached.away,
-        h: cached.home,
-        al: cached.awayLogo,
-        hl: cached.homeLogo,
-        stt: "upcoming",
-        utc: cached.tipoffUtc,
-        lg,
-        cl,
-        ot: 0,
-        c5: false,
-        lcf: false,
-        fp: false,
-        bz: false,
-        st: null,
-        sk: cached.stakes,
-        hook,
-        pitch: cached.pitch,
-        score_visible: false,
-      });
+      results.push(toGameJson(row, "upcoming", cl));
       continue;
     }
 
     if (status === "live") {
-      // Quarter/clock are on the scoreboard event itself - no play-by-play needed.
-      const period = event.competitions[0].status.period;
-      const clock = event.competitions[0].status.displayClock;
-      results.push({
-        a: cached.away,
-        h: cached.home,
-        al: cached.awayLogo,
-        hl: cached.homeLogo,
-        stt: "live",
-        utc: cached.tipoffUtc,
-        lg,
-        cl,
-        q: period,
-        clk: clock,
-        ot: 0,
-        c5: false,
-        lcf: false,
-        fp: false,
-        bz: false,
-        st: null,
-        sk: cached.stakes,
-        hook,
-        pitch: cached.pitch,
-        score_visible: false,
-      });
+      results.push(toGameJson(row, "live", cl, competition.status.period, competition.status.displayClock));
       continue;
     }
 
-    // final: need play-by-play, unless we already locked in a result for it.
-    let rubric = cached.finalRubric;
-
-    if (!rubric) {
-      const summary = await fetchSummary(event.id, eventLeague);
-      const mapped = mapEventToGame(event, eventLeague, summary);
-      const score = computeWatchabilityScore(mapped.rubric, stakes).total;
-      cached.finalRubric = {
+    // final: compute the rubric once, ever - already-set fields are never touched again.
+    if (row.score === null) {
+      const summary = await fetchSummary(event.id, league);
+      const mapped = mapEventToGame(event, league, summary);
+      const score = computeWatchabilityScore(mapped.rubric, row.stakes ?? undefined).total;
+      const rubric: FinalRubric = {
+        awayScore: parseFloat(away.score),
+        homeScore: parseFloat(home.score),
         finalMargin: mapped.rubric.finalMargin ?? 0,
         largestDeficitOvercome: mapped.rubric.largestDeficitOvercome ?? 0,
         leadChanges: mapped.rubric.leadChanges ?? 0,
@@ -262,39 +246,39 @@ export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "
         buzzerBeater: mapped.rubric.buzzerBeater,
         starPerformance: mapped.rubric.starPerformance,
         score,
+        tier: tierForScore(score),
       };
-      rubric = cached.finalRubric;
+      setFinalRubric(event.id, rubric);
+      row = getGame(event.id)!;
     }
 
-    await ensureHighlightsVideo(day, eventLeague, event);
-
+    const lg: GameJson["lg"] = row.league === "nba" ? "nba" : row.league === "wnba" ? "wnba" : "summer";
     results.push({
-      a: cached.away,
-      h: cached.home,
-      al: cached.awayLogo,
-      hl: cached.homeLogo,
+      a: row.away,
+      h: row.home,
+      al: row.awayLogo ?? undefined,
+      hl: row.homeLogo ?? undefined,
       stt: "final",
-      utc: cached.tipoffUtc,
+      utc: row.tipoffUtc,
       lg,
       cl,
-      ot: rubric.overtimePeriods,
-      m: rubric.finalMargin,
-      cb: rubric.largestDeficitOvercome,
-      lc: rubric.leadChanges,
-      c5: rubric.closeInFinalTwoMin,
-      lcf: rubric.leadChangeInFinalMin,
-      fp: rubric.decidedOnFinalPossession,
-      bz: rubric.buzzerBeater,
-      st: rubric.starPerformance,
-      sk: cached.stakes,
-      hook,
-      pitch: cached.pitch,
-      score: rubric.score,
+      ot: row.overtimePeriods ?? 0,
+      m: row.finalMargin ?? undefined,
+      cb: row.largestDeficitOvercome ?? undefined,
+      lc: row.leadChanges ?? undefined,
+      c5: Boolean(row.closeInFinalTwoMin),
+      lcf: Boolean(row.leadChangeInFinalMin),
+      fp: Boolean(row.decidedOnFinalPossession),
+      bz: Boolean(row.buzzerBeater),
+      st: row.starPerformance,
+      sk: row.stakes ?? undefined,
+      hook: row.hook ?? fallbackHook(row.away, row.home),
+      pitch: row.pitch ?? undefined,
+      score: row.score ?? undefined,
       score_visible: true,
-      yt: cached.yt,
+      yt: row.ytVideoId ?? undefined,
     });
   }
 
-  saveDay(day);
   return results;
 }
