@@ -1,15 +1,20 @@
-// One-time migration: imports backend/data/historicalWatchability.json (the
-// 2,650-game NBA backfill, already fully correct after this session's
-// rubric-fields fix) into gameStore's durable games table - this is how the
-// historical backfill "graduates" into the same permanent store live games
-// use, per the user's lifecycle spec: a finished game from a year ago and
-// one from five minutes ago are the same kind of row, not two systems.
+// Imports backend/data/historicalWatchability.json (the 2,650-game NBA
+// backfill, already fully correct after this session's rubric-fields fix)
+// into gameStore's durable games table - this is how the historical
+// backfill "graduates" into the same permanent store live games use, per
+// the user's lifecycle spec: a finished game from a year ago and one from
+// five minutes ago are the same kind of row, not two systems.
 //
-// Idempotent (safe to re-run): upsertBaseEntry is INSERT OR IGNORE, and
-// setFinalRubric only writes when score is still NULL, so re-running this
-// against an already-migrated store is a harmless no-op.
+// Idempotent (safe to run every time, not just once): upsertBaseEntry is
+// INSERT OR IGNORE, and setFinalRubric only writes when score is still
+// NULL, so running this against an already-migrated store is a harmless
+// no-op. That's also why devServer.ts calls this on every startup rather
+// than requiring a manual one-off run against production (which would need
+// Render Shell access, a paid-tier feature) - a brand new empty disk
+// self-seeds from this file automatically; an already-populated one just
+// verifies nothing's missing.
 //
-// Run with: npx tsx src/migrateToGameStore.ts
+// Can still be run standalone: npx tsx src/migrateToGameStore.ts
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { FinalRubric, setFinalRubric, upsertBaseEntry } from "./gameStore";
@@ -38,9 +43,8 @@ interface HistoricalGame {
 
 const DATA_PATH = join(__dirname, "..", "data", "historicalWatchability.json");
 
-function main(): void {
+export function migrateHistoricalBackfill(): void {
   const { games } = JSON.parse(readFileSync(DATA_PATH, "utf8")) as { games: HistoricalGame[] };
-  let migrated = 0;
 
   for (const g of games) {
     upsertBaseEntry({
@@ -69,10 +73,13 @@ function main(): void {
       tier: g.tier,
     };
     setFinalRubric(g.eventId, rubric);
-    migrated++;
   }
 
-  console.log(`Migrated ${migrated}/${games.length} historical games into gameStore.`);
+  console.log(`migrateHistoricalBackfill: verified ${games.length} historical games are present in gameStore.`);
 }
 
-main();
+// Allows `npx tsx src/migrateToGameStore.ts` to still work standalone for
+// local testing, without running twice when devServer.ts imports this module.
+if (require.main === module) {
+  migrateHistoricalBackfill();
+}

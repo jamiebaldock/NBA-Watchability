@@ -10,6 +10,7 @@ import {
 } from "./httpHandler";
 import { startHighlightsPoller } from "./highlightsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
+import { migrateHistoricalBackfill } from "./migrateToGameStore";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
@@ -95,6 +96,11 @@ app.get("/news", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`NBA Watchability backend dev server listening on http://localhost:${PORT}`);
   console.log(`Try: http://localhost:${PORT}/schedule?start=2025-01-15&end=2025-01-15`);
+  // migrateHistoricalBackfill is idempotent - on a fresh/empty persistent
+  // disk this self-seeds the 2,650-game backfill with no manual step
+  // required; against an already-populated store it's a harmless no-op
+  // (just re-verifies nothing's missing).
+  migrateHistoricalBackfill();
   // gameStore's guarded setters (WHERE x IS NULL) make the seed and the
   // poller safe to run in either order or even concurrently - sequencing
   // here is just to have the seed's rows exist before the poller's first
