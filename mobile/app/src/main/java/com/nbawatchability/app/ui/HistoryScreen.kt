@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
@@ -55,8 +56,9 @@ private val earliestDateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
 
 /**
  * "Which old games are actually worth going back to watch" - surfaces the
- * NBA watchability backfill (2024-25 + 2025-26 seasons), Worth Your Time and
- * Instant Classic tiers only, most-watchable-first by default. Unlike every
+ * NBA watchability backfill, games scoring 70+ only (gameStore.ts's
+ * HISTORY_MIN_SCORE - stricter than the "Worth Your Time" tier badge's own
+ * >=65), most-watchable-first by default. Unlike every
  * other tab, these games are ones the viewer is intentionally browsing
  * rather than following live, so the breakdown is never spoiler-blurred
  * (GameCard's spoilerFree = true) - the tier/score/final result are the
@@ -104,10 +106,11 @@ fun HistoryScreen(
     // from another tab, so a "showing scores" choice never survives a tab
     // switch and can't accidentally spoil something.
     var showScore by remember { mutableStateOf(false) }
-    // False (default) = server's own most-watchable-first order, left
-    // untouched. True = newest game first - a local re-sort of the already-
-    // fetched list, no re-fetch needed.
-    var sortByDate by rememberSaveable { mutableStateOf(false) }
+    // Same two-toggle pattern as StarredScreen: sortBestFirst picks the sort
+    // mode (rating vs date), dateAscending only matters in date mode - both
+    // local re-sorts of the already-fetched list, no re-fetch needed.
+    var sortBestFirst by rememberSaveable { mutableStateOf(true) }
+    var dateAscending by rememberSaveable { mutableStateOf(false) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
@@ -117,16 +120,29 @@ fun HistoryScreen(
                 title = { TabTitle(showWnba, selectedLeague, onLeagueSelected, "Past Barn Burners") },
                 actions = {
                     IconToggleButton(
-                        checked = sortByDate,
+                        checked = dateAscending,
                         onCheckedChange = {
-                            sortByDate = it
-                            actionLabel = if (it) "Sorted by date" else "Sorted by watchability"
+                            dateAscending = it
+                            actionLabel = if (it) "Oldest first" else "Newest first"
                         }
                     ) {
                         Icon(
-                            imageVector = if (sortByDate) Icons.Default.CalendarToday else Icons.AutoMirrored.Filled.Sort,
-                            contentDescription = if (sortByDate) "Sorted by date - tap for most watchable first" else "Sorted by watchability - tap for date order",
-                            tint = if (sortByDate) TierWorthYourTime else TextSecondary
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = if (dateAscending) "Oldest game first" else "Newest game first",
+                            tint = if (dateAscending) TierWorthYourTime else TextSecondary
+                        )
+                    }
+                    IconToggleButton(
+                        checked = sortBestFirst,
+                        onCheckedChange = {
+                            sortBestFirst = it
+                            actionLabel = if (it) "Sorted by rating" else "Sorted by date"
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Sort,
+                            contentDescription = "Best first sort",
+                            tint = if (sortBestFirst) TierWorthYourTime else TextSecondary
                         )
                     }
                     IconToggleButton(
@@ -246,13 +262,18 @@ fun HistoryScreen(
                             )
                         }
                     } else {
-                        // Score-sort order comes straight from the server (already
-                        // most-watchable-first) - only re-sort locally when the
-                        // user's asked for date order instead.
-                        val ordered = if (sortByDate) {
-                            uiState.games.sortedByDescending { OffsetDateTime.parse(it.tipoffUtc) }
+                        // Same three-way ordering as StarredScreen: best first
+                        // (by the user's own rubric weights, not just the
+                        // server's stored score) or date order in either
+                        // direction - every History game already has a score,
+                        // so unlike Starred there's no unscored tail to fall
+                        // back to.
+                        val ordered = if (sortBestFirst) {
+                            uiState.games.sortedByDescending { it.effectiveScore(weights) }
+                        } else if (dateAscending) {
+                            uiState.games.sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
                         } else {
-                            uiState.games
+                            uiState.games.sortedByDescending { OffsetDateTime.parse(it.tipoffUtc) }
                         }
 
                         LazyColumn(

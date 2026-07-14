@@ -443,22 +443,28 @@ export function getFinalGamesMissingHighlights(): GameRow[] {
     });
 }
 
+// Deliberately a raw score cutoff, not the "worth_your_time" tier's own
+// >=65 boundary (rubric.ts's tierForScore) - the History tab wants a
+// stricter bar than the tier badge itself uses, so a game can show a
+// "Worth Your Time" tier badge elsewhere in the app without necessarily
+// clearing History's own cutoff.
+const HISTORY_MIN_SCORE = 70;
+
 /**
- * Worth Your Time / Instant Classic games in [startDate, endDate], sorted
- * score descending - backs the History tab. Date-range filtering happens in
- * JS on real Date objects (not a SQL string comparison on tipoff_utc) -
- * ESPN's timestamps omit seconds/milliseconds when they're :00 (e.g.
- * "T01:00Z" vs a boundary like "T23:59:59.999Z"), and comparing ISO strings
- * of different precision isn't reliably correct at exact boundaries the way
- * numeric Date.getTime() comparison always is. The tier filter alone is
- * cheap and exact in SQL, so only that's pushed down; the result set is
- * always small (a season's worth of games, at most).
+ * Games scoring >= HISTORY_MIN_SCORE in [startDate, endDate], sorted score
+ * descending - backs the History tab. Date-range filtering happens in JS on
+ * real Date objects (not a SQL string comparison on tipoff_utc) - ESPN's
+ * timestamps omit seconds/milliseconds when they're :00 (e.g. "T01:00Z" vs
+ * a boundary like "T23:59:59.999Z"), and comparing ISO strings of different
+ * precision isn't reliably correct at exact boundaries the way numeric
+ * Date.getTime() comparison always is. The score filter alone is cheap and
+ * exact in SQL, so only that's pushed down; the result set is always small
+ * (a season's worth of games, at most).
  */
 export function getWatchableHistory(startDate: string, endDate: string): GameRow[] {
   const startTime = new Date(`${startDate}T00:00:00Z`).getTime();
   const endTime = new Date(`${endDate}T23:59:59.999Z`).getTime();
-  const placeholders = WATCHABLE_TIERS.map(() => "?").join(",");
-  const raws = db.prepare(`SELECT * FROM games WHERE tier IN (${placeholders})`).all(...WATCHABLE_TIERS) as RawGameRow[];
+  const raws = db.prepare(`SELECT * FROM games WHERE score >= ?`).all(HISTORY_MIN_SCORE) as RawGameRow[];
   return raws
     .map(mapRow)
     .filter((row) => {

@@ -70,7 +70,10 @@ fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGr
                                 modifier = Modifier.size(28.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
-                            Text(league.displayName)
+                            Text(
+                                text = league.displayName,
+                                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp)
+                            )
                         }
                     },
                     onClick = {
