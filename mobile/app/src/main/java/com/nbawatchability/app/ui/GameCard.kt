@@ -85,13 +85,14 @@ fun GameCard(
     // that could still be spoiled - so the breakdown starts revealed instead
     // of blurred behind its own reveal tap.
     spoilerFree: Boolean = false,
-    // History tab only: a "browse blind" preference, distinct from
-    // spoilerFree/scoreVisible - this hides the watchability rating (tier
-    // badge + breakdown) specifically, not the final score/teams, which stay
-    // visible either way (that's just "what game is this", not a rating).
+    // History tab only: a "browse blind" preference - hides just the two
+    // teams' final numeric score digits (TeamRow below), not the
+    // watchability rating (tier badge + breakdown), which stay visible
+    // either way - the rating is the point of this tab, only the literal
+    // score is optional to peek at.
     showScore: Boolean = true
 ) {
-    val tier = if (showScore) game.effectiveTier(weights) else null
+    val tier = game.effectiveTier(weights)
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -151,9 +152,9 @@ fun GameCard(
                 }
 
                 Column(modifier = Modifier.padding(top = 8.dp)) {
-                    TeamRow(logoUrl = game.awayLogo, name = game.away, score = game.awayScore)
+                    TeamRow(logoUrl = game.awayLogo, name = game.away, score = game.awayScore.takeIf { showScore })
                     Spacer(modifier = Modifier.height(4.dp))
-                    TeamRow(logoUrl = game.homeLogo, name = game.home, score = game.homeScore)
+                    TeamRow(logoUrl = game.homeLogo, name = game.home, score = game.homeScore.takeIf { showScore })
                 }
 
                 // Once the game is final, the pregame preview area is fully
@@ -162,7 +163,7 @@ fun GameCard(
                     PitchSection(game = game, modifier = Modifier.padding(top = 10.dp))
                 }
 
-                if (showScore && game.hasBreakdown) {
+                if (game.hasBreakdown) {
                     val breakdownTopPadding = if (game.status == GameStatus.FINAL) 10.dp else 12.dp
                     FullBreakdownSection(
                         game = game,
