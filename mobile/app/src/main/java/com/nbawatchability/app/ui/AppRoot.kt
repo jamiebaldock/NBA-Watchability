@@ -32,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
@@ -207,6 +209,15 @@ private fun GamesTab(
     // dropdown) - a full fresh load, not a merge with whatever was showing.
     LaunchedEffect(effectiveLeagueGroup) { viewModel.load(effectiveLeagueGroup) }
 
+    // Same refresh() pull-to-refresh already uses - cost-safe to fire more
+    // often than a user would manually pull, since ensureHighlightsVideo's
+    // cache/cooldown and the pregame preview's once-ever gate (both in
+    // gamesService.ts) mean a redundant fetch just re-reads already-cached
+    // state server-side, not new YouTube searches or LLM calls. Only wired
+    // up while this tab is actually composed (selected), so backgrounding
+    // the app while on a different tab doesn't refresh Games in the background.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
+
     when (val state = viewModel.uiState) {
         is ScheduleUiState.Loading -> LoadingScreen()
         is ScheduleUiState.Error -> ErrorScreen(state.message, onRetry = { viewModel.load(effectiveLeagueGroup) })
@@ -248,6 +259,12 @@ private fun StarredTab(
     // whatever's currently starred, same idea as GamesTab reloading on
     // league change.
     LaunchedEffect(starredGamesViewModel.starredIds) { starredGamesViewModel.refreshLiveData() }
+
+    // Same cost reasoning as GamesTab's resume effect - refreshLiveData()
+    // just re-hits /schedule for already-starred games, gated by the same
+    // server-side caching, so refreshing on resume adds no real YouTube/LLM
+    // work beyond what's already cached or cooldown-skipped.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { starredGamesViewModel.refreshLiveData() }
 
     StarredScreen(
         games = starredGamesViewModel.starredGames,
