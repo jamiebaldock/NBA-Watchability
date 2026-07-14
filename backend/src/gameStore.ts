@@ -473,6 +473,31 @@ export function earliestGameDate(): string | undefined {
   return row.earliest?.slice(0, 10) ?? undefined;
 }
 
+// Same "ends in" convention as historicalWatchability.json's own season
+// strings (a season runs Oct 1 - Sep 30, labeled by its start year) - e.g.
+// a 2024-10-22 tipoff and a 2025-04-15 tipoff both label "2024-25".
+function seasonLabelForTipoff(tipoffUtc: string): string {
+  const date = new Date(tipoffUtc);
+  const year = date.getUTCFullYear();
+  const startYear = date.getUTCMonth() >= 9 ? year : year - 1;
+  return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+}
+
+/**
+ * Distinct season labels present in the backfill/live data, newest first -
+ * backs the History tab's per-season filter chips, so a newly-backfilled
+ * season shows up automatically with no code change. Only real NBA
+ * season/playoff games count toward a season label (league='nba') - Summer
+ * League and preseason games are deliberately excluded, since those belong
+ * to the "This season" (current in-progress period) bucket the client
+ * computes separately, not to a named season block.
+ */
+export function getSeasonLabels(): string[] {
+  const rows = db.prepare(`SELECT tipoff_utc FROM games WHERE league = 'nba'`).all() as { tipoff_utc: string }[];
+  const labels = new Set(rows.map((r) => seasonLabelForTipoff(r.tipoff_utc)));
+  return Array.from(labels).sort().reverse();
+}
+
 export function closeDb(): void {
   db.close();
 }

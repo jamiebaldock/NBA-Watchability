@@ -82,6 +82,7 @@ private val earliestDateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
 @Composable
 fun HistoryScreen(
     uiState: HistoryUiState,
+    presets: List<HistoryRangePreset>,
     selectedPreset: HistoryRangePreset,
     earliestDate: java.time.LocalDate?,
     onPresetSelected: (HistoryRangePreset) -> Unit,
@@ -186,7 +187,7 @@ fun HistoryScreen(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                HistoryRangePreset.entries.forEach { preset ->
+                presets.forEach { preset ->
                     FilterChip(
                         selected = preset == selectedPreset,
                         onClick = { onPresetSelected(preset) },

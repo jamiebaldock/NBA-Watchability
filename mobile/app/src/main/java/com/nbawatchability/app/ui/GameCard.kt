@@ -64,7 +64,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val localTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
-private val localDateFormatter = DateTimeFormatter.ofPattern("MMM d")
+private val localDateFormatter = DateTimeFormatter.ofPattern("MMMM d - yyyy")
 private const val TABULAR_NUMS = "tnum"
 
 @Composable

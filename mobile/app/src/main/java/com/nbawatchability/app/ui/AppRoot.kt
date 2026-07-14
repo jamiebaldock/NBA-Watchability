@@ -329,6 +329,7 @@ private fun HistoryTab(
 
     HistoryScreen(
         uiState = viewModel.uiState,
+        presets = viewModel.presets,
         selectedPreset = viewModel.selectedPreset,
         earliestDate = viewModel.earliestDate,
         onPresetSelected = viewModel::load,

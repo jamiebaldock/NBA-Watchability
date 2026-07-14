@@ -4,12 +4,13 @@
 // (rated + highlights found). There's no separate historical dataset
 // anymore; a game finished a year ago and a game that finished five
 // minutes ago are the same kind of row.
-import { earliestGameDate, getWatchableHistory } from "./gameStore";
+import { earliestGameDate, getSeasonLabels, getWatchableHistory } from "./gameStore";
 import { teamLogoUrl } from "./teamLogos";
 import { GameJson } from "./types";
 
 export interface HistoryResult {
   earliestDate: string;
+  seasons: string[];
   games: GameJson[];
 }
 
@@ -45,5 +46,5 @@ export async function getHistory(start: string, end: string): Promise<HistoryRes
     yt: row.ytVideoId ?? undefined,
   }));
 
-  return { earliestDate: earliestGameDate() ?? start, games };
+  return { earliestDate: earliestGameDate() ?? start, seasons: getSeasonLabels(), games };
 }
