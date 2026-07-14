@@ -8,6 +8,7 @@ import {
   getStandingsForLeagueGroup,
   getStatsForLeagueGroup,
 } from "./httpHandler";
+import { debugHighlightsStatus } from "./gamesService";
 import { startHighlightsPoller } from "./highlightsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
@@ -91,6 +92,13 @@ app.get("/news", async (req, res) => {
       res.status(500).json({ error: "internal error" });
     }
   }
+});
+
+// TEMPORARY - diagnosing why highlights checks aren't firing at all in
+// prod. No secrets exposed (just booleans/counts/timestamps). Remove once
+// resolved.
+app.get("/api/debug/highlights", (_req, res) => {
+  res.json(debugHighlightsStatus());
 });
 
 app.listen(PORT, () => {

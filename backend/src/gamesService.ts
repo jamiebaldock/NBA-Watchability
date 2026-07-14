@@ -106,27 +106,26 @@ const YT_MIN_CHECK_SPACING_MS = 5 * 60 * 1000;
 let loggedMissingApiKey = false;
 
 /**
- * Whether [row] is due for its next highlights check. The first-ever check
- * (ytCheckCount === 0) always fires immediately, same as the original
- * design - there's no reason to wait an estimated delay before an attempt
- * we haven't even made once yet, and plenty of videos post within minutes.
- * Only *retries* are paced by the percentile ladder learned from real match
- * data for this league (gameStore's getLagPercentiles): check 1 waits until
- * the league's observed p50 delay since the game went final, check 2 until
- * p75, check 3 until p90, then the tail cadence forever after. A league
- * with no history yet uses sane bootstrap defaults and gradually switches
- * over to its own real percentiles as matches get found (see gameStore.ts).
+ * Whether [row] is due for its next highlights check. Every check,
+ * including the first, is paced by the percentile ladder learned from real
+ * match data for this league (gameStore's getLagPercentiles) - there's
+ * essentially always some real upload lag before NBA posts a highlights
+ * video, so an unconditional instant check on the first attempt would just
+ * waste a search on a near-certain miss. Check 0 waits until the league's
+ * observed p50 delay since the game went final, check 1 until p75, check 2
+ * until p90, then the tail cadence forever after. A league with no history
+ * yet uses sane bootstrap defaults and gradually switches over to its own
+ * real percentiles as matches get found (see gameStore.ts).
  */
 function isDueForHighlightsCheck(row: GameRow, now: number): boolean {
   if (row.ytVideoId) return false;
-  if (row.ytCheckCount === 0) return true;
   if (row.ytLastCheckedAt && now - new Date(row.ytLastCheckedAt).getTime() < YT_MIN_CHECK_SPACING_MS) return false;
 
   const anchor = row.finalAt ?? row.tipoffUtc;
   const sinceFinalMs = now - new Date(anchor).getTime();
   const { p50Ms, p75Ms, p90Ms } = getLagPercentiles(row.league, row.leagueGroup);
   const rungs = [p50Ms, p75Ms, p90Ms];
-  const nextDelayMs = row.ytCheckCount <= rungs.length ? rungs[row.ytCheckCount - 1] : YT_TAIL_RETRY_INTERVAL_MS;
+  const nextDelayMs = row.ytCheckCount < rungs.length ? rungs[row.ytCheckCount] : YT_TAIL_RETRY_INTERVAL_MS;
   return sinceFinalMs >= nextDelayMs;
 }
 
@@ -167,6 +166,33 @@ export async function checkPendingHighlights(): Promise<void> {
   for (const row of getFinalGamesMissingHighlights()) {
     if (isDueForHighlightsCheck(row, now)) await checkGameHighlights(row);
   }
+}
+
+// Temporary diagnostic (devServer.ts's /api/debug/highlights) - reports
+// whether search is configured and which pending games the schedule
+// currently considers due, without exposing the key itself. Remove once
+// the "no highlights firing at all" investigation is resolved.
+export function debugHighlightsStatus() {
+  const configured = isYoutubeSearchConfigured();
+  const pending = getFinalGamesMissingHighlights();
+  const now = Date.now();
+  const due = pending.filter((row) => isDueForHighlightsCheck(row, now));
+  return {
+    configured,
+    pendingCount: pending.length,
+    dueCount: due.length,
+    sample: pending.slice(0, 10).map((row) => ({
+      away: row.away,
+      home: row.home,
+      league: row.league,
+      ytCheckCount: row.ytCheckCount,
+      ytLastCheckedAt: row.ytLastCheckedAt,
+      finalAt: row.finalAt,
+      tipoffUtc: row.tipoffUtc,
+      sinceFinalMin: row.finalAt ? Math.round((now - new Date(row.finalAt).getTime()) / 60000) : null,
+      isDue: isDueForHighlightsCheck(row, now),
+    })),
+  };
 }
 
 function toGameJson(row: GameRow, status: "upcoming" | "live", cl: string | undefined, q?: number, clk?: string): GameJson {
