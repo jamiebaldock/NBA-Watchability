@@ -5,6 +5,7 @@ import {
   GameRow,
   getFinalGamesMissingHighlights,
   getGame,
+  getLagPercentiles,
   markHighlightsChecked,
   setFinalRubric,
   setHighlights,
@@ -90,27 +91,64 @@ async function ensurePregamePreview(row: GameRow, league: League, event: EspnEve
   setPreview(row.eventId, hook, pitch, stakes);
 }
 
-// The official channel rarely has a game's highlights video up within
-// minutes of it going final (observed same-day, but not immediately), so a
-// miss is retried on this cadence rather than being permanent - not on
-// every request, since search.list has its own hard 100-calls/day quota
-// bucket (youtubeClient.ts). Retries forever (lifecycle point: a game is
-// never permanently "unfindable") but slows down after 48h so one video
-// that's genuinely never posted (rare) doesn't quietly eat the shared quota
-// every 30 minutes indefinitely.
-const YT_RETRY_INTERVAL_MS = 30 * 60 * 1000;
-const YT_SLOWDOWN_AFTER_MS = 48 * 60 * 60 * 1000;
-const YT_SLOW_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000;
+// Beyond the percentile ladder (p50 -> p75 -> p90, from gameStore's learned
+// per-league lag data), a still-missing game falls back to this cadence
+// forever - never permanently gives up (lifecycle point: a game is never
+// stuck "unfindable"), but doesn't let one video that's genuinely never
+// posted (rare) quietly eat the shared 100/day quota at a tight interval
+// indefinitely.
+const YT_TAIL_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000;
+// Floor under the percentile ladder so a game can never be checked twice in
+// quick succession even in a "catching up after downtime" burst where
+// several rungs are already overdue at once.
+const YT_MIN_CHECK_SPACING_MS = 5 * 60 * 1000;
 
 let loggedMissingApiKey = false;
+
+/**
+ * Whether [row] is due for its next highlights check, per the percentile
+ * ladder learned from real match data for its league (gameStore's
+ * getLagPercentiles) - rung 0 fires at the league's observed p50 delay
+ * since the game went final, rung 1 at p75, rung 2 at p90, then the tail
+ * cadence forever after. A league with no history yet uses sane bootstrap
+ * defaults and gradually switches over to its own real percentiles as
+ * matches get found (see gameStore.ts).
+ */
+function isDueForHighlightsCheck(row: GameRow, now: number): boolean {
+  if (row.ytVideoId) return false;
+  if (row.ytLastCheckedAt && now - new Date(row.ytLastCheckedAt).getTime() < YT_MIN_CHECK_SPACING_MS) return false;
+
+  const anchor = row.finalAt ?? row.tipoffUtc;
+  const sinceFinalMs = now - new Date(anchor).getTime();
+  const { p50Ms, p75Ms, p90Ms } = getLagPercentiles(row.league, row.leagueGroup);
+  const rungs = [p50Ms, p75Ms, p90Ms];
+  const nextDelayMs = row.ytCheckCount < rungs.length ? rungs[row.ytCheckCount] : YT_TAIL_RETRY_INTERVAL_MS;
+  return sinceFinalMs >= nextDelayMs;
+}
+
+/** Searches for and records the result of one game's highlights check - shared by the poller and the demand-driven trigger below so there's exactly one place this happens. */
+async function checkGameHighlights(row: GameRow): Promise<void> {
+  const highlightsLeague: HighlightsLeague = row.league === "wnba" ? "wnba" : "nba";
+  console.log(`checkGameHighlights: searching for ${row.away} @ ${row.home} (${row.eventId}, ${highlightsLeague})`);
+  const match = await searchHighlightsVideo(highlightsLeague, row.away, row.home, row.tipoffUtc);
+  markHighlightsChecked(row.eventId, new Date().toISOString());
+  if (match) {
+    setHighlights(row.eventId, match.videoId);
+    console.log(`checkGameHighlights: matched "${match.title}" (${match.videoId})`);
+  } else {
+    console.log(`checkGameHighlights: no match for ${row.away} @ ${row.home} (${row.eventId})`);
+  }
+}
 
 /**
  * Checks every final game still missing a highlights match (globally, not
  * scoped to any date range - gameStore.getFinalGamesMissingHighlights is a
  * simple query, not a per-day file scan) and searches for whichever are due
- * a retry. Called by highlightsPoller.ts on a timer - live requests
- * (getGamesForDate) no longer trigger this inline, since a game's highlights
- * have nothing to do with the ESPN data a request happens to be fetching.
+ * per isDueForHighlightsCheck. Called by highlightsPoller.ts on a timer, as
+ * a backstop for games nobody's actively looking at - getGamesForDate below
+ * also triggers this inline for whatever a live request happens to touch,
+ * so someone actively viewing a game doesn't have to wait for the next
+ * poller tick.
  */
 export async function checkPendingHighlights(): Promise<void> {
   if (!isYoutubeSearchConfigured()) {
@@ -121,28 +159,9 @@ export async function checkPendingHighlights(): Promise<void> {
     return;
   }
 
-  const pending = getFinalGamesMissingHighlights();
   const now = Date.now();
-
-  for (const row of pending) {
-    const sinceTipoffMs = now - new Date(row.tipoffUtc).getTime();
-    const cooldownMs = sinceTipoffMs > YT_SLOWDOWN_AFTER_MS ? YT_SLOW_RETRY_INTERVAL_MS : YT_RETRY_INTERVAL_MS;
-
-    if (row.ytLastCheckedAt) {
-      const sinceLastCheckMs = now - new Date(row.ytLastCheckedAt).getTime();
-      if (sinceLastCheckMs < cooldownMs) continue;
-    }
-
-    const highlightsLeague: HighlightsLeague = row.league === "wnba" ? "wnba" : "nba";
-    console.log(`checkPendingHighlights: searching for ${row.away} @ ${row.home} (${row.eventId}, ${highlightsLeague})`);
-    const match = await searchHighlightsVideo(highlightsLeague, row.away, row.home, row.tipoffUtc);
-    markHighlightsChecked(row.eventId, new Date(now).toISOString());
-    if (match) {
-      setHighlights(row.eventId, match.videoId);
-      console.log(`checkPendingHighlights: matched "${match.title}" (${match.videoId})`);
-    } else {
-      console.log(`checkPendingHighlights: no match for ${row.away} @ ${row.home} (${row.eventId})`);
-    }
+  for (const row of getFinalGamesMissingHighlights()) {
+    if (isDueForHighlightsCheck(row, now)) await checkGameHighlights(row);
   }
 }
 
@@ -249,6 +268,15 @@ export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "
         tier: tierForScore(score),
       };
       setFinalRubric(event.id, rubric);
+      row = getGame(event.id)!;
+    }
+
+    // Demand-driven: a live request touching this game is a chance to check
+    // sooner than the next poller tick, if the learned per-league schedule
+    // says it's actually due (isDueForHighlightsCheck) - not on every
+    // request regardless, which would defeat the whole point of scheduling.
+    if (!row.ytVideoId && isYoutubeSearchConfigured() && isDueForHighlightsCheck(row, Date.now())) {
+      await checkGameHighlights(row);
       row = getGame(event.id)!;
     }
 

@@ -2,12 +2,16 @@
 // YouTube links, matched here to their exact ESPN event by team names/date)
 // rather than found via search.list - lets specific games show a working
 // highlights link immediately without spending any of the 100/day search
-// quota. Safe to run on every startup: gameStore.setHighlights only ever
-// writes when yt_video_id is still NULL, so a genuine search result already
-// on file is never clobbered - the guard lives in the store itself now, not
-// in this file's own bookkeeping.
+// quota. Safe to run on every startup: gameStore.setHighlightsFromSeed only
+// ever writes when yt_video_id is still NULL, so a genuine search result
+// already on file is never clobbered - the guard lives in the store itself
+// now, not in this file's own bookkeeping. Uses the seed-specific setter
+// (not setHighlights) so these manually-confirmed matches don't get folded
+// into the learned upload-lag schedule as if they were real search
+// discoveries - they weren't found via the natural wait-and-search process
+// at all, and doing so would badly skew future scheduling.
 import { getGamesForDate } from "./gamesService";
-import { setHighlights } from "./gameStore";
+import { setHighlightsFromSeed } from "./gameStore";
 import { LeagueGroup } from "./types";
 
 interface SeedEntry {
@@ -56,7 +60,7 @@ export async function applySeedHighlights(): Promise<void> {
       // exact same path every normal request uses - never hand-built),
       // then layers the confirmed video ID on top.
       await getGamesForDate(date, leagueGroup);
-      for (const entry of entries) setHighlights(entry.eventId, entry.videoId);
+      for (const entry of entries) setHighlightsFromSeed(entry.eventId, entry.videoId);
     } catch (err) {
       console.error(`applySeedHighlights: failed for ${key}`, err);
     }

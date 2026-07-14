@@ -72,7 +72,12 @@ export function migrateHistoricalBackfill(): void {
       score: g.score,
       tier: g.tier,
     };
-    setFinalRubric(g.eventId, rubric);
+    // finalAt=null: this game's true end time isn't recorded anywhere in
+    // the backfill, and stamping "whenever this migration happened to run"
+    // would corrupt the per-league upload-lag stats getLagPercentiles
+    // learns from. The highlights schedule falls back to tipoff_utc as its
+    // anchor for any historical game that still needs a check.
+    setFinalRubric(g.eventId, rubric, null);
   }
 
   console.log(`migrateHistoricalBackfill: verified ${games.length} historical games are present in gameStore.`);

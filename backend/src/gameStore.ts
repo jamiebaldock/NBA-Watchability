@@ -69,6 +69,26 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_games_tier_score ON games(tier, score);
 `);
 
+// Added after the initial release - ensureColumn (not a second CREATE TABLE
+// migration) so this is safe to run against both a brand-new DB (columns
+// just won't already exist) and an already-populated one from before these
+// existed, without needing a separate versioned-migration system.
+function ensureColumn(table: string, column: string, definition: string): void {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!existing.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+// final_at/yt_found_at are the two anchors the self-tuning highlights
+// schedule (below) learns from: the real-world gap between them, for every
+// game a match was ever found for, is what "upload lag" actually means per
+// league - not a guessed constant. yt_check_count tracks which rung of the
+// percentile ladder (p50 -> p75 -> p90 -> daily) a still-missing game is on.
+ensureColumn("games", "final_at", "TEXT");
+ensureColumn("games", "yt_found_at", "TEXT");
+ensureColumn("games", "yt_check_count", "INTEGER NOT NULL DEFAULT 0");
+
 function now(): string {
   return new Date().toISOString();
 }
@@ -115,8 +135,11 @@ export interface GameRow {
   starPerformance: StarPerformance;
   score: number | null;
   tier: string | null;
+  finalAt: string | null;
   ytVideoId: string | null;
   ytLastCheckedAt: string | null;
+  ytFoundAt: string | null;
+  ytCheckCount: number;
 }
 
 /** Creates the row if this eventId has never been seen before; a no-op otherwise - never touches an existing row's already-collected fields. */
@@ -188,8 +211,11 @@ interface RawGameRow {
   star_performance: StarPerformance;
   score: number | null;
   tier: string | null;
+  final_at: string | null;
   yt_video_id: string | null;
   yt_last_checked_at: string | null;
+  yt_found_at: string | null;
+  yt_check_count: number;
 }
 
 function mapRow(raw: RawGameRow): GameRow {
@@ -219,8 +245,11 @@ function mapRow(raw: RawGameRow): GameRow {
     starPerformance: raw.star_performance,
     score: raw.score,
     tier: raw.tier,
+    finalAt: raw.final_at,
     ytVideoId: raw.yt_video_id,
     ytLastCheckedAt: raw.yt_last_checked_at,
+    ytFoundAt: raw.yt_found_at,
+    ytCheckCount: raw.yt_check_count,
   };
 }
 
@@ -240,11 +269,19 @@ export function setPreview(eventId: string, hook: string, pitch: string, stakes:
   );
 }
 
-/** Final rubric + score/tier - set once, when the game goes final, permanent. */
-export function setFinalRubric(eventId: string, rubric: FinalRubric): void {
+/**
+ * Final rubric + score/tier - set once, when the game goes final, permanent.
+ * [finalAt] defaults to right now (a live game just went final) - the
+ * migration script passes `null` explicitly instead, since a backfilled
+ * historical game's true end time isn't known, and recording "whenever the
+ * migration happened to run" as its anchor would silently corrupt the
+ * per-league upload-lag stats (getLagPercentiles below) for any historical
+ * game that later gets a highlights match found.
+ */
+export function setFinalRubric(eventId: string, rubric: FinalRubric, finalAt: string | null = now()): void {
   db.prepare(
     `UPDATE games SET
-       status='final',
+       status='final', final_at=@finalAt,
        away_score=@awayScore, home_score=@homeScore, final_margin=@finalMargin,
        largest_deficit_overcome=@largestDeficitOvercome, lead_changes=@leadChanges,
        overtime_periods=@overtimePeriods, close_in_final_two_min=@closeInFinalTwoMin,
@@ -254,6 +291,7 @@ export function setFinalRubric(eventId: string, rubric: FinalRubric): void {
      WHERE event_id=@eventId AND score IS NULL`
   ).run({
     eventId,
+    finalAt,
     awayScore: rubric.awayScore,
     homeScore: rubric.homeScore,
     finalMargin: rubric.finalMargin,
@@ -271,8 +309,28 @@ export function setFinalRubric(eventId: string, rubric: FinalRubric): void {
   });
 }
 
-/** Highlights video - set once found, permanent. */
+/**
+ * Highlights video found via a real search - set once, permanent. Also
+ * records yt_found_at, the raw data point getLagPercentiles learns from.
+ * Manual/seeded matches (highlightsSeed.ts) must go through
+ * setHighlightsFromSeed instead - a human pasting a known-good link seconds
+ * after the game's row is created isn't a real observation of upload lag,
+ * and folding it in here would badly skew the learned schedule toward
+ * "videos appear almost instantly," causing genuine future searches to
+ * check too early and waste quota.
+ */
 export function setHighlights(eventId: string, videoId: string): void {
+  const ts = now();
+  db.prepare(`UPDATE games SET yt_video_id=?, yt_found_at=?, updated_at=? WHERE event_id=? AND yt_video_id IS NULL`).run(
+    videoId,
+    ts,
+    ts,
+    eventId
+  );
+}
+
+/** Manually-confirmed video (highlightsSeed.ts) - sets yt_video_id only, deliberately not yt_found_at (see setHighlights). */
+export function setHighlightsFromSeed(eventId: string, videoId: string): void {
   db.prepare(`UPDATE games SET yt_video_id=?, updated_at=? WHERE event_id=? AND yt_video_id IS NULL`).run(
     videoId,
     now(),
@@ -280,19 +338,81 @@ export function setHighlights(eventId: string, videoId: string): void {
   );
 }
 
-/** Records a search attempt's timestamp regardless of outcome - drives retry pacing only, never gates the precious yt_video_id itself. */
+/**
+ * Records a search attempt's timestamp and bumps the check count regardless
+ * of outcome - drives retry pacing only (which percentile-ladder rung is
+ * next), never gates the precious yt_video_id itself.
+ */
 export function markHighlightsChecked(eventId: string, when: string): void {
-  db.prepare(`UPDATE games SET yt_last_checked_at=?, updated_at=? WHERE event_id=?`).run(when, now(), eventId);
+  db.prepare(`UPDATE games SET yt_last_checked_at=?, yt_check_count = yt_check_count + 1, updated_at=? WHERE event_id=?`).run(
+    when,
+    now(),
+    eventId
+  );
+}
+
+export interface LagPercentiles {
+  p50Ms: number;
+  p75Ms: number;
+  p90Ms: number;
+  sampleCount: number;
+  fromRealData: boolean;
+}
+
+// Bootstrap defaults for a league with no (or too little) real data yet -
+// roughly matches the actual NBA-channel upload timings observed directly
+// this session (most within an hour of game end, a handful of hours for
+// stragglers). Every league starts here and graduates to its own real
+// percentiles as MIN_LAG_SAMPLES worth of matches get found.
+const DEFAULT_PERCENTILES = { p50Ms: 45 * 60 * 1000, p75Ms: 2 * 60 * 60 * 1000, p90Ms: 6 * 60 * 60 * 1000 };
+const MIN_LAG_SAMPLES = 5;
+
+function percentileOf(sortedMs: number[], p: number): number {
+  const idx = Math.min(sortedMs.length - 1, Math.floor(p * sortedMs.length));
+  return sortedMs[idx];
+}
+
+function observedLagsMs(whereClause: string, param: string): number[] {
+  const rows = db
+    .prepare(`SELECT final_at, yt_found_at FROM games WHERE ${whereClause} AND final_at IS NOT NULL AND yt_found_at IS NOT NULL`)
+    .all(param) as { final_at: string; yt_found_at: string }[];
+  return rows.map((r) => new Date(r.yt_found_at).getTime() - new Date(r.final_at).getTime()).sort((a, b) => a - b);
+}
+
+/**
+ * Real, learned upload-lag percentiles for [league], falling back to
+ * [leagueGroup]-wide data if that specific league doesn't have enough
+ * samples yet, and to hardcoded defaults if neither does. This is what lets
+ * the highlights check schedule cluster around each league's actual
+ * observed delay instead of a single guessed constant applied everywhere -
+ * and scale to new leagues for free, since each one just starts on the
+ * default and learns its own profile as it accumulates real matches.
+ */
+export function getLagPercentiles(league: string, leagueGroup: string): LagPercentiles {
+  let lags = observedLagsMs("league = ?", league);
+  if (lags.length < MIN_LAG_SAMPLES) {
+    lags = observedLagsMs("league_group = ?", leagueGroup);
+  }
+  if (lags.length < MIN_LAG_SAMPLES) {
+    return { ...DEFAULT_PERCENTILES, sampleCount: lags.length, fromRealData: false };
+  }
+  return {
+    p50Ms: percentileOf(lags, 0.5),
+    p75Ms: percentileOf(lags, 0.75),
+    p90Ms: percentileOf(lags, 0.9),
+    sampleCount: lags.length,
+    fromRealData: true,
+  };
 }
 
 /**
  * Every final game still missing a highlights match - always a small set
  * (never more than a handful of days' worth of games), so it's simplest and
- * safest to filter/decide cooldowns in JS (matching the rest of the
+ * safest to filter/decide scheduling in JS (matching the rest of the
  * codebase's style) rather than encode retry-interval math in SQL date
- * functions. The caller (gamesService.ts's ensureHighlightsVideo) applies
- * the 30min-then-daily-after-48h policy against each row's
- * tipoff_utc/yt_last_checked_at.
+ * functions. The caller (gamesService.ts's isDueForHighlightsCheck) decides
+ * whether each row is actually due for a check, against getLagPercentiles'
+ * learned per-league schedule.
  */
 export function getFinalGamesMissingHighlights(): GameRow[] {
   const raws = db.prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL`).all() as RawGameRow[];
