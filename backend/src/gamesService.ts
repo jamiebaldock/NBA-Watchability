@@ -106,23 +106,27 @@ const YT_MIN_CHECK_SPACING_MS = 5 * 60 * 1000;
 let loggedMissingApiKey = false;
 
 /**
- * Whether [row] is due for its next highlights check, per the percentile
- * ladder learned from real match data for its league (gameStore's
- * getLagPercentiles) - rung 0 fires at the league's observed p50 delay
- * since the game went final, rung 1 at p75, rung 2 at p90, then the tail
- * cadence forever after. A league with no history yet uses sane bootstrap
- * defaults and gradually switches over to its own real percentiles as
- * matches get found (see gameStore.ts).
+ * Whether [row] is due for its next highlights check. The first-ever check
+ * (ytCheckCount === 0) always fires immediately, same as the original
+ * design - there's no reason to wait an estimated delay before an attempt
+ * we haven't even made once yet, and plenty of videos post within minutes.
+ * Only *retries* are paced by the percentile ladder learned from real match
+ * data for this league (gameStore's getLagPercentiles): check 1 waits until
+ * the league's observed p50 delay since the game went final, check 2 until
+ * p75, check 3 until p90, then the tail cadence forever after. A league
+ * with no history yet uses sane bootstrap defaults and gradually switches
+ * over to its own real percentiles as matches get found (see gameStore.ts).
  */
 function isDueForHighlightsCheck(row: GameRow, now: number): boolean {
   if (row.ytVideoId) return false;
+  if (row.ytCheckCount === 0) return true;
   if (row.ytLastCheckedAt && now - new Date(row.ytLastCheckedAt).getTime() < YT_MIN_CHECK_SPACING_MS) return false;
 
   const anchor = row.finalAt ?? row.tipoffUtc;
   const sinceFinalMs = now - new Date(anchor).getTime();
   const { p50Ms, p75Ms, p90Ms } = getLagPercentiles(row.league, row.leagueGroup);
   const rungs = [p50Ms, p75Ms, p90Ms];
-  const nextDelayMs = row.ytCheckCount < rungs.length ? rungs[row.ytCheckCount] : YT_TAIL_RETRY_INTERVAL_MS;
+  const nextDelayMs = row.ytCheckCount <= rungs.length ? rungs[row.ytCheckCount - 1] : YT_TAIL_RETRY_INTERVAL_MS;
   return sinceFinalMs >= nextDelayMs;
 }
 
