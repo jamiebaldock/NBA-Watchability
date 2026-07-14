@@ -1,5 +1,5 @@
-// The historical backfill (backfillHistoricalWatchability.ts) only kept each
-// team's ESPN displayName, not its logo URL - live schedule data gets logos
+// The original historical backfill only kept each team's ESPN displayName,
+// not its logo URL - live schedule data gets logos
 // straight off the ESPN scoreboard response, but historyService.ts has no
 // live ESPN call to piggyback on for 2024-25/2025-26 games. Static map keyed
 // off exactly the 30 displayName strings ESPN's own teams endpoint returns
