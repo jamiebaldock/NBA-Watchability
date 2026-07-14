@@ -173,8 +173,6 @@ fun AppRoot() {
                     onLeagueSelected = appSettingsViewModel::setSelectedLeague,
                     showNumericScore = appSettingsViewModel.settings.showNumericScore,
                     onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
-                    sortBestFirst = appSettingsViewModel.settings.sortBestFirst,
-                    onToggleSort = appSettingsViewModel::toggleSortBestFirst,
                     weights = settingsViewModel.weights,
                     onWatchHighlights = { videoId -> highlightsVideoId = videoId },
                     onSettingsClick = { showSettings = true }
@@ -253,8 +251,6 @@ private fun StarredTab(
     onLeagueSelected: (LeagueGroup) -> Unit,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
-    sortBestFirst: Boolean,
-    onToggleSort: () -> Unit,
     weights: RubricWeights,
     onWatchHighlights: (String) -> Unit,
     onSettingsClick: () -> Unit
@@ -275,8 +271,6 @@ private fun StarredTab(
         games = starredGamesViewModel.starredGames,
         showNumericScore = showNumericScore,
         onToggleNumericScore = onToggleNumericScore,
-        sortBestFirst = sortBestFirst,
-        onToggleSort = onToggleSort,
         weights = weights,
         starredIds = starredGamesViewModel.starredIds,
         onToggleStar = starredGamesViewModel::toggleStar,

@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,13 +40,11 @@ import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 
 /**
- * Combines NBA and WNBA starred games in one list (most recent tipoff
- * first by default, or best-rated first when toggled), unlike every other
- * tab which is scoped to a single league group - a personal favorites list
- * has no reason to split by league. Sort/numeric-score toggles are the
- * same app-wide preference the Games tab uses, so flipping one affects
- * both. The date-order toggle is Starred-specific (no other tab mixes
- * dates in one list) and purely a local view preference, not persisted.
+ * Combines NBA and WNBA starred games in one list, unlike every other tab
+ * which is scoped to a single league group - a personal favorites list has
+ * no reason to split by league. Sort order is a local view preference
+ * (not persisted) covering all 4 combinations (date/rating x asc/desc) via
+ * a single dropdown (SortMenuButton), not two independent toggles.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,8 +52,6 @@ fun StarredScreen(
     games: List<Game>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
-    sortBestFirst: Boolean,
-    onToggleSort: () -> Unit,
     weights: RubricWeights,
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
@@ -68,7 +62,7 @@ fun StarredScreen(
     onLeagueSelected: (LeagueGroup) -> Unit,
     onSettingsClick: () -> Unit
 ) {
-    var dateAscending by remember { mutableStateOf(false) }
+    var sortOption by remember { mutableStateOf(SortOption.DATE_NEWEST_FIRST) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
@@ -77,32 +71,13 @@ fun StarredScreen(
             TopAppBar(
                 title = { TitleLeagueSelector(selectedLeague, onLeagueSelected) },
                 actions = {
-                    IconToggleButton(
-                        checked = dateAscending,
-                        onCheckedChange = {
-                            dateAscending = it
-                            actionLabel = if (it) "Oldest first" else "Newest first"
+                    SortMenuButton(
+                        selected = sortOption,
+                        onSelected = {
+                            sortOption = it
+                            actionLabel = it.label
                         }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarToday,
-                            contentDescription = if (dateAscending) "Oldest game first" else "Newest game first",
-                            tint = if (dateAscending) TierWorthYourTime else TextSecondary
-                        )
-                    }
-                    IconToggleButton(
-                        checked = sortBestFirst,
-                        onCheckedChange = {
-                            onToggleSort()
-                            actionLabel = if (it) "Sorted by rating" else "Sorted by date"
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                            contentDescription = "Best first sort",
-                            tint = if (sortBestFirst) TierWorthYourTime else TextSecondary
-                        )
-                    }
+                    )
                     IconToggleButton(
                         checked = showNumericScore,
                         onCheckedChange = {
@@ -149,13 +124,19 @@ fun StarredScreen(
                 return@PullToRefreshBox
             }
 
-            fun List<Game>.byDate() = if (dateAscending) sortedBy { it.tipoffUtc } else sortedByDescending { it.tipoffUtc }
-
-            val ordered = if (sortBestFirst) {
-                val (scored, unscored) = games.partition { it.effectiveScore(weights) != null }
-                scored.sortedByDescending { it.effectiveScore(weights) } + unscored.byDate()
-            } else {
-                games.byDate()
+            // Rating modes still fall back to newest-first for any unscored
+            // (future/live) starred games, since those have no rating to sort by.
+            val ordered = when (sortOption) {
+                SortOption.RATING_HIGHEST_FIRST -> {
+                    val (scored, unscored) = games.partition { it.effectiveScore(weights) != null }
+                    scored.sortedByDescending { it.effectiveScore(weights) } + unscored.sortedByDescending { it.tipoffUtc }
+                }
+                SortOption.RATING_LOWEST_FIRST -> {
+                    val (scored, unscored) = games.partition { it.effectiveScore(weights) != null }
+                    scored.sortedBy { it.effectiveScore(weights) } + unscored.sortedByDescending { it.tipoffUtc }
+                }
+                SortOption.DATE_OLDEST_FIRST -> games.sortedBy { it.tipoffUtc }
+                SortOption.DATE_NEWEST_FIRST -> games.sortedByDescending { it.tipoffUtc }
             }
 
             LazyColumn(

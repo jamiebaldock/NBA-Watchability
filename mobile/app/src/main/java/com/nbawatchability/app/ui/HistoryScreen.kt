@@ -13,8 +13,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Visibility
@@ -105,11 +103,10 @@ fun HistoryScreen(
     // from another tab, so a "showing scores" choice never survives a tab
     // switch and can't accidentally spoil something.
     var showScore by remember { mutableStateOf(false) }
-    // Same two-toggle pattern as StarredScreen: sortBestFirst picks the sort
-    // mode (rating vs date), dateAscending only matters in date mode - both
-    // local re-sorts of the already-fetched list, no re-fetch needed.
-    var sortBestFirst by rememberSaveable { mutableStateOf(true) }
-    var dateAscending by rememberSaveable { mutableStateOf(false) }
+    // A single 4-option sort dropdown (SortMenuButton) rather than two
+    // independent toggles - defaults to highest-rated first, matching this
+    // tab's own "most watchable first" framing.
+    var sortOption by rememberSaveable { mutableStateOf(SortOption.RATING_HIGHEST_FIRST) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
@@ -118,32 +115,13 @@ fun HistoryScreen(
             TopAppBar(
                 title = { TitleLeagueSelector(selectedLeague, onLeagueSelected) },
                 actions = {
-                    IconToggleButton(
-                        checked = dateAscending,
-                        onCheckedChange = {
-                            dateAscending = it
-                            actionLabel = if (it) "Oldest first" else "Newest first"
+                    SortMenuButton(
+                        selected = sortOption,
+                        onSelected = {
+                            sortOption = it
+                            actionLabel = it.label
                         }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarToday,
-                            contentDescription = if (dateAscending) "Oldest game first" else "Newest game first",
-                            tint = if (dateAscending) TierWorthYourTime else TextSecondary
-                        )
-                    }
-                    IconToggleButton(
-                        checked = sortBestFirst,
-                        onCheckedChange = {
-                            sortBestFirst = it
-                            actionLabel = if (it) "Sorted by rating" else "Sorted by date"
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                            contentDescription = "Best first sort",
-                            tint = if (sortBestFirst) TierWorthYourTime else TextSecondary
-                        )
-                    }
+                    )
                     IconToggleButton(
                         checked = showScore,
                         onCheckedChange = {
@@ -261,18 +239,15 @@ fun HistoryScreen(
                             )
                         }
                     } else {
-                        // Same three-way ordering as StarredScreen: best first
-                        // (by the user's own rubric weights, not just the
-                        // server's stored score) or date order in either
-                        // direction - every History game already has a score,
-                        // so unlike Starred there's no unscored tail to fall
-                        // back to.
-                        val ordered = if (sortBestFirst) {
-                            uiState.games.sortedByDescending { it.effectiveScore(weights) }
-                        } else if (dateAscending) {
-                            uiState.games.sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
-                        } else {
-                            uiState.games.sortedByDescending { OffsetDateTime.parse(it.tipoffUtc) }
+                        // Ordered by the user's own rubric weights (not just
+                        // the server's stored score) when sorting by rating -
+                        // every History game already has a score, so unlike
+                        // Starred there's no unscored tail to fall back to.
+                        val ordered = when (sortOption) {
+                            SortOption.RATING_HIGHEST_FIRST -> uiState.games.sortedByDescending { it.effectiveScore(weights) }
+                            SortOption.RATING_LOWEST_FIRST -> uiState.games.sortedBy { it.effectiveScore(weights) }
+                            SortOption.DATE_OLDEST_FIRST -> uiState.games.sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
+                            SortOption.DATE_NEWEST_FIRST -> uiState.games.sortedByDescending { OffsetDateTime.parse(it.tipoffUtc) }
                         }
 
                         LazyColumn(
