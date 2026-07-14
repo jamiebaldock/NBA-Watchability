@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -38,11 +39,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.DayGames
 import com.nbawatchability.app.data.LeagueGroup
@@ -163,9 +164,13 @@ fun DayTabsScreen(
 
 /**
  * Material3's ScrollableTabRow only scrolls the selected tab into view (edge
- * aligned), not centered — replaced with a manual horizontalScroll Row that
- * tracks each tab's on-screen position and animates the scroll offset so the
- * selected tab lands centered in the viewport.
+ * aligned), not centered — replaced with a manual horizontalScroll Row.
+ * Each tab is sized to exactly a third of the viewport (rather than sizing
+ * to its own text content), so at rest exactly 3 tabs are ever visible with
+ * none peeking in cut off at either edge - the selected tab's scroll offset
+ * is then just an exact multiple of that fixed tab width, landing it in the
+ * middle slot with a full tab showing on each side (clamped to the ends of
+ * the list, where fewer than one full tab's worth of neighbors exist).
  */
 @Composable
 private fun CenteringDayTabRow(
@@ -176,14 +181,12 @@ private fun CenteringDayTabRow(
 ) {
     val scrollState = rememberScrollState()
     var viewportWidth by remember { mutableStateOf(0) }
-    val tabBounds = remember { mutableStateOf(IntArray(days.size)) }
-    val tabWidths = remember { mutableStateOf(IntArray(days.size)) }
+    val density = LocalDensity.current
+    val tabWidthPx = viewportWidth / 3
 
     LaunchedEffect(selectedDayIndex, viewportWidth) {
-        if (viewportWidth == 0) return@LaunchedEffect
-        val offset = tabBounds.value.getOrNull(selectedDayIndex) ?: return@LaunchedEffect
-        val width = tabWidths.value.getOrNull(selectedDayIndex) ?: 0
-        val target = (offset + width / 2) - viewportWidth / 2
+        if (tabWidthPx == 0) return@LaunchedEffect
+        val target = (selectedDayIndex - 1) * tabWidthPx
         scrollState.animateScrollTo(target.coerceIn(0, scrollState.maxValue))
     }
 
@@ -192,29 +195,25 @@ private fun CenteringDayTabRow(
             .fillMaxWidth()
             .onSizeChanged { viewportWidth = it.width }
             .horizontalScroll(scrollState)
-            .padding(horizontal = 12.dp)
     ) {
         days.forEachIndexed { index, day ->
             val selected = index == selectedDayIndex
             Column(
                 modifier = Modifier
+                    .width(with(density) { tabWidthPx.toDp() })
                     .clickable { onDaySelected(index) }
-                    .onGloballyPositioned { coords ->
-                        val bounds = tabBounds.value.copyOf()
-                        val widths = tabWidths.value.copyOf()
-                        bounds[index] = coords.positionInParent().x.toInt()
-                        widths[index] = coords.size.width
-                        tabBounds.value = bounds
-                        tabWidths.value = widths
-                    }
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = dayTabLabel(day.date, today),
                     color = if (selected) TextPrimary else TextSecondary,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                    )
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
                 )
                 Box(
                     modifier = Modifier
