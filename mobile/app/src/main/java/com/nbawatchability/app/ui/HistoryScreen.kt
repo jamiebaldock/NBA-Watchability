@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -24,6 +25,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -93,7 +95,8 @@ fun HistoryScreen(
     showWnba: Boolean,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
-    leagueGroup: LeagueGroup
+    leagueGroup: LeagueGroup,
+    onSettingsClick: () -> Unit
 ) {
     // Plain remember (not rememberSaveable) - defaults to hidden every time
     // this composable enters composition, e.g. switching back to History
@@ -149,6 +152,13 @@ fun HistoryScreen(
                             imageVector = Icons.Default.Tag,
                             contentDescription = "Show numeric score",
                             tint = if (showNumericScore) TierWorthYourTime else TextSecondary
+                        )
+                    }
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = TextSecondary
                         )
                     }
                 }

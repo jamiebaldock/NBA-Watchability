@@ -5,7 +5,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -39,7 +43,8 @@ fun LeadersScreen(
     onStatsRetry: () -> Unit,
     showWnba: Boolean,
     selectedLeague: LeagueGroup,
-    onLeagueSelected: (LeagueGroup) -> Unit
+    onLeagueSelected: (LeagueGroup) -> Unit,
+    onSettingsClick: () -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = 0) { LEADERS_PAGE_TITLES.size }
     val scope = rememberCoroutineScope()
@@ -48,7 +53,18 @@ fun LeadersScreen(
         containerColor = BackgroundBase,
         topBar = {
             Column {
-                TopAppBar(title = { TabTitle(showWnba, selectedLeague, onLeagueSelected, "Leaders") })
+                TopAppBar(
+                    title = { TabTitle(showWnba, selectedLeague, onLeagueSelected, "Leaders") },
+                    actions = {
+                        IconButton(onClick = onSettingsClick) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = TextSecondary
+                            )
+                        }
+                    }
+                )
                 TabRow(
                     selectedTabIndex = pagerState.currentPage,
                     containerColor = BackgroundBase,

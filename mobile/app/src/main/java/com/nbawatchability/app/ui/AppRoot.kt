@@ -165,13 +165,15 @@ fun AppRoot() {
                     showWnba = appSettingsViewModel.settings.showWnba,
                     selectedLeague = appSettingsViewModel.settings.selectedLeague,
                     onLeagueSelected = appSettingsViewModel::setSelectedLeague,
-                    effectiveLeagueGroup = appSettingsViewModel.settings.effectiveLeagueGroup
+                    effectiveLeagueGroup = appSettingsViewModel.settings.effectiveLeagueGroup,
+                    onSettingsClick = { showSettings = true }
                 )
                 BottomNavTab.NEWS -> NewsTab(
                     showWnba = appSettingsViewModel.settings.showWnba,
                     selectedLeague = appSettingsViewModel.settings.selectedLeague,
                     onLeagueSelected = appSettingsViewModel::setSelectedLeague,
-                    effectiveLeagueGroup = appSettingsViewModel.settings.effectiveLeagueGroup
+                    effectiveLeagueGroup = appSettingsViewModel.settings.effectiveLeagueGroup,
+                    onSettingsClick = { showSettings = true }
                 )
                 BottomNavTab.STARRED -> StarredTab(
                     starredGamesViewModel = starredGamesViewModel,
@@ -183,7 +185,8 @@ fun AppRoot() {
                     sortBestFirst = appSettingsViewModel.settings.sortBestFirst,
                     onToggleSort = appSettingsViewModel::toggleSortBestFirst,
                     weights = settingsViewModel.weights,
-                    onWatchHighlights = { videoId -> highlightsVideoId = videoId }
+                    onWatchHighlights = { videoId -> highlightsVideoId = videoId },
+                    onSettingsClick = { showSettings = true }
                 )
                 BottomNavTab.HISTORY -> HistoryTab(
                     weights = settingsViewModel.weights,
@@ -195,7 +198,8 @@ fun AppRoot() {
                     onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
                     starredIds = starredGamesViewModel.starredIds,
                     onToggleStar = starredGamesViewModel::toggleStar,
-                    onWatchHighlights = { videoId -> highlightsVideoId = videoId }
+                    onWatchHighlights = { videoId -> highlightsVideoId = videoId },
+                    onSettingsClick = { showSettings = true }
                 )
             }
         }
@@ -267,7 +271,8 @@ private fun StarredTab(
     sortBestFirst: Boolean,
     onToggleSort: () -> Unit,
     weights: RubricWeights,
-    onWatchHighlights: (String) -> Unit
+    onWatchHighlights: (String) -> Unit,
+    onSettingsClick: () -> Unit
 ) {
     // Fires on first composition and again whenever the starred set changes
     // (a star added/removed anywhere in the app) - re-fetches live data for
@@ -295,7 +300,8 @@ private fun StarredTab(
         onRefresh = starredGamesViewModel::refreshLiveData,
         showWnba = showWnba,
         selectedLeague = selectedLeague,
-        onLeagueSelected = onLeagueSelected
+        onLeagueSelected = onLeagueSelected,
+        onSettingsClick = onSettingsClick
     )
 }
 
@@ -310,7 +316,8 @@ private fun HistoryTab(
     onToggleNumericScore: () -> Unit,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
-    onWatchHighlights: (String) -> Unit
+    onWatchHighlights: (String) -> Unit,
+    onSettingsClick: () -> Unit
 ) {
     val viewModel: HistoryViewModel = viewModel()
     // The backfill only covers NBA so far - don't fire a request for a
@@ -335,7 +342,8 @@ private fun HistoryTab(
         showWnba = showWnba,
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
-        leagueGroup = effectiveLeagueGroup
+        leagueGroup = effectiveLeagueGroup,
+        onSettingsClick = onSettingsClick
     )
 }
 
@@ -344,7 +352,8 @@ private fun LeadersTab(
     showWnba: Boolean,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
-    effectiveLeagueGroup: LeagueGroup
+    effectiveLeagueGroup: LeagueGroup,
+    onSettingsClick: () -> Unit
 ) {
     val standingsViewModel: StandingsViewModel = viewModel()
     val statsViewModel: StatsViewModel = viewModel()
@@ -359,7 +368,8 @@ private fun LeadersTab(
         onStatsRetry = statsViewModel::retry,
         showWnba = showWnba,
         selectedLeague = selectedLeague,
-        onLeagueSelected = onLeagueSelected
+        onLeagueSelected = onLeagueSelected,
+        onSettingsClick = onSettingsClick
     )
 }
 
@@ -368,7 +378,8 @@ private fun NewsTab(
     showWnba: Boolean,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
-    effectiveLeagueGroup: LeagueGroup
+    effectiveLeagueGroup: LeagueGroup,
+    onSettingsClick: () -> Unit
 ) {
     val viewModel: NewsViewModel = viewModel()
     LaunchedEffect(effectiveLeagueGroup) { viewModel.load(effectiveLeagueGroup) }
@@ -377,7 +388,8 @@ private fun NewsTab(
         onRetry = viewModel::retry,
         showWnba = showWnba,
         selectedLeague = selectedLeague,
-        onLeagueSelected = onLeagueSelected
+        onLeagueSelected = onLeagueSelected,
+        onSettingsClick = onSettingsClick
     )
 }
 

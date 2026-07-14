@@ -83,7 +83,7 @@ fun SettingsScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(text = "Show WNBA", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        text = "Adds an NBA/WNBA switcher to the Games tab title.",
+                        text = "Adds an NBA/WNBA switcher to every tab's title.",
                         color = TextMuted,
                         style = MaterialTheme.typography.bodySmall
                     )
