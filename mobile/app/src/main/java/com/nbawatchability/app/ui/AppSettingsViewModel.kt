@@ -21,7 +21,7 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
     // Starts false because [settings] is a hardcoded default (NBA, sort off,
     // etc.) until DataStore's first emission arrives asynchronously - callers
     // must wait for this before reading [settings], otherwise a persisted
-    // WNBA/sort/numeric-score choice loses a race against a request already
+    // league/sort/numeric-score choice loses a race against a request already
     // fired for the wrong (default) league on cold start.
     var isLoaded by mutableStateOf(false)
         private set
@@ -33,10 +33,6 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
                 isLoaded = true
             }
         }
-    }
-
-    fun setShowWnba(value: Boolean) {
-        viewModelScope.launch { repository.setShowWnba(value) }
     }
 
     fun setSelectedLeague(league: LeagueGroup) {

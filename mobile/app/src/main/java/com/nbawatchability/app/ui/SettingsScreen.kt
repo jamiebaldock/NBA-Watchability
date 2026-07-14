@@ -22,7 +22,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -34,12 +33,10 @@ import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
 
-/** Top-level settings screen (spec: settings gear, top app bar) - league toggle plus links to the rating-weights and About sub-pages. */
+/** Top-level settings screen (spec: settings gear, top app bar) - links to the rating-weights and About sub-pages. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    showWnba: Boolean,
-    onShowWnbaChange: (Boolean) -> Unit,
     onRubricWeightsClick: () -> Unit,
     onAboutClick: () -> Unit,
     onBack: () -> Unit
@@ -67,37 +64,11 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
         ) {
-            Text(
-                text = "League",
-                style = MaterialTheme.typography.titleMedium,
-                color = TextPrimary,
-                modifier = Modifier.padding(top = 16.dp)
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Show WNBA", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = "Adds an NBA/WNBA switcher to every tab's title.",
-                        color = TextMuted,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                Switch(checked = showWnba, onCheckedChange = onShowWnbaChange)
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(top = 20.dp), color = TextMuted.copy(alpha = 0.3f))
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onRubricWeightsClick)
-                    .padding(vertical = 16.dp),
+                    .padding(top = 16.dp, bottom = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {

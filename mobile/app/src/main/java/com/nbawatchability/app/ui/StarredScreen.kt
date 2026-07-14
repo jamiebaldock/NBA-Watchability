@@ -64,7 +64,6 @@ fun StarredScreen(
     onWatchHighlights: (String) -> Unit,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
-    showWnba: Boolean,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     onSettingsClick: () -> Unit
@@ -76,7 +75,7 @@ fun StarredScreen(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { TabTitle(showWnba, selectedLeague, onLeagueSelected, "Starred") },
+                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected) },
                 actions = {
                     IconToggleButton(
                         checked = dateAscending,

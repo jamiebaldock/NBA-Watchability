@@ -55,7 +55,6 @@ private val publishedFormatter = DateTimeFormatter.ofPattern("MMM d")
 fun NewsScreen(
     uiState: NewsUiState,
     onRetry: () -> Unit,
-    showWnba: Boolean,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     onSettingsClick: () -> Unit
@@ -64,7 +63,7 @@ fun NewsScreen(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { TabTitle(showWnba, selectedLeague, onLeagueSelected, "News") },
+                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected) },
                 actions = {
                     IconButton(onClick = onSettingsClick) {
                         Icon(

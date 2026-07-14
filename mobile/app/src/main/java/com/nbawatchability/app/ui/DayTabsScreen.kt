@@ -78,7 +78,6 @@ fun DayTabsScreen(
     onRefresh: () -> Unit,
     weights: RubricWeights,
     onSettingsClick: () -> Unit,
-    showWnba: Boolean,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     starredIds: Set<String>,
@@ -99,7 +98,7 @@ fun DayTabsScreen(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { TabTitle(showWnba, selectedLeague, onLeagueSelected, "NBA Watchability") },
+                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected) },
                 actions = {
                     IconToggleButton(
                         checked = showNumericScore,

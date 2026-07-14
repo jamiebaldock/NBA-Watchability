@@ -41,7 +41,6 @@ fun LeadersScreen(
     onStandingsRetry: () -> Unit,
     statsUiState: StatsUiState,
     onStatsRetry: () -> Unit,
-    showWnba: Boolean,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     onSettingsClick: () -> Unit
@@ -54,7 +53,7 @@ fun LeadersScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    title = { TabTitle(showWnba, selectedLeague, onLeagueSelected, "Leaders") },
+                    title = { TitleLeagueSelector(selectedLeague, onLeagueSelected) },
                     actions = {
                         IconButton(onClick = onSettingsClick) {
                             Icon(

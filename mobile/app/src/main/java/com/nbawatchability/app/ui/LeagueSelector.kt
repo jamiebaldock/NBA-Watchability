@@ -27,11 +27,10 @@ import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.ui.theme.TextPrimary
 
 /**
- * Replaces a tab's static title with a tappable league logo + name whenever
- * "Show WNBA" is on - shared by every tab's top bar (Games, Starred,
+ * A tab's top-bar title: a tappable league logo + name, always including
+ * WNBA as an option - shared by every tab's top bar (Games, Starred,
  * History, Leaders, News), not just Games, so the league can be switched
- * from wherever the user happens to be. Off (the default), each tab keeps
- * its own plain static title with no dropdown affordance at all.
+ * from wherever the user happens to be.
  */
 @Composable
 fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGroup) -> Unit) {
@@ -83,19 +82,5 @@ fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGr
                 )
             }
         }
-    }
-}
-
-/**
- * A tab's top-bar title: the tappable league selector when "Show WNBA" is
- * on, otherwise [plainTitle] as static text - the same swap Games has
- * always done, just shared so every tab's title behaves identically.
- */
-@Composable
-fun TabTitle(showWnba: Boolean, selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGroup) -> Unit, plainTitle: String) {
-    if (showWnba) {
-        TitleLeagueSelector(selectedLeague = selectedLeague, onLeagueSelected = onLeagueSelected)
-    } else {
-        Text(plainTitle, color = TextPrimary)
     }
 }

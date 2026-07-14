@@ -95,7 +95,6 @@ fun HistoryScreen(
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
-    showWnba: Boolean,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     leagueGroup: LeagueGroup,
@@ -117,7 +116,7 @@ fun HistoryScreen(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { TabTitle(showWnba, selectedLeague, onLeagueSelected, "Past Barn Burners") },
+                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected) },
                 actions = {
                     IconToggleButton(
                         checked = dateAscending,
