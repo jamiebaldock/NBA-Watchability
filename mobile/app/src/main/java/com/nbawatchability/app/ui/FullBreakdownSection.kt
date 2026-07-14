@@ -113,15 +113,43 @@ private fun marginDescriptor(margin: Int?): String? = when {
     else -> "Blowout margin"
 }
 
+private fun overtimeWord(periods: Int): String = when {
+    periods <= 0 -> ""
+    periods == 1 -> "Overtime"
+    periods == 2 -> "Double overtime"
+    periods == 3 -> "Triple overtime"
+    else -> "$periods overtimes"
+}
+
+// Buzzer-beater, decided-on-final-possession, and the margin bucket are all
+// ways of saying "how tight was the finish" - listing all three that apply
+// (e.g. "One-possession finish · Buzzer-beater finish · Down to the final
+// possession") just repeats the same point three times. Collapse them into
+// one phrase, picking the most specific/dramatic fact that's true (buzzer-
+// beater first, then final-possession, falling back to the plain margin
+// descriptor), and fold the overtime count into that same phrase rather than
+// listing overtime as its own disconnected bullet ("Double overtime
+// buzzer-beater finish" instead of "Overtime" ... "Buzzer-beater finish").
+private fun finishDescriptor(game: Game): String? {
+    val ot = overtimeWord(game.overtimePeriods)
+    return when {
+        game.buzzerBeater -> if (ot.isEmpty()) "Buzzer-beater finish" else "$ot buzzer-beater finish"
+        game.decidedOnFinalPossession -> if (ot.isEmpty()) "Down to the final possession" else "$ot, down to the final possession"
+        ot.isNotEmpty() -> ot
+        else -> marginDescriptor(game.margin)
+    }
+}
+
+// Ordered to read like a natural recap - the shape of the game (lead changes,
+// comeback), then how tense it got late, then how it actually finished, then
+// any standout individual performance, with the score appended last by the
+// caller.
 private fun breakdownFacts(game: Game): List<String> = buildList {
-    marginDescriptor(game.margin)?.let { add(it) }
-    if (game.buzzerBeater) add("Buzzer-beater finish")
-    if (game.decidedOnFinalPossession) add("Down to the final possession")
+    game.leadChanges?.takeIf { it >= 10 }?.let { add("$it lead changes") }
+    game.comeback?.takeIf { it >= 10 }?.let { add("A $it-point comeback") }
     if (game.leadChangeInFinalMin) add("Lead changed hands late")
     if (game.closeInFinalTwoMin) add("Neck-and-neck in the final 2 minutes")
-    game.comeback?.takeIf { it >= 10 }?.let { add("A $it-point comeback") }
-    game.leadChanges?.takeIf { it >= 10 }?.let { add("$it lead changes") }
-    if (game.overtimePeriods > 0) add(if (game.overtimePeriods == 1) "Overtime" else "${game.overtimePeriods} overtimes")
+    finishDescriptor(game)?.let { add(it) }
     game.starPerformance?.let {
         add(
             when (it) {
