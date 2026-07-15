@@ -11,6 +11,7 @@ import {
 } from "./httpHandler";
 import { startHighlightsPoller } from "./highlightsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
+import { findGameByTeamsAndTipoff, getLagPercentiles, getSearchQuotaStatus } from "./gameStore";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
 
 const app = express();
@@ -108,6 +109,22 @@ app.get("/news", async (req, res) => {
       res.status(500).json({ error: "internal error" });
     }
   }
+});
+
+// TEMPORARY read-only diagnostic route - the public JSON contract never
+// exposes eventId, so this is how a specific game's internal highlights-
+// check state gets inspected. Remove once the Pacers/Timberwolves
+// investigation is done.
+app.get("/admin/debug-game", (req, res) => {
+  const away = String(req.query.away ?? "");
+  const home = String(req.query.home ?? "");
+  const tipoffUtc = String(req.query.tipoffUtc ?? "");
+  const row = findGameByTeamsAndTipoff(away, home, tipoffUtc);
+  if (!row) {
+    res.status(404).json({ error: "no matching game" });
+    return;
+  }
+  res.json({ row, lagPercentiles: getLagPercentiles(row.league, row.leagueGroup), searchQuota: getSearchQuotaStatus() });
 });
 
 app.listen(PORT, () => {

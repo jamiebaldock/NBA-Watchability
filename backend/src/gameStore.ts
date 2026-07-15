@@ -274,6 +274,14 @@ function mapRow(raw: RawGameRow): GameRow {
   };
 }
 
+/** Read-only lookup by exact team names + tipoff - the public JSON contract never exposes eventId, so this is how a specific game gets found for diagnostics. */
+export function findGameByTeamsAndTipoff(away: string, home: string, tipoffUtc: string): GameRow | undefined {
+  const raw = db.prepare(`SELECT * FROM games WHERE away=? AND home=? AND tipoff_utc=?`).get(away, home, tipoffUtc) as
+    | RawGameRow
+    | undefined;
+  return raw ? mapRow(raw) : undefined;
+}
+
 export function getGame(eventId: string): GameRow | undefined {
   const raw = db.prepare(`SELECT * FROM games WHERE event_id=?`).get(eventId) as RawGameRow | undefined;
   return raw ? mapRow(raw) : undefined;
@@ -579,6 +587,14 @@ export function canSpendSearchQuota(): boolean {
     | { count: number }
     | undefined;
   return (row?.count ?? 0) < DAILY_SEARCH_BUDGET;
+}
+
+/** Read-only diagnostic: today's spend against DAILY_SEARCH_BUDGET. */
+export function getSearchQuotaStatus(): { date: string; count: number; limit: number } {
+  const row = db.prepare(`SELECT count FROM youtube_search_budget WHERE date = ?`).get(todayUtcKey()) as
+    | { count: number }
+    | undefined;
+  return { date: todayUtcKey(), count: row?.count ?? 0, limit: DAILY_SEARCH_BUDGET };
 }
 
 /** Records one spent search.list call against today's budget - call once per real request actually made, success or failure alike (a quota-exceeded response still counts against Google's own daily limit). */
