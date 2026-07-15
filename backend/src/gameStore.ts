@@ -405,21 +405,19 @@ export function getLagPercentiles(league: string, leagueGroup: string): LagPerce
   };
 }
 
-const WATCHABLE_TIERS = ["worth_your_time", "instant_classic"];
-
-// A highlights link is only ever actually shown for: (a) recent games
-// within the live app's realistic display window (Games/Starred tabs,
-// roughly +/-9 days), or (b) the History tab's Worth Your Time/Instant
-// Classic games. Everything else - the ~96% of the historical backfill
-// that's Skippable/Solid tier, or anything simply too old for any tab to
-// show - has no "Watch highlights" row anywhere in the app that could ever
-// use a match. Before this filter existed, every one of those ~2,550
-// never-displayed games competed in the same global search queue as actual
-// live games, and a single poller tick or server restart could burn through
-// the entire shared 100/day YouTube quota checking games nobody would ever
-// see, starving the games that actually needed it. Date comparison happens
-// in JS (matching getWatchableHistory below), not a SQL string comparison
-// on tipoff_utc, for the same mixed-ISO-precision reason.
+// A highlights link is only ever searched for recent games - the live app's
+// realistic display window (Games/Starred tabs, roughly +/-9 days), with 14
+// for margin. Historical/backfill games are deliberately never searched,
+// regardless of tier or score: per product decision, the History tab is
+// fine showing older Worth Your Time/Instant Classic games without a
+// highlights link for now. An earlier version of this filter also included
+// watchable-tier historical games (any age), which combined with a since-
+// fixed persistent-disk gap to burn the entire shared 100/day YouTube quota
+// in a single afternoon re-scanning the 2,650-game backfill on repeated
+// server restarts - excluding historical games entirely removes that
+// exposure completely rather than just shrinking it. Date comparison
+// happens in JS (matching getWatchableHistory below), not a SQL string
+// comparison on tipoff_utc, for the same mixed-ISO-precision reason.
 const RECENT_GAMES_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
 /**
@@ -434,13 +432,7 @@ const RECENT_GAMES_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 export function getFinalGamesMissingHighlights(): GameRow[] {
   const cutoffTime = Date.now() - RECENT_GAMES_WINDOW_MS;
   const raws = db.prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL`).all() as RawGameRow[];
-  return raws
-    .map(mapRow)
-    .filter((row) => {
-      const isRecent = new Date(row.tipoffUtc).getTime() >= cutoffTime;
-      const isWatchableHistory = row.tier !== null && WATCHABLE_TIERS.includes(row.tier);
-      return isRecent || isWatchableHistory;
-    });
+  return raws.map(mapRow).filter((row) => new Date(row.tipoffUtc).getTime() >= cutoffTime);
 }
 
 // Deliberately a raw score cutoff, not the "worth_your_time" tier's own
