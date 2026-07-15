@@ -62,7 +62,17 @@ private val earliestDateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
 // on the viewer's own rubric weights, same as the existing rating sort
 // below - the server's >=70 games are still fetched, this just narrows the
 // display further for this one preset.
-private const val ALL_TIME_MIN_SCORE = 90
+//
+// WNBA gets its own, lower bar - NBA's 90 represents its rarest ~0.1% of
+// games (3 of 2,650 in the backfill), but WNBA's entire History-qualifying
+// pool (>=70) is only 8 games total, topping out at 81 - applying NBA's
+// literal threshold, or even matching NBA's rarity percentile, leaves
+// All-time permanently empty (or down to a single game) for WNBA. 75 keeps
+// the top 5 of those 8 - still a real cut from "everything," just not one
+// calibrated to a sample size WNBA's backfill doesn't have yet. Revisit as
+// more WNBA seasons get backfilled and the pool grows past single digits.
+private const val ALL_TIME_MIN_SCORE_NBA = 90
+private const val ALL_TIME_MIN_SCORE_WNBA = 75
 
 /**
  * "Which old games are actually worth going back to watch" - surfaces the
@@ -70,8 +80,9 @@ private const val ALL_TIME_MIN_SCORE = 90
  * through the same league-aware rubric), games scoring 70+ only
  * (gameStore.ts's HISTORY_MIN_SCORE - stricter than the "Worth Your Time"
  * tier badge's own >=65), most-watchable-first by default - except "All
- * time" (ALL_TIME_MIN_SCORE above), which holds every season's worth of
- * backfill to a 90+ bar instead. Unlike every other tab, these games are
+ * time" (ALL_TIME_MIN_SCORE_NBA/ALL_TIME_MIN_SCORE_WNBA above), which holds
+ * every season's worth of backfill to a much higher, per-league bar
+ * instead. Unlike every other tab, these games are
  * ones the viewer is intentionally browsing rather than following live, so
  * the breakdown is never spoiler-blurred (GameCard's spoilerFree = true) -
  * the tier/score/final result are the point, not something to hide.
@@ -217,7 +228,8 @@ fun HistoryScreen(
 
                 is HistoryUiState.Loaded -> {
                     val displayGames = if (selectedPreset is HistoryRangePreset.AllTime) {
-                        uiState.games.filter { (it.effectiveScore(weights) ?: 0) >= ALL_TIME_MIN_SCORE }
+                        val allTimeMinScore = if (selectedLeague == LeagueGroup.WNBA) ALL_TIME_MIN_SCORE_WNBA else ALL_TIME_MIN_SCORE_NBA
+                        uiState.games.filter { (it.effectiveScore(weights) ?: 0) >= allTimeMinScore }
                     } else {
                         uiState.games
                     }
