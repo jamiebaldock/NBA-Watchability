@@ -72,8 +72,25 @@ const WNBA_TEAM_ABBREVIATIONS: Record<string, string> = {
 export function teamLogoUrl(displayName: string, leagueGroup: "nba" | "wnba" = "nba"): string | undefined {
   if (leagueGroup === "wnba") {
     const abbr = WNBA_TEAM_ABBREVIATIONS[displayName];
-    return abbr ? `https://a.espncdn.com/i/teamlogos/wnba/500/${abbr}.png` : undefined;
+    return preferDarkLogoVariant(abbr ? `https://a.espncdn.com/i/teamlogos/wnba/500/${abbr}.png` : undefined);
   }
   const abbr = NBA_TEAM_ABBREVIATIONS[displayName];
   return abbr ? `https://a.espncdn.com/i/teamlogos/nba/500/scoreboard/${abbr}.png` : undefined;
+}
+
+// Some team crests are a dark, saturated color that reads poorly against
+// this app's near-black surfaces - ESPN's own "-dark" logo variant (built
+// for exactly this, verified directly against ESPN's asset set rather than
+// assumed) is swapped in instead. Matched by URL shape (league +
+// abbreviation embedded in the path), not team display name, so this
+// applies uniformly no matter which endpoint/code path a logo URL came
+// from - the live scoreboard, standings, stat leaders, or this file's own
+// History-backfill fallback above.
+const DARK_VARIANT_URL_PATTERNS: RegExp[] = [
+  /\/teamlogos\/wnba\/500\/(scoreboard\/)?tor\.png(\?.*)?$/, // Toronto Tempo
+];
+
+export function preferDarkLogoVariant(url: string | undefined): string | undefined {
+  if (!url || !DARK_VARIANT_URL_PATTERNS.some((p) => p.test(url))) return url;
+  return url.replace("/500/", "/500-dark/");
 }

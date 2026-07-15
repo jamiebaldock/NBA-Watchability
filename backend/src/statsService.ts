@@ -7,6 +7,7 @@ import {
 } from "./espnClient";
 import { loadLeagueCache, saveLeagueCache, todayKey } from "./leagueCache";
 import { resolveSeasonYear } from "./seasonYear";
+import { preferDarkLogoVariant } from "./teamLogos";
 import { LeagueGroup, StatCategoryJson, StatLeaderJson, StatsResponseJson } from "./types";
 
 // The classic box-score categories - matches what other sports apps lead
@@ -37,7 +38,7 @@ async function resolveLeader(
     teamInfoCache.set(entry.team.$ref, team);
   }
 
-  return { name, team: team.abbreviation, teamLogo: team.logo, value: entry.displayValue };
+  return { name, team: team.abbreviation, teamLogo: preferDarkLogoVariant(team.logo), value: entry.displayValue };
 }
 
 /** Cached once per calendar day per league group - same reasoning as standingsService. */

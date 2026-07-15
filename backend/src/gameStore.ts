@@ -191,6 +191,25 @@ export function upsertBaseEntry(entry: {
   });
 }
 
+/**
+ * One-off correction: rows for a team gamesService.ts now stores under
+ * preferDarkLogoVariant's override (currently just Toronto Tempo) but that
+ * were written before that override existed still have the old, poorly-
+ * visible default logo URL baked in - upsertBaseEntry's insert-once
+ * contract means they never self-correct on their own. Safe to target
+ * broadly by team name since away/home are exact ESPN display-name
+ * strings, not fuzzy matches.
+ */
+export function fixLogoForTeam(teamDisplayName: string, correctLogoUrl: string): number {
+  const awayChanges = db
+    .prepare(`UPDATE games SET away_logo=?, updated_at=? WHERE away=? AND (away_logo IS NULL OR away_logo != ?)`)
+    .run(correctLogoUrl, now(), teamDisplayName, correctLogoUrl).changes;
+  const homeChanges = db
+    .prepare(`UPDATE games SET home_logo=?, updated_at=? WHERE home=? AND (home_logo IS NULL OR home_logo != ?)`)
+    .run(correctLogoUrl, now(), teamDisplayName, correctLogoUrl).changes;
+  return awayChanges + homeChanges;
+}
+
 /** Status changes freely (upcoming -> live -> final) until final, which is sticky - a completed game's status is never downgraded. */
 export function updateStatus(eventId: string, status: GameStatus): void {
   db.prepare(`UPDATE games SET status=?, updated_at=? WHERE event_id=? AND status != 'final'`).run(

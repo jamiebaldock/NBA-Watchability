@@ -1,6 +1,7 @@
 import { ContentLeague, EspnStandingsEntry, EspnStandingsGroup, fetchStandings } from "./espnClient";
 import { loadLeagueCache, saveLeagueCache, todayKey } from "./leagueCache";
 import { resolveSeasonYear } from "./seasonYear";
+import { preferDarkLogoVariant } from "./teamLogos";
 import { LeagueGroup, StandingsGroupJson, StandingsResponseJson, StandingsTeamJson } from "./types";
 
 function statValueByName(entry: EspnStandingsEntry, name: string): string {
@@ -40,7 +41,7 @@ function flattenGroups(groups: EspnStandingsGroup[]): StandingsGroupJson[] {
             id: entry.team.id,
             n: entry.team.shortDisplayName,
             ab: entry.team.abbreviation,
-            lg: entry.team.logos?.[0]?.href,
+            lg: preferDarkLogoVariant(entry.team.logos?.[0]?.href),
             w: Number(statValueByName(entry, "wins")) || 0,
             l: Number(statValueByName(entry, "losses")) || 0,
             pct: statValueByName(entry, "winPercent"),

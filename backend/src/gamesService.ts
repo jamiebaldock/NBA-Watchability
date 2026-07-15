@@ -18,6 +18,7 @@ import {
 } from "./gameStore";
 import { generateHookAndStakes } from "./llm";
 import { computeWatchabilityScore, tierForScore } from "./rubric";
+import { preferDarkLogoVariant } from "./teamLogos";
 import { GameJson, LeagueGroup } from "./types";
 import { HighlightsLeague, isYoutubeSearchConfigured, searchHighlightsVideo } from "./youtubeClient";
 
@@ -276,8 +277,8 @@ export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "
       leagueGroup,
       away: away.team.displayName,
       home: home.team.displayName,
-      awayLogo: away.team.logo,
-      homeLogo: home.team.logo,
+      awayLogo: preferDarkLogoVariant(away.team.logo),
+      homeLogo: preferDarkLogoVariant(home.team.logo),
       tipoffUtc: event.date,
       status,
     });

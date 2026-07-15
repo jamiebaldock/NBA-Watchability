@@ -23,7 +23,11 @@ enum class LeagueGroup(
 ) {
     NBA("nba", "NBA", "https://a.espncdn.com/i/teamlogos/leagues/500/nba.png"),
     WNBA("wnba", "WNBA", "https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png"),
-    EPL("epl", "English Premier League", "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png", isSupported = false),
+    // The default crest is a dark purple lion that reads poorly against this
+    // app's near-black surfaces - ESPN's own "-dark" variant (a white
+    // version, built for exactly this) is used instead, verified directly
+    // against ESPN's asset set rather than assumed.
+    EPL("epl", "English Premier League", "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/23.png", isSupported = false),
     LA_LIGA("la-liga", "La Liga", "https://a.espncdn.com/i/leaguelogos/soccer/500/15.png", isSupported = false),
     NBL("nbl", "NBL", "https://a.espncdn.com/i/teamlogos/leagues/500/nbl.png", isSupported = false),
     UFC("ufc", "UFC", "https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png", isSupported = false)
