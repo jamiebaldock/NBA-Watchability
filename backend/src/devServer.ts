@@ -1,6 +1,6 @@
 import compression from "compression";
 import express from "express";
-import { forceRescoreWnbaGames } from "./gameStore";
+import { forceRescoreWnbaGames, getWnbaTierBreakdown } from "./gameStore";
 import {
   BadRequestError,
   getHistoryForRange,
@@ -122,7 +122,7 @@ app.get("/api/admin/rescore-wnba", (_req, res) => {
     );
     return { score: breakdown.total, tier: tierForScore(breakdown.total) };
   });
-  res.json({ changedCount: changes.length, changes });
+  res.json({ changedCount: changes.length, changes, tierBreakdown: getWnbaTierBreakdown() });
 });
 
 app.listen(PORT, () => {

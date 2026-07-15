@@ -597,6 +597,16 @@ export function forceRescoreWnbaGames(scoreFn: (row: GameRow) => { score: number
   return changes;
 }
 
+/** Diagnostic accompanying forceRescoreWnbaGames - tallies every WNBA game with a stored score by tier, for a full before/after picture rather than just the rows that changed. */
+export function getWnbaTierBreakdown(): Record<string, number> {
+  const rows = db.prepare(`SELECT tier FROM games WHERE league_group = 'wnba' AND score IS NOT NULL`).all() as {
+    tier: string;
+  }[];
+  const counts: Record<string, number> = { instant_classic: 0, worth_your_time: 0, solid: 0, skippable: 0 };
+  for (const r of rows) counts[r.tier] = (counts[r.tier] ?? 0) + 1;
+  return counts;
+}
+
 export function closeDb(): void {
   db.close();
 }
