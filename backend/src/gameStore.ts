@@ -493,7 +493,7 @@ export function earliestGameDate(leagueGroup?: LeagueGroup): string | undefined 
 // "2024-25") doesn't apply to WNBA, which never spans a year boundary - a
 // WNBA season is just the calendar year it plays in, so the tipoff's own
 // UTC year is the whole label.
-function seasonLabelForTipoff(tipoffUtc: string, leagueGroup: LeagueGroup): string {
+export function seasonLabelForTipoff(tipoffUtc: string, leagueGroup: LeagueGroup): string {
   const date = new Date(tipoffUtc);
   const year = date.getUTCFullYear();
   if (leagueGroup === "wnba") return String(year);

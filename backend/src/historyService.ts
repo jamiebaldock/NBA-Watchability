@@ -4,7 +4,7 @@
 // (rated + highlights found). There's no separate historical dataset
 // anymore; a game finished a year ago and a game that finished five
 // minutes ago are the same kind of row.
-import { earliestGameDate, getSeasonLabels, getWatchableHistory } from "./gameStore";
+import { earliestGameDate, getSeasonLabels, getWatchableHistory, seasonLabelForTipoff } from "./gameStore";
 import { teamLogoUrl } from "./teamLogos";
 import { GameJson, LeagueGroup } from "./types";
 
@@ -29,6 +29,14 @@ export async function getHistory(start: string, end: string, leagueGroup: League
     stt: "final",
     utc: row.tipoffUtc,
     lg: row.league === "nba" ? "nba" : row.league === "wnba" ? "wnba" : "summer",
+    // Historical rows have no stored ESPN season/tournament data to derive
+    // deriveCompetitionLabel()'s finer REGULAR SEASON/CUP/PLAYOFFS label
+    // (that's only ever computed for live games, from the live ESPN event) -
+    // the season-year label already used for the History season chips is
+    // the best available substitute. Summer League rows keep their own
+    // separate client-side static label (GameCard checks isSummerLeague
+    // first) and ignore this field.
+    cl: `${leagueGroup.toUpperCase()} · ${seasonLabelForTipoff(row.tipoffUtc, leagueGroup)}`,
     m: row.finalMargin ?? undefined,
     as: row.awayScore ?? undefined,
     hs: row.homeScore ?? undefined,
