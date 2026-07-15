@@ -8,7 +8,7 @@
     "build": "tsc -p .",
     "dev": "tsx watch src/devServer.ts",
     "start": "node dist/devServer.js",
-    "test": "tsx src/rubric.test.ts"
+    "test": "tsx src/rubric.test.ts && tsx src/soccerRubric.test.ts"
   },
   "engines": {
     "node": ">=18"
