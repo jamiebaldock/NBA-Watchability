@@ -550,6 +550,53 @@ export function recordSearchQuotaSpend(): void {
   ).run(todayUtcKey());
 }
 
+export interface RescoreResult {
+  eventId: string;
+  away: string;
+  home: string;
+  before: { score: number | null; tier: string | null };
+  after: { score: number; tier: string };
+}
+
+/**
+ * One-off correction pass (NOT part of the normal lifecycle) - forcibly
+ * recomputes and overwrites score/tier for every WNBA game that already has
+ * one stored, bypassing setFinalRubric's usual "never overwrite" guard.
+ * Exists only to fix WNBA games that went final (and got scored) before the
+ * league-aware rubric calibration deployed - those would otherwise be stuck
+ * on the old unified NBA-style thresholds forever, since a normal write
+ * only ever happens once per game. Deliberately scoped to league_group =
+ * 'wnba' only (NBA rows are never touched) and meant to be called exactly
+ * once, by hand, through a temporary admin route removed right after use -
+ * never wired into any automatic or recurring path. Only rows whose
+ * recomputed score/tier actually differ get written (and reported), so
+ * running this again against already-corrected rows is a harmless no-op -
+ * useful for verifying the correction took, not for making it "safe to
+ * automate."
+ */
+export function forceRescoreWnbaGames(scoreFn: (row: GameRow) => { score: number; tier: string }): RescoreResult[] {
+  const raws = db.prepare(`SELECT * FROM games WHERE league_group = 'wnba' AND score IS NOT NULL`).all() as RawGameRow[];
+  const stmt = db.prepare(`UPDATE games SET score = ?, tier = ?, updated_at = ? WHERE event_id = ?`);
+  const changes: RescoreResult[] = [];
+
+  for (const raw of raws) {
+    const row = mapRow(raw);
+    const { score, tier } = scoreFn(row);
+    if (score !== row.score || tier !== row.tier) {
+      stmt.run(score, tier, now(), row.eventId);
+      changes.push({
+        eventId: row.eventId,
+        away: row.away,
+        home: row.home,
+        before: { score: row.score, tier: row.tier },
+        after: { score, tier },
+      });
+    }
+  }
+
+  return changes;
+}
+
 export function closeDb(): void {
   db.close();
 }
