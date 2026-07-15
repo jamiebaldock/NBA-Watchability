@@ -12,6 +12,7 @@ import {
   setFinalRubric,
   setHighlights,
   setPreview,
+  setSeasonStageLabel,
   updateStatus,
   upsertBaseEntry,
 } from "./gameStore";
@@ -275,6 +276,10 @@ export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "
     let row = getGame(event.id)!;
     // Summer League keeps its own separate static label client-side.
     const cl = league.startsWith("nba-summer") ? undefined : deriveCompetitionLabel(event, league === "wnba" ? "wnba" : "nba");
+    // Persisted once (gameStore's IS NULL guard) so this same label is still
+    // available once the game graduates into History, long after the raw
+    // ESPN event/notes data used to derive it is gone.
+    if (cl) setSeasonStageLabel(event.id, cl);
 
     if (status !== "final") {
       await ensurePregamePreview(row, league, event);

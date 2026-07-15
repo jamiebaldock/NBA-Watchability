@@ -29,14 +29,16 @@ export async function getHistory(start: string, end: string, leagueGroup: League
     stt: "final",
     utc: row.tipoffUtc,
     lg: row.league === "nba" ? "nba" : row.league === "wnba" ? "wnba" : "summer",
-    // Historical rows have no stored ESPN season/tournament data to derive
-    // deriveCompetitionLabel()'s finer REGULAR SEASON/CUP/PLAYOFFS label
-    // (that's only ever computed for live games, from the live ESPN event) -
-    // the season-year label already used for the History season chips is
-    // the best available substitute. Summer League rows keep their own
-    // separate client-side static label (GameCard checks isSummerLeague
-    // first) and ignore this field.
-    cl: `${leagueGroup.toUpperCase()} · ${seasonLabelForTipoff(row.tipoffUtc, leagueGroup)}`,
+    // row.seasonStageLabel ("NBA - Playoffs: Conference Semifinals") is
+    // captured once per game (gamesService.ts) from ESPN's own season/notes
+    // data and persisted in gameStore, so it survives long after that raw
+    // ESPN data is gone. Only missing for games seen before that column
+    // existed - migrateStageLabels.ts backfills those; the plain
+    // season-year label is a last-resort fallback for anything that script
+    // still couldn't resolve. Summer League rows keep their own separate
+    // client-side static label (GameCard checks isSummerLeague first) and
+    // ignore this field either way.
+    cl: row.seasonStageLabel ?? `${leagueGroup.toUpperCase()} - ${seasonLabelForTipoff(row.tipoffUtc, leagueGroup)}`,
     m: row.finalMargin ?? undefined,
     as: row.awayScore ?? undefined,
     hs: row.homeScore ?? undefined,

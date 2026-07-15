@@ -117,7 +117,7 @@ fun GameCard(
                         }
                         if (showDate) {
                             if (competitionLabel != null) {
-                                Text(text = " · ", color = TextMuted, style = MaterialTheme.typography.labelSmall)
+                                Text(text = " - ", color = TextMuted, style = MaterialTheme.typography.labelSmall)
                             }
                             Text(text = localDate(game.tipoffUtc), color = TextMuted, style = MaterialTheme.typography.labelSmall)
                         }

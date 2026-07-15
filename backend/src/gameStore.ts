@@ -99,6 +99,13 @@ function ensureColumn(table: string, column: string, definition: string): void {
 ensureColumn("games", "final_at", "TEXT");
 ensureColumn("games", "yt_found_at", "TEXT");
 ensureColumn("games", "yt_check_count", "INTEGER NOT NULL DEFAULT 0");
+// "{LEAGUE} - {stage}" (e.g. "NBA - Playoffs: Conference Semifinals") from
+// gameMapper.ts's deriveCompetitionLabel - captured once per game (any
+// status, not just final) since ESPN's season/notes data for a given event
+// never changes after the fact, so there's no reason to wait. Backfilled
+// rows from before this column existed are enriched by the one-off
+// migrateStageLabels.ts script rather than left permanently null.
+ensureColumn("games", "season_stage_label", "TEXT");
 
 function now(): string {
   return new Date().toISOString();
@@ -151,6 +158,7 @@ export interface GameRow {
   ytLastCheckedAt: string | null;
   ytFoundAt: string | null;
   ytCheckCount: number;
+  seasonStageLabel: string | null;
 }
 
 /** Creates the row if this eventId has never been seen before; a no-op otherwise - never touches an existing row's already-collected fields. */
@@ -227,6 +235,7 @@ interface RawGameRow {
   yt_last_checked_at: string | null;
   yt_found_at: string | null;
   yt_check_count: number;
+  season_stage_label: string | null;
 }
 
 function mapRow(raw: RawGameRow): GameRow {
@@ -261,6 +270,7 @@ function mapRow(raw: RawGameRow): GameRow {
     ytLastCheckedAt: raw.yt_last_checked_at,
     ytFoundAt: raw.yt_found_at,
     ytCheckCount: raw.yt_check_count,
+    seasonStageLabel: raw.season_stage_label,
   };
 }
 
@@ -275,6 +285,20 @@ export function setPreview(eventId: string, hook: string, pitch: string, stakes:
     hook,
     pitch,
     stakes,
+    now(),
+    eventId
+  );
+}
+
+/**
+ * League + season-stage label ("NBA - Playoffs: Conference Semifinals") -
+ * set once, permanent. Safe to call on every request that touches a game
+ * (gamesService.ts does, regardless of status) since the guard makes every
+ * call after the first a no-op.
+ */
+export function setSeasonStageLabel(eventId: string, label: string): void {
+  db.prepare(`UPDATE games SET season_stage_label=?, updated_at=? WHERE event_id=? AND season_stage_label IS NULL`).run(
+    label,
     now(),
     eventId
   );
@@ -443,6 +467,21 @@ export function getFinalGamesMissingHighlights(): GameRow[] {
   const cutoffTime = Date.now() - RECENT_GAMES_WINDOW_MS;
   const raws = db.prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL`).all() as RawGameRow[];
   return raws.map(mapRow).filter((row) => new Date(row.tipoffUtc).getTime() >= cutoffTime);
+}
+
+/**
+ * Rows still missing season_stage_label - backs migrateStageLabels.ts's
+ * one-off enrichment pass for rows written before that column existed.
+ * Summer League variants are excluded: deriveCompetitionLabel only accepts
+ * league "nba"/"wnba", and Summer League tiles ignore this field entirely
+ * (their own static client-side label takes over first), so there's
+ * nothing to backfill for them.
+ */
+export function getGamesMissingStageLabel(): GameRow[] {
+  const raws = db
+    .prepare(`SELECT * FROM games WHERE season_stage_label IS NULL AND league IN ('nba', 'wnba')`)
+    .all() as RawGameRow[];
+  return raws.map(mapRow);
 }
 
 // Deliberately a raw score cutoff, not the "worth_your_time" tier's own

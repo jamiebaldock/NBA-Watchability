@@ -10,6 +10,8 @@ import {
 } from "./httpHandler";
 import { startHighlightsPoller } from "./highlightsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
+import { getGamesMissingStageLabel } from "./gameStore";
+import { migrateStageLabels } from "./migrateStageLabels";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
 
 const app = express();
@@ -92,6 +94,27 @@ app.get("/news", async (req, res) => {
       res.status(500).json({ error: "internal error" });
     }
   }
+});
+
+// TEMPORARY one-off admin routes for the season_stage_label backfill -
+// remove both, and the migrateStageLabels import above, once the
+// production backfill is confirmed complete (see migrateStageLabels.ts).
+let stageLabelMigrationRunning = false;
+app.post("/admin/migrate-stage-labels", (_req, res) => {
+  if (stageLabelMigrationRunning) {
+    res.json({ started: false, reason: "already running" });
+    return;
+  }
+  stageLabelMigrationRunning = true;
+  migrateStageLabels()
+    .catch((e) => console.error("migrateStageLabels failed:", e))
+    .finally(() => {
+      stageLabelMigrationRunning = false;
+    });
+  res.json({ started: true });
+});
+app.get("/admin/migrate-stage-labels/status", (_req, res) => {
+  res.json({ running: stageLabelMigrationRunning, stillMissing: getGamesMissingStageLabel().length });
 });
 
 app.listen(PORT, () => {
