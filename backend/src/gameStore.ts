@@ -191,6 +191,22 @@ export function upsertBaseEntry(entry: {
   });
 }
 
+/**
+ * One-off cleanup: deletes any row written before gamesService.ts's TBD
+ * skip-guard existed, back when a Summer League bracket placeholder event
+ * (real team not yet decided by ESPN) still got upserted with away/home
+ * literally "TBD". upsertBaseEntry's insert-once contract means those rows
+ * never self-correct even after ESPN later fills in the real matchup and
+ * the live fetch stops seeing "TBD" at all - the stale row from before the
+ * guard existed just sits there forever otherwise. Deleting (not
+ * correcting in place) is safe here since these were never real games to
+ * begin with, and match the guard's own intent: nothing should have been
+ * stored for them in the first place.
+ */
+export function deleteTbdPlaceholderGames(): number {
+  return db.prepare(`DELETE FROM games WHERE away = 'TBD' OR home = 'TBD'`).run().changes;
+}
+
 /** Status changes freely (upcoming -> live -> final) until final, which is sticky - a completed game's status is never downgraded. */
 export function updateStatus(eventId: string, status: GameStatus): void {
   db.prepare(`UPDATE games SET status=?, updated_at=? WHERE event_id=? AND status != 'final'`).run(
