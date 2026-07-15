@@ -7,9 +7,10 @@
 // recent window only (gameStore.getFinalGamesMissingHighlights) - a
 // historical/backfill game is never a candidate here, by design.
 //
-// 30 min rather than tighter: the learned per-league p50 delay
-// (gameStore.getLagPercentiles) is what actually decides whether a game's
-// one-and-only check happens, not this tick rate - this just needs to be
+// 30 min rather than tighter: the learned per-league p50 delay and the
+// fixed 30-min gap before the second attempt (gamesService.ts's
+// isDueForHighlightsCheck) are what actually decide whether a game's next
+// (of at most 2) checks happens, not this tick rate - this just needs to be
 // frequent enough that an unattended game doesn't sit noticeably past its
 // due time, not frequent enough to drive the schedule itself.
 import { checkPendingHighlights } from "./gamesService";

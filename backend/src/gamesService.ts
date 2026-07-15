@@ -3,10 +3,12 @@ import { deriveCompetitionLabel, mapEspnState, mapEventToGame } from "./gameMapp
 import {
   FinalRubric,
   GameRow,
+  canSpendSearchQuota,
   getFinalGamesMissingHighlights,
   getGame,
   getLagPercentiles,
   markHighlightsChecked,
+  recordSearchQuotaSpend,
   setFinalRubric,
   setHighlights,
   setPreview,
@@ -96,35 +98,70 @@ async function ensurePregamePreview(row: GameRow, league: League, event: EspnEve
 // same moment.
 const YT_MIN_CHECK_SPACING_MS = 5 * 60 * 1000;
 
+// Gap before the second (and final) attempt, counted from the first
+// check's own timestamp - not from the league's learned delay, since the
+// first check may itself have fired late (30-min poller granularity).
+const YT_SECOND_CHECK_DELAY_MS = 30 * 60 * 1000;
+
+// Two attempts total, never more: a game that misses both is not retried
+// again (no daily-forever tail) - if it's later found to be missing its
+// link, that's a manual fix (James pastes the real link), not something
+// the app keeps polling for.
+const MAX_HIGHLIGHTS_CHECKS = 2;
+
 let loggedMissingApiKey = false;
 
 /**
- * Whether [row] is due for its one-and-only highlights check. Per product
- * decision, this is a single-shot attempt, not a retry ladder: wait until
- * the league's learned p50 upload lag has passed since the game went final,
- * search exactly once, and permanently stop regardless of outcome (a miss
- * is not retried - if a specific game is later found to be missing its
- * link, that's a manual fix, not something the app keeps polling for).
+ * Whether [row] is due for its next (first or second) highlights check.
+ * Check 0 waits until the league's learned p50 upload lag has passed since
+ * the game went final. If that misses, check 1 fires a flat 30 minutes
+ * later - late enough that a video posted just after the first look has a
+ * real chance of being up, without turning into an open-ended retry
+ * schedule. After 2 checks, permanently stops regardless of outcome.
  * Historical/backfill games never reach this at all (gameStore's
  * recent-only scope). A league with no history yet uses a sane bootstrap
  * default and gradually switches over to its own real p50 as matches get
- * found (see gameStore.ts's getLagPercentiles).
+ * found (see gameStore.ts's getLagPercentiles) - a match found on the
+ * second attempt still feeds that learning (gameStore.setHighlights records
+ * yt_found_at regardless of which attempt found it).
  */
 function isDueForHighlightsCheck(row: GameRow, now: number): boolean {
   if (row.ytVideoId) return false;
-  if (row.ytCheckCount > 0) return false;
+  if (row.ytCheckCount >= MAX_HIGHLIGHTS_CHECKS) return false;
   if (row.ytLastCheckedAt && now - new Date(row.ytLastCheckedAt).getTime() < YT_MIN_CHECK_SPACING_MS) return false;
 
-  const anchor = row.finalAt ?? row.tipoffUtc;
-  const sinceFinalMs = now - new Date(anchor).getTime();
-  const { p50Ms } = getLagPercentiles(row.league, row.leagueGroup);
-  return sinceFinalMs >= p50Ms;
+  if (row.ytCheckCount === 0) {
+    const anchor = row.finalAt ?? row.tipoffUtc;
+    const sinceFinalMs = now - new Date(anchor).getTime();
+    const { p50Ms } = getLagPercentiles(row.league, row.leagueGroup);
+    return sinceFinalMs >= p50Ms;
+  }
+
+  // Second attempt: row.ytLastCheckedAt is always set once ytCheckCount > 0
+  // (markHighlightsChecked sets both together), so this is never null here.
+  const sinceFirstCheckMs = now - new Date(row.ytLastCheckedAt!).getTime();
+  return sinceFirstCheckMs >= YT_SECOND_CHECK_DELAY_MS;
 }
 
-/** Searches for and records the result of one game's highlights check - shared by the poller and the demand-driven trigger below so there's exactly one place this happens. */
+/**
+ * Searches for and records the result of one game's highlights check -
+ * shared by the poller and the demand-driven trigger below so there's
+ * exactly one place this happens. Guarded by the persisted daily search
+ * budget (gameStore.canSpendSearchQuota) as a hard ceiling independent of
+ * the per-game scheduling above - if the budget's spent, this deliberately
+ * does NOT call markHighlightsChecked, so the game stays "due" and gets its
+ * real attempt once the budget resets, rather than silently losing one of
+ * its 2 allotted checks to a skip that was never really tried.
+ */
 async function checkGameHighlights(row: GameRow): Promise<void> {
+  if (!canSpendSearchQuota()) {
+    console.warn(`checkGameHighlights: daily search budget spent, deferring ${row.away} @ ${row.home}`);
+    return;
+  }
+
   const highlightsLeague: HighlightsLeague = row.league === "wnba" ? "wnba" : "nba";
   console.log(`checkGameHighlights: searching for ${row.away} @ ${row.home} (${row.eventId}, ${highlightsLeague})`);
+  recordSearchQuotaSpend();
   const match = await searchHighlightsVideo(highlightsLeague, row.away, row.home, row.tipoffUtc);
   markHighlightsChecked(row.eventId, new Date().toISOString());
   if (match) {
@@ -135,17 +172,18 @@ async function checkGameHighlights(row: GameRow): Promise<void> {
   }
 }
 
-// Defense in depth alongside gameStore's recent-or-watchable filter: even
-// a legitimate backlog (e.g. after downtime) shouldn't be able to spend the
-// whole shared 100/day quota in one poller tick. Bounded per tick, not per
-// day - a real backlog just spreads across a few extra ticks instead.
+// Defense in depth alongside gameStore's recent-games-only filter and the
+// daily search budget: even a legitimate backlog (e.g. after downtime)
+// shouldn't be able to spend a big chunk of the daily budget in one poller
+// tick. Bounded per tick, not per day - a real backlog just spreads across
+// a few extra ticks instead.
 const MAX_CHECKS_PER_POLL = 20;
 
 /**
  * Checks final games still missing a highlights match that could actually
  * be shown one (gameStore.getFinalGamesMissingHighlights already excludes
- * games no tab would ever display a match for) and searches for whichever
- * are due per isDueForHighlightsCheck, up to MAX_CHECKS_PER_POLL. Called by
+ * historical/backfill games entirely) and searches for whichever are due
+ * per isDueForHighlightsCheck, up to MAX_CHECKS_PER_POLL. Called by
  * highlightsPoller.ts on a timer, as a backstop for games nobody's actively
  * looking at - getGamesForDate below also triggers this inline for
  * whatever a live request happens to touch, so someone actively viewing a

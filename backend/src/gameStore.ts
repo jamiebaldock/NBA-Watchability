@@ -67,6 +67,15 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_games_tipoff ON games(tipoff_utc);
   CREATE INDEX IF NOT EXISTS idx_games_tier_score ON games(tier, score);
+
+  -- Hard ceiling on real YouTube search.list calls per day, independent of
+  -- (and a backstop for) the per-game scheduling logic above - see
+  -- canSpendSearchQuota below. Persisted, not in-memory, so it survives a
+  -- restart mid-day instead of quietly resetting to 0 on every deploy.
+  CREATE TABLE IF NOT EXISTS youtube_search_budget (
+    date TEXT PRIMARY KEY,
+    count INTEGER NOT NULL DEFAULT 0
+  );
 `);
 
 // Added after the initial release - ensureColumn (not a second CREATE TABLE
@@ -83,9 +92,10 @@ function ensureColumn(table: string, column: string, definition: string): void {
 // final_at/yt_found_at are the two anchors the self-tuning highlights
 // schedule (below) learns from: the real-world gap between them, for every
 // game a match was ever found for, is what "upload lag" actually means per
-// league - not a guessed constant. yt_check_count is 0 (not yet checked) or
-// 1 (checked, permanently done regardless of outcome) - the check is
-// single-shot, not a retry ladder.
+// league - not a guessed constant. yt_check_count runs 0 -> 1 -> 2: the
+// first check fires at the league's learned p50 delay, a second (final)
+// check 30 minutes later if the first missed, then permanently done - not
+// an open-ended retry ladder.
 ensureColumn("games", "final_at", "TEXT");
 ensureColumn("games", "yt_found_at", "TEXT");
 ensureColumn("games", "yt_check_count", "INTEGER NOT NULL DEFAULT 0");
@@ -494,6 +504,37 @@ export function getSeasonLabels(): string[] {
   const rows = db.prepare(`SELECT tipoff_utc FROM games WHERE league = 'nba'`).all() as { tipoff_utc: string }[];
   const labels = new Set(rows.map((r) => seasonLabelForTipoff(r.tipoff_utc)));
   return Array.from(labels).sort().reverse();
+}
+
+// Conservative margin under YouTube's real 100/day search.list cap - not a
+// precise mirror of it (this counter's day boundary is UTC midnight, not
+// YouTube's actual midnight-Pacific reset), just enough headroom that
+// clock-boundary drift between the two can never itself cause a real
+// overage. This is deliberately a second, independent layer on top of the
+// per-game scheduling in gamesService.ts (learned delay, 2-check cap,
+// recent-games-only scope) - the thing that turned an earlier scope bug
+// into a 22K-request storm was having no ceiling at all on total daily
+// volume, only per-game pacing that assumed the scope was already correct.
+const DAILY_SEARCH_BUDGET = 90;
+
+function todayUtcKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Whether a real search.list call is still within today's budget - check before spending, not after. */
+export function canSpendSearchQuota(): boolean {
+  const row = db.prepare(`SELECT count FROM youtube_search_budget WHERE date = ?`).get(todayUtcKey()) as
+    | { count: number }
+    | undefined;
+  return (row?.count ?? 0) < DAILY_SEARCH_BUDGET;
+}
+
+/** Records one spent search.list call against today's budget - call once per real request actually made, success or failure alike (a quota-exceeded response still counts against Google's own daily limit). */
+export function recordSearchQuotaSpend(): void {
+  db.prepare(
+    `INSERT INTO youtube_search_budget (date, count) VALUES (?, 1)
+     ON CONFLICT(date) DO UPDATE SET count = count + 1`
+  ).run(todayUtcKey());
 }
 
 export function closeDb(): void {
