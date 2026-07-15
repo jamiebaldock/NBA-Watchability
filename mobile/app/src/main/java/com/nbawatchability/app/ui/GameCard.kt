@@ -274,7 +274,13 @@ private fun HighlightsRow(onClick: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-private val LOGO_SIZE = 20.dp
+private val LOGO_SIZE = 24.dp
+
+// A modest bump over the theme's own titleMedium (18sp) - applied locally
+// here rather than changing titleMedium itself, since that style is shared
+// by other screens (tier badges, empty states, etc.) that don't need to
+// grow along with it.
+private val TEAM_NAME_FONT_SIZE = 20.sp
 
 // Away listed above home, each with its logo before the name — standard
 // scoreboard convention, so no "at"/"@" separator needed between them.
@@ -296,7 +302,7 @@ private fun TeamRow(logoUrl: String?, name: String, score: Int? = null) {
             text = name,
             color = TextPrimary,
             fontWeight = FontWeight.Bold,
-            baseStyle = MaterialTheme.typography.titleMedium,
+            baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = TEAM_NAME_FONT_SIZE),
             modifier = Modifier.weight(1f, fill = false)
         )
         if (score != null) {
@@ -305,7 +311,7 @@ private fun TeamRow(logoUrl: String?, name: String, score: Int? = null) {
                 text = score.toString(),
                 color = TextPrimary,
                 fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = TABULAR_NUMS)
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = TEAM_NAME_FONT_SIZE, fontFeatureSettings = TABULAR_NUMS)
             )
         }
     }
