@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -22,6 +23,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -32,11 +35,14 @@ import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
+import com.nbawatchability.app.ui.theme.TierWorthYourTime
 
 /** Top-level settings screen (spec: settings gear, top app bar) - links to the rating-weights and About sub-pages. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+    showAllLeaguesInStarred: Boolean,
+    onToggleShowAllLeaguesInStarred: () -> Unit,
     onRubricWeightsClick: () -> Unit,
     onAboutClick: () -> Unit,
     onBack: () -> Unit
@@ -78,6 +84,31 @@ fun SettingsScreen(
                     Text(text = "Watchability rating weights", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
                 }
                 Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+            }
+
+            HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
+
+            // Starred normally follows the shared league dropdown like every
+            // other tab; this ON state makes it show every league's starred
+            // games combined instead, ignoring that dropdown entirely (see
+            // StarredScreen.kt).
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Public, contentDescription = null, tint = TextSecondary)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(text = "Show all leagues in Starred", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                }
+                Switch(
+                    checked = showAllLeaguesInStarred,
+                    onCheckedChange = { onToggleShowAllLeaguesInStarred() },
+                    colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime)
+                )
             }
 
             HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))

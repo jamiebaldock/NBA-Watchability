@@ -110,6 +110,8 @@ fun AppRoot() {
 
     if (showSettings) {
         SettingsScreen(
+            showAllLeaguesInStarred = appSettingsViewModel.settings.showAllLeaguesInStarred,
+            onToggleShowAllLeaguesInStarred = appSettingsViewModel::toggleShowAllLeaguesInStarred,
             onRubricWeightsClick = { showRubricWeights = true },
             onAboutClick = { showAbout = true },
             onBack = { showSettings = false }
@@ -173,6 +175,8 @@ fun AppRoot() {
                     onLeagueSelected = appSettingsViewModel::setSelectedLeague,
                     showNumericScore = appSettingsViewModel.settings.showNumericScore,
                     onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
+                    showAllLeagues = appSettingsViewModel.settings.showAllLeaguesInStarred,
+                    onToggleAllLeagues = appSettingsViewModel::toggleShowAllLeaguesInStarred,
                     weights = settingsViewModel.weights,
                     onWatchHighlights = { videoId -> highlightsVideoId = videoId },
                     onSettingsClick = { showSettings = true }
@@ -251,6 +255,8 @@ private fun StarredTab(
     onLeagueSelected: (LeagueGroup) -> Unit,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
+    showAllLeagues: Boolean,
+    onToggleAllLeagues: () -> Unit,
     weights: RubricWeights,
     onWatchHighlights: (String) -> Unit,
     onSettingsClick: () -> Unit
@@ -279,6 +285,8 @@ private fun StarredTab(
         onRefresh = starredGamesViewModel::refreshLiveData,
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
+        showAllLeagues = showAllLeagues,
+        onToggleAllLeagues = onToggleAllLeagues,
         onSettingsClick = onSettingsClick
     )
 }

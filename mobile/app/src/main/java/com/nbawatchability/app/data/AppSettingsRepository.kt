@@ -14,10 +14,12 @@ private val Context.appSettingsDataStore: DataStore<Preferences> by preferencesD
 
 private val SELECTED_LEAGUE_KEY = stringPreferencesKey("selected_league")
 private val SHOW_NUMERIC_SCORE_KEY = booleanPreferencesKey("show_numeric_score")
+private val SHOW_ALL_LEAGUES_IN_STARRED_KEY = booleanPreferencesKey("show_all_leagues_in_starred")
 
 data class AppSettings(
     val selectedLeague: LeagueGroup = LeagueGroup.NBA,
-    val showNumericScore: Boolean = false
+    val showNumericScore: Boolean = false,
+    val showAllLeaguesInStarred: Boolean = false
 )
 
 /** Persists the last-selected league and Games-tab display prefs (numeric score) - on-device only, so they survive an app restart. */
@@ -29,7 +31,8 @@ class AppSettingsRepository(private val context: Context) {
                 LeagueGroup.WNBA.apiValue -> LeagueGroup.WNBA
                 else -> LeagueGroup.NBA
             },
-            showNumericScore = prefs[SHOW_NUMERIC_SCORE_KEY] ?: false
+            showNumericScore = prefs[SHOW_NUMERIC_SCORE_KEY] ?: false,
+            showAllLeaguesInStarred = prefs[SHOW_ALL_LEAGUES_IN_STARRED_KEY] ?: false
         )
     }
 
@@ -39,5 +42,9 @@ class AppSettingsRepository(private val context: Context) {
 
     suspend fun setShowNumericScore(value: Boolean) {
         context.appSettingsDataStore.edit { it[SHOW_NUMERIC_SCORE_KEY] = value }
+    }
+
+    suspend fun setShowAllLeaguesInStarred(value: Boolean) {
+        context.appSettingsDataStore.edit { it[SHOW_ALL_LEAGUES_IN_STARRED_KEY] = value }
     }
 }

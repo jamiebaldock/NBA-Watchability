@@ -42,4 +42,8 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
     fun toggleShowNumericScore() {
         viewModelScope.launch { repository.setShowNumericScore(!settings.showNumericScore) }
     }
+
+    fun toggleShowAllLeaguesInStarred() {
+        viewModelScope.launch { repository.setShowAllLeaguesInStarred(!settings.showAllLeaguesInStarred) }
+    }
 }

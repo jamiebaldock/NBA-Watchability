@@ -54,11 +54,23 @@ import java.time.format.DateTimeFormatter
 
 private val earliestDateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
 
+// "All time" holds itself to a much higher bar than every other range - the
+// server's own >=70 (gameStore.ts's HISTORY_MIN_SCORE) makes sense across a
+// single season, but scanning the *entire* backfill at that same bar would
+// surface a long list that isn't really "the best of all time" anymore.
+// Applied client-side (not a backend param) since effective score depends
+// on the viewer's own rubric weights, same as the existing rating sort
+// below - the server's >=70 games are still fetched, this just narrows the
+// display further for this one preset.
+private const val ALL_TIME_MIN_SCORE = 90
+
 /**
  * "Which old games are actually worth going back to watch" - surfaces the
  * NBA watchability backfill, games scoring 70+ only (gameStore.ts's
  * HISTORY_MIN_SCORE - stricter than the "Worth Your Time" tier badge's own
- * >=65), most-watchable-first by default. Unlike every
+ * >=65), most-watchable-first by default - except "All time"
+ * (ALL_TIME_MIN_SCORE above), which holds every season's worth of backfill
+ * to a 90+ bar instead. Unlike every
  * other tab, these games are ones the viewer is intentionally browsing
  * rather than following live, so the breakdown is never spoiler-blurred
  * (GameCard's spoilerFree = true) - the tier/score/final result are the
@@ -222,7 +234,13 @@ fun HistoryScreen(
                 }
 
                 is HistoryUiState.Loaded -> {
-                    if (uiState.games.isEmpty()) {
+                    val displayGames = if (selectedPreset is HistoryRangePreset.AllTime) {
+                        uiState.games.filter { (it.effectiveScore(weights) ?: 0) >= ALL_TIME_MIN_SCORE }
+                    } else {
+                        uiState.games
+                    }
+
+                    if (displayGames.isEmpty()) {
                         val earliestText = earliestDate?.format(earliestDateFormatter)
                         Column(
                             modifier = Modifier.fillMaxSize(),
@@ -243,10 +261,10 @@ fun HistoryScreen(
                         // every History game already has a score, so unlike
                         // Starred there's no unscored tail to fall back to.
                         val ordered = when (sortOption) {
-                            SortOption.RATING_HIGHEST_FIRST -> uiState.games.sortedByDescending { it.effectiveScore(weights) }
-                            SortOption.RATING_LOWEST_FIRST -> uiState.games.sortedBy { it.effectiveScore(weights) }
-                            SortOption.DATE_OLDEST_FIRST -> uiState.games.sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
-                            SortOption.DATE_NEWEST_FIRST -> uiState.games.sortedByDescending { OffsetDateTime.parse(it.tipoffUtc) }
+                            SortOption.RATING_HIGHEST_FIRST -> displayGames.sortedByDescending { it.effectiveScore(weights) }
+                            SortOption.RATING_LOWEST_FIRST -> displayGames.sortedBy { it.effectiveScore(weights) }
+                            SortOption.DATE_OLDEST_FIRST -> displayGames.sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
+                            SortOption.DATE_NEWEST_FIRST -> displayGames.sortedByDescending { OffsetDateTime.parse(it.tipoffUtc) }
                         }
 
                         val listState = rememberLazyListState()

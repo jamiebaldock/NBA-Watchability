@@ -20,7 +20,11 @@ import java.time.LocalDate
 sealed class HistoryRangePreset(val label: String) {
     data object ThisSeason : HistoryRangePreset("This season")
     data class NamedSeason(val seasonLabel: String) : HistoryRangePreset(seasonLabel)
-    data object AllTime : HistoryRangePreset("All time")
+    // Fire emoji flags that this range holds itself to a much higher bar
+    // than every other preset (HistoryScreen.kt's ALL_TIME_MIN_SCORE) - not
+    // just decoration, since the reader should expect a shorter, more
+    // exceptional list here than "This season" or a named season show.
+    data object AllTime : HistoryRangePreset("🔥 All time")
 }
 
 sealed interface HistoryUiState {

@@ -101,8 +101,10 @@ class StarredGamesViewModel(application: Application) : AndroidViewModel(applica
 
 // NBA Summer League games are unioned into the "nba" LeagueGroup server-side
 // (there's no separate SUMMER case), so a starred Summer League game must be
-// queried under LeagueGroup.NBA too.
-private fun leagueGroupOf(game: Game): LeagueGroup = if (game.league == "wnba") LeagueGroup.WNBA else LeagueGroup.NBA
+// queried under LeagueGroup.NBA too. Not private - StarredScreen.kt reuses
+// this to filter the combined list back down to one league when "all
+// leagues" is off.
+fun leagueGroupOf(game: Game): LeagueGroup = if (game.league == "wnba") LeagueGroup.WNBA else LeagueGroup.NBA
 
 private fun localDateOf(game: Game): LocalDate =
     OffsetDateTime.parse(game.tipoffUtc).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate()
