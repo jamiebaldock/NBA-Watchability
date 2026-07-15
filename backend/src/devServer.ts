@@ -6,6 +6,7 @@ import {
   getNewsForLeagueGroup,
   getNextGameDateForLeagueGroup,
   getSchedule,
+  getSeasonWindowForLeagueGroup,
   getStandingsForLeagueGroup,
   getStatsForLeagueGroup,
 } from "./httpHandler";
@@ -86,6 +87,20 @@ app.get("/next-game-date", async (req, res) => {
     const after = String(req.query.after ?? "");
     const leagueGroup = String(req.query.leagueGroup ?? "nba");
     res.json(await getNextGameDateForLeagueGroup(after, leagueGroup));
+  } catch (err) {
+    if (err instanceof BadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
+});
+
+app.get("/season-window", async (req, res) => {
+  try {
+    const leagueGroup = String(req.query.leagueGroup ?? "nba");
+    res.json(await getSeasonWindowForLeagueGroup(leagueGroup));
   } catch (err) {
     if (err instanceof BadRequestError) {
       res.status(400).json({ error: err.message });

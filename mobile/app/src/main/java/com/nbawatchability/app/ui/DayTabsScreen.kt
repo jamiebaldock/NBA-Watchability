@@ -2,7 +2,6 @@ package com.nbawatchability.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +15,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Today
@@ -58,6 +60,7 @@ import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
@@ -95,10 +98,15 @@ fun DayTabsScreen(
     onJumpToNextGame: () -> Unit,
     onJumpToNextGameErrorShown: () -> Unit,
     isJumpingToToday: Boolean,
-    onJumpToToday: () -> Unit
+    onJumpToToday: () -> Unit,
+    fullSeasonRange: Pair<LocalDate, LocalDate>?,
+    datesWithGames: Set<LocalDate>,
+    isJumpingToDate: Boolean,
+    onJumpToDate: (LocalDate) -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
     var actionLabel by remember { mutableStateOf<String?>(null) }
+    var showCalendar by remember { mutableStateOf(false) }
 
     LaunchedEffect(pagerState.currentPage) {
         if (pagerState.currentPage != selectedDayIndex) onDaySelected(pagerState.currentPage)
@@ -123,6 +131,23 @@ fun DayTabsScreen(
             TopAppBar(
                 title = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
                 actions = {
+                    // Only shown for leagues with a full-season range loaded
+                    // (currently WNBA) - a calendar has nothing useful to
+                    // offer over the swipeable tabs themselves for NBA's
+                    // narrow +/-7 day window.
+                    if (fullSeasonRange != null) {
+                        IconButton(onClick = { showCalendar = true }, enabled = !isJumpingToDate) {
+                            if (isJumpingToDate) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.CalendarMonth,
+                                    contentDescription = "Jump to date",
+                                    tint = TextSecondary
+                                )
+                            }
+                        }
+                    }
                     // Only shown once the viewer has actually wandered off
                     // today's tab (by swiping or via "jump to next game") -
                     // same "only surface it when it'd do something" rule as
@@ -202,17 +227,35 @@ fun DayTabsScreen(
             )
         }
     }
+
+    if (showCalendar && fullSeasonRange != null) {
+        val (seasonStart, seasonEnd) = fullSeasonRange
+        SeasonCalendarDialog(
+            seasonStart = seasonStart,
+            seasonEnd = seasonEnd,
+            datesWithGames = datesWithGames,
+            initialMonth = YearMonth.from(today),
+            onDateSelected = { date ->
+                showCalendar = false
+                onJumpToDate(date)
+            },
+            onDismiss = { showCalendar = false }
+        )
+    }
 }
 
 /**
  * Material3's ScrollableTabRow only scrolls the selected tab into view (edge
- * aligned), not centered — replaced with a manual horizontalScroll Row.
- * Each tab is sized to exactly a third of the viewport (rather than sizing
- * to its own text content), so at rest exactly 3 tabs are ever visible with
- * none peeking in cut off at either edge - the selected tab's scroll offset
- * is then just an exact multiple of that fixed tab width, landing it in the
- * middle slot with a full tab showing on each side (clamped to the ends of
- * the list, where fewer than one full tab's worth of neighbors exist).
+ * aligned), not centered — replaced with a manually-scrolled LazyRow. Each
+ * tab is sized to exactly a third of the viewport (rather than sizing to
+ * its own text content), so at rest exactly 3 tabs are ever visible with
+ * none peeking in cut off at either edge - scrolling so (selectedDayIndex -
+ * 1) becomes the first visible item then reproduces the same "selected tab
+ * centered, one neighbor on each side" layout (clamped to the ends of the
+ * list, where fewer than one full tab's worth of neighbors exist). Lazy
+ * (not a plain Row) since a full WNBA season is ~140 tabs - only NBA's
+ * narrow window is small enough that a non-lazy Row would've been fine,
+ * but there's no reason to maintain two versions of this.
  */
 @Composable
 private fun CenteringDayTabRow(
@@ -221,24 +264,23 @@ private fun CenteringDayTabRow(
     selectedDayIndex: Int,
     onDaySelected: (Int) -> Unit
 ) {
-    val scrollState = rememberScrollState()
+    val listState = rememberLazyListState()
     var viewportWidth by remember { mutableStateOf(0) }
     val density = LocalDensity.current
     val tabWidthPx = viewportWidth / 3
 
     LaunchedEffect(selectedDayIndex, viewportWidth) {
-        if (tabWidthPx == 0) return@LaunchedEffect
-        val target = (selectedDayIndex - 1) * tabWidthPx
-        scrollState.animateScrollTo(target.coerceIn(0, scrollState.maxValue))
+        if (tabWidthPx == 0 || days.isEmpty()) return@LaunchedEffect
+        listState.animateScrollToItem((selectedDayIndex - 1).coerceIn(0, days.size - 1))
     }
 
-    Row(
+    LazyRow(
+        state = listState,
         modifier = Modifier
             .fillMaxWidth()
             .onSizeChanged { viewportWidth = it.width }
-            .horizontalScroll(scrollState)
     ) {
-        days.forEachIndexed { index, day ->
+        itemsIndexed(days, key = { _, day -> day.date.toString() }) { index, day ->
             val selected = index == selectedDayIndex
             Column(
                 modifier = Modifier

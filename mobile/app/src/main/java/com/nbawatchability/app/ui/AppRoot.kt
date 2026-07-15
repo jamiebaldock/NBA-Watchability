@@ -289,7 +289,11 @@ private fun GamesTab(
             onJumpToNextGame = viewModel::jumpToNextGame,
             onJumpToNextGameErrorShown = viewModel::clearJumpError,
             isJumpingToToday = viewModel.isJumpingToToday,
-            onJumpToToday = viewModel::jumpToToday
+            onJumpToToday = viewModel::jumpToToday,
+            fullSeasonRange = viewModel.fullSeasonRange,
+            datesWithGames = viewModel.datesWithGames,
+            isJumpingToDate = viewModel.isJumpingToDate,
+            onJumpToDate = viewModel::jumpToDate
         )
     }
 }

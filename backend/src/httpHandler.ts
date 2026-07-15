@@ -3,6 +3,7 @@ import { earliestGameDate } from "./gameStore";
 import { getGamesForDate, getNextScheduledDate } from "./gamesService";
 import { getHistory, HistoryResult } from "./historyService";
 import { getNews } from "./newsService";
+import { getSeasonWindow, SeasonWindow } from "./seasonWindowService";
 import { getStandings } from "./standingsService";
 import { getStats } from "./statsService";
 import { GameJson, LeagueGroup, NewsResponseJson, StandingsResponseJson, StatsResponseJson } from "./types";
@@ -55,6 +56,14 @@ export async function getNextGameDateForLeagueGroup(afterRaw: string, leagueGrou
   const leagueGroup = parseLeagueGroup(leagueGroupRaw);
   const date = await getNextScheduledDate(afterRaw, leagueGroup);
   return { date: date ?? null };
+}
+
+export async function getSeasonWindowForLeagueGroup(
+  leagueGroupRaw = "nba"
+): Promise<SeasonWindow | { start: null; end: null }> {
+  const leagueGroup = parseLeagueGroup(leagueGroupRaw);
+  const window = await getSeasonWindow(leagueGroup);
+  return window ?? { start: null, end: null };
 }
 
 export async function getStandingsForLeagueGroup(leagueGroupRaw = "nba"): Promise<StandingsResponseJson> {
