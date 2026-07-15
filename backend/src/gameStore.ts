@@ -453,20 +453,23 @@ export function getFinalGamesMissingHighlights(): GameRow[] {
 const HISTORY_MIN_SCORE = 70;
 
 /**
- * Games scoring >= HISTORY_MIN_SCORE in [startDate, endDate], sorted score
- * descending - backs the History tab. Date-range filtering happens in JS on
- * real Date objects (not a SQL string comparison on tipoff_utc) - ESPN's
- * timestamps omit seconds/milliseconds when they're :00 (e.g. "T01:00Z" vs
- * a boundary like "T23:59:59.999Z"), and comparing ISO strings of different
- * precision isn't reliably correct at exact boundaries the way numeric
- * Date.getTime() comparison always is. The score filter alone is cheap and
- * exact in SQL, so only that's pushed down; the result set is always small
- * (a season's worth of games, at most).
+ * Games scoring >= HISTORY_MIN_SCORE in [startDate, endDate] for
+ * [leagueGroup], sorted score descending - backs the History tab.
+ * Date-range filtering happens in JS on real Date objects (not a SQL
+ * string comparison on tipoff_utc) - ESPN's timestamps omit
+ * seconds/milliseconds when they're :00 (e.g. "T01:00Z" vs a boundary like
+ * "T23:59:59.999Z"), and comparing ISO strings of different precision
+ * isn't reliably correct at exact boundaries the way numeric
+ * Date.getTime() comparison always is. The score/league filters alone are
+ * cheap and exact in SQL, so only those are pushed down; the result set is
+ * always small (a season's worth of games, at most).
  */
-export function getWatchableHistory(startDate: string, endDate: string): GameRow[] {
+export function getWatchableHistory(startDate: string, endDate: string, leagueGroup: LeagueGroup): GameRow[] {
   const startTime = new Date(`${startDate}T00:00:00Z`).getTime();
   const endTime = new Date(`${endDate}T23:59:59.999Z`).getTime();
-  const raws = db.prepare(`SELECT * FROM games WHERE score >= ?`).all(HISTORY_MIN_SCORE) as RawGameRow[];
+  const raws = db
+    .prepare(`SELECT * FROM games WHERE score >= ? AND league_group = ?`)
+    .all(HISTORY_MIN_SCORE, leagueGroup) as RawGameRow[];
   return raws
     .map(mapRow)
     .filter((row) => {
@@ -476,33 +479,43 @@ export function getWatchableHistory(startDate: string, endDate: string): GameRow
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 }
 
-export function earliestGameDate(): string | undefined {
-  const row = db.prepare(`SELECT MIN(tipoff_utc) as earliest FROM games`).get() as { earliest: string | null };
+export function earliestGameDate(leagueGroup?: LeagueGroup): string | undefined {
+  const row = leagueGroup
+    ? (db.prepare(`SELECT MIN(tipoff_utc) as earliest FROM games WHERE league_group = ?`).get(leagueGroup) as {
+        earliest: string | null;
+      })
+    : (db.prepare(`SELECT MIN(tipoff_utc) as earliest FROM games`).get() as { earliest: string | null });
   return row.earliest?.slice(0, 10) ?? undefined;
 }
 
-// Same "ends in" convention as historicalWatchability.json's own season
-// strings (a season runs Oct 1 - Sep 30, labeled by its start year) - e.g.
-// a 2024-10-22 tipoff and a 2025-04-15 tipoff both label "2024-25".
-function seasonLabelForTipoff(tipoffUtc: string): string {
+// NBA's "ends in" convention (a season runs Oct 1 - Sep 30, labeled by its
+// start year - e.g. a 2024-10-22 tipoff and a 2025-04-15 tipoff both label
+// "2024-25") doesn't apply to WNBA, which never spans a year boundary - a
+// WNBA season is just the calendar year it plays in, so the tipoff's own
+// UTC year is the whole label.
+function seasonLabelForTipoff(tipoffUtc: string, leagueGroup: LeagueGroup): string {
   const date = new Date(tipoffUtc);
   const year = date.getUTCFullYear();
+  if (leagueGroup === "wnba") return String(year);
   const startYear = date.getUTCMonth() >= 9 ? year : year - 1;
   return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
 }
 
 /**
- * Distinct season labels present in the backfill/live data, newest first -
- * backs the History tab's per-season filter chips, so a newly-backfilled
- * season shows up automatically with no code change. Only real NBA
- * season/playoff games count toward a season label (league='nba') - Summer
- * League and preseason games are deliberately excluded, since those belong
- * to the "This season" (current in-progress period) bucket the client
- * computes separately, not to a named season block.
+ * Distinct season labels present in the backfill/live data for
+ * [leagueGroup], newest first - backs the History tab's per-season filter
+ * chips, so a newly-backfilled season shows up automatically with no code
+ * change. Only real season/playoff games count toward a season label
+ * (league='nba' or 'wnba', matching [leagueGroup]) - NBA Summer League and
+ * preseason games are deliberately excluded, since those belong to the
+ * "This season" (current in-progress period) bucket the client computes
+ * separately, not to a named season block.
  */
-export function getSeasonLabels(): string[] {
-  const rows = db.prepare(`SELECT tipoff_utc FROM games WHERE league = 'nba'`).all() as { tipoff_utc: string }[];
-  const labels = new Set(rows.map((r) => seasonLabelForTipoff(r.tipoff_utc)));
+export function getSeasonLabels(leagueGroup: LeagueGroup): string[] {
+  const rows = db.prepare(`SELECT tipoff_utc FROM games WHERE league = ?`).all(leagueGroup) as {
+    tipoff_utc: string;
+  }[];
+  const labels = new Set(rows.map((r) => seasonLabelForTipoff(r.tipoff_utc, leagueGroup)));
   return Array.from(labels).sort().reverse();
 }
 

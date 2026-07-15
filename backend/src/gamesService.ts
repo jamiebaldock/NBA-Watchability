@@ -295,7 +295,7 @@ export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "
     if (row.score === null) {
       const summary = await fetchSummary(event.id, league);
       const mapped = mapEventToGame(event, league, summary);
-      const score = computeWatchabilityScore(mapped.rubric, row.stakes ?? undefined).total;
+      const score = computeWatchabilityScore(mapped.rubric, row.stakes ?? undefined, league).total;
       const rubric: FinalRubric = {
         awayScore: parseFloat(away.score),
         homeScore: parseFloat(home.score),

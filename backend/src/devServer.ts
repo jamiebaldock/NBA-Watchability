@@ -68,7 +68,8 @@ app.get("/api/history", async (req, res) => {
   try {
     const start = String(req.query.start ?? "");
     const end = String(req.query.end ?? "");
-    res.json(await getHistoryForRange(start, end));
+    const leagueGroup = String(req.query.leagueGroup ?? "nba");
+    res.json(await getHistoryForRange(start, end, leagueGroup));
   } catch (err) {
     if (err instanceof BadRequestError) {
       res.status(400).json({ error: err.message });

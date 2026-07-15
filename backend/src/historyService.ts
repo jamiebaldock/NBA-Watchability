@@ -6,7 +6,7 @@
 // minutes ago are the same kind of row.
 import { earliestGameDate, getSeasonLabels, getWatchableHistory } from "./gameStore";
 import { teamLogoUrl } from "./teamLogos";
-import { GameJson } from "./types";
+import { GameJson, LeagueGroup } from "./types";
 
 export interface HistoryResult {
   earliestDate: string;
@@ -14,8 +14,8 @@ export interface HistoryResult {
   games: GameJson[];
 }
 
-export async function getHistory(start: string, end: string): Promise<HistoryResult> {
-  const rows = getWatchableHistory(start, end);
+export async function getHistory(start: string, end: string, leagueGroup: LeagueGroup): Promise<HistoryResult> {
+  const rows = getWatchableHistory(start, end, leagueGroup);
 
   const games: GameJson[] = rows.map((row) => ({
     a: row.away,
@@ -28,7 +28,7 @@ export async function getHistory(start: string, end: string): Promise<HistoryRes
     hl: row.homeLogo ?? teamLogoUrl(row.home),
     stt: "final",
     utc: row.tipoffUtc,
-    lg: "nba",
+    lg: row.league === "nba" ? "nba" : row.league === "wnba" ? "wnba" : "summer",
     m: row.finalMargin ?? undefined,
     as: row.awayScore ?? undefined,
     hs: row.homeScore ?? undefined,
@@ -46,5 +46,5 @@ export async function getHistory(start: string, end: string): Promise<HistoryRes
     yt: row.ytVideoId ?? undefined,
   }));
 
-  return { earliestDate: earliestGameDate() ?? start, seasons: getSeasonLabels(), games };
+  return { earliestDate: earliestGameDate(leagueGroup) ?? start, seasons: getSeasonLabels(leagueGroup), games };
 }

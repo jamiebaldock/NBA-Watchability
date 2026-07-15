@@ -1,6 +1,7 @@
 // Imports backend/data/historicalWatchability.json (the 2,650-game NBA
-// backfill, already fully correct after this session's rubric-fields fix)
-// into gameStore's durable games table - this is how the historical
+// backfill) and historicalWatchabilityWnba.json (the 576-game WNBA
+// backfill, scored with the league-aware rubric from the start) into
+// gameStore's durable games table - this is how each league's historical
 // backfill "graduates" into the same permanent store live games use, per
 // the user's lifecycle spec: a finished game from a year ago and one from
 // five minutes ago are the same kind of row, not two systems.
@@ -17,8 +18,9 @@
 // Can still be run standalone: npx tsx src/migrateToGameStore.ts
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { League } from "./espnClient";
 import { FinalRubric, setFinalRubric, upsertBaseEntry } from "./gameStore";
-import { StarPerformance } from "./types";
+import { LeagueGroup, StarPerformance } from "./types";
 
 interface HistoricalGame {
   eventId: string;
@@ -41,16 +43,17 @@ interface HistoricalGame {
   tier: string;
 }
 
-const DATA_PATH = join(__dirname, "..", "data", "historicalWatchability.json");
+const DATA_DIR = join(__dirname, "..", "data");
 
-export function migrateHistoricalBackfill(): void {
-  const { games } = JSON.parse(readFileSync(DATA_PATH, "utf8")) as { games: HistoricalGame[] };
+function migrateFile(fileName: string, league: League, leagueGroup: LeagueGroup): number {
+  const path = join(DATA_DIR, fileName);
+  const { games } = JSON.parse(readFileSync(path, "utf8")) as { games: HistoricalGame[] };
 
   for (const g of games) {
     upsertBaseEntry({
       eventId: g.eventId,
-      league: "nba",
-      leagueGroup: "nba",
+      league,
+      leagueGroup,
       away: g.away,
       home: g.home,
       tipoffUtc: g.date,
@@ -80,7 +83,15 @@ export function migrateHistoricalBackfill(): void {
     setFinalRubric(g.eventId, rubric, null);
   }
 
-  console.log(`migrateHistoricalBackfill: verified ${games.length} historical games are present in gameStore.`);
+  return games.length;
+}
+
+export function migrateHistoricalBackfill(): void {
+  const nbaCount = migrateFile("historicalWatchability.json", "nba", "nba");
+  const wnbaCount = migrateFile("historicalWatchabilityWnba.json", "wnba", "wnba");
+  console.log(
+    `migrateHistoricalBackfill: verified ${nbaCount} NBA and ${wnbaCount} WNBA historical games are present in gameStore.`
+  );
 }
 
 // Allows `npx tsx src/migrateToGameStore.ts` to still work standalone for

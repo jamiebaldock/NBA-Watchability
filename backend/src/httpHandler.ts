@@ -65,16 +65,17 @@ export async function getNewsForLeagueGroup(leagueGroupRaw = "nba"): Promise<New
  * as future backfills extend it, so the client shouldn't need to know that
  * boundary precisely to ask for it.
  */
-export async function getHistoryForRange(startRaw: string, endRaw: string): Promise<HistoryResult> {
+export async function getHistoryForRange(startRaw: string, endRaw: string, leagueGroupRaw = "nba"): Promise<HistoryResult> {
   if (!DATE_RE.test(startRaw) || !DATE_RE.test(endRaw)) {
     throw new BadRequestError("start and end must be YYYY-MM-DD");
   }
+  const leagueGroup = parseLeagueGroup(leagueGroupRaw);
 
-  const earliest = earliestGameDate() ?? startRaw;
+  const earliest = earliestGameDate(leagueGroup) ?? startRaw;
   const today = new Date().toISOString().slice(0, 10);
   const start = startRaw < earliest ? earliest : startRaw;
   const end = endRaw > today ? today : endRaw;
   if (end < start) throw new BadRequestError("end must not be before start");
 
-  return getHistory(start, end);
+  return getHistory(start, end, leagueGroup);
 }
