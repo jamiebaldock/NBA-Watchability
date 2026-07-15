@@ -11,7 +11,6 @@ import {
 } from "./httpHandler";
 import { startHighlightsPoller } from "./highlightsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
-import { fixLogoForTeam } from "./gameStore";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
 
 const app = express();
@@ -109,14 +108,6 @@ app.get("/news", async (req, res) => {
       res.status(500).json({ error: "internal error" });
     }
   }
-});
-
-// TEMPORARY one-off admin route: corrects Toronto Tempo rows already
-// stored (before preferDarkLogoVariant existed) with the old, poorly-
-// visible default logo. Remove this route (and the fixLogoForTeam import
-// above) once run once against production and confirmed.
-app.post("/admin/fix-tempo-logo", (_req, res) => {
-  res.json({ updated: fixLogoForTeam("Toronto Tempo", "https://a.espncdn.com/i/teamlogos/wnba/500-dark/tor.png") });
 });
 
 app.listen(PORT, () => {
