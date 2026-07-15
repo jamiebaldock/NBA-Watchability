@@ -89,13 +89,19 @@ private val EaseInAccelerating = Easing { fraction -> fraction * fraction }
  * every frame) rather than pixel offsets, since list tiles vary in height
  * (expanded breakdowns, spoiler blur, etc.) - index-based stepping lands
  * exactly on the target regardless of that variance.
+ *
+ * Durations deliberately sit well above what a snappy UI transition would
+ * normally use - an early pass tuned this against a much faster floor/cap
+ * (300ms-1100ms) and it read as a flicker rather than a scroll, even on the
+ * "slow" short-hop end. The whole curve is shifted down in speed here
+ * (600ms-2200ms) so even the fastest case still reads as a deliberate roll.
  */
 suspend fun LazyListState.animateScrollToTopAdaptively() {
     val startIndex = firstVisibleItemIndex
     if (startIndex <= 0) return
 
     val shortHop = startIndex <= 8
-    val durationMillis = (300 + startIndex * 15).coerceIn(300, 1100)
+    val durationMillis = (600 + startIndex * 25).coerceIn(600, 2200)
     val easing: Easing = if (shortHop) LinearEasing else EaseInAccelerating
 
     val startTimeNanos = withFrameNanos { it }
