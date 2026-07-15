@@ -287,7 +287,9 @@ private fun GamesTab(
             isJumpingToNextGame = viewModel.isJumping,
             jumpToNextGameError = viewModel.jumpError,
             onJumpToNextGame = viewModel::jumpToNextGame,
-            onJumpToNextGameErrorShown = viewModel::clearJumpError
+            onJumpToNextGameErrorShown = viewModel::clearJumpError,
+            isJumpingToToday = viewModel.isJumpingToToday,
+            onJumpToToday = viewModel::jumpToToday
         )
     }
 }

@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -92,7 +93,9 @@ fun DayTabsScreen(
     isJumpingToNextGame: Boolean,
     jumpToNextGameError: String?,
     onJumpToNextGame: () -> Unit,
-    onJumpToNextGameErrorShown: () -> Unit
+    onJumpToNextGameErrorShown: () -> Unit,
+    isJumpingToToday: Boolean,
+    onJumpToToday: () -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -120,6 +123,24 @@ fun DayTabsScreen(
             TopAppBar(
                 title = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
                 actions = {
+                    // Only shown once the viewer has actually wandered off
+                    // today's tab (by swiping or via "jump to next game") -
+                    // same "only surface it when it'd do something" rule as
+                    // the empty-day jump button, rather than a permanently
+                    // present icon that's a no-op most of the time.
+                    if (days.getOrNull(selectedDayIndex)?.date != today) {
+                        IconButton(onClick = onJumpToToday, enabled = !isJumpingToToday) {
+                            if (isJumpingToToday) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Today,
+                                    contentDescription = "Back to today",
+                                    tint = TextSecondary
+                                )
+                            }
+                        }
+                    }
                     IconToggleButton(
                         checked = showNumericScore,
                         onCheckedChange = {

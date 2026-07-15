@@ -129,6 +129,44 @@ class GameListViewModel : ViewModel() {
         }
     }
 
+    // Only meaningful while jumpToToday() has to reload the window (today
+    // fell outside it, e.g. after a big jumpToNextGame) - the common case,
+    // today still being in the loaded window, resolves synchronously and
+    // never touches this.
+    var isJumpingToToday by mutableStateOf(false)
+        private set
+
+    /**
+     * Jumps straight back to today's tab - instant if today is still within
+     * the loaded window (just a selectedDayIndex change), otherwise reloads
+     * the window centered back on today (mirrors jumpToNextGame's own
+     * outside-the-window case, minus the backend lookup, since the target
+     * date here is always just [today]).
+     */
+    fun jumpToToday() {
+        if (isJumpingToToday) return
+        val loadedState = uiState as? ScheduleUiState.Loaded ?: return
+        val existingIndex = loadedState.days.indexOfFirst { it.date == today }
+        if (existingIndex >= 0) {
+            selectedDayIndex = existingIndex
+            return
+        }
+
+        windowCenter = today
+        isJumpingToToday = true
+        viewModelScope.launch {
+            try {
+                val days = fetchSchedule()
+                selectedDayIndex = days.indexOfFirst { it.date == today }.coerceAtLeast(0)
+                uiState = ScheduleUiState.Loaded(days)
+            } catch (e: Exception) {
+                jumpError = e.message ?: "Couldn't reach the backend"
+            } finally {
+                isJumpingToToday = false
+            }
+        }
+    }
+
     /**
      * Pull-to-refresh: re-fetches only the currently-viewed day (plus a small
      * buffer so the cross-timezone rebucketing stays correct), not the whole
