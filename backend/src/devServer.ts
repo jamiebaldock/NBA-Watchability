@@ -1,6 +1,5 @@
 import compression from "compression";
 import express from "express";
-import { forceRescoreWnbaGames, getWnbaTierBreakdown } from "./gameStore";
 import {
   BadRequestError,
   getHistoryForRange,
@@ -12,7 +11,6 @@ import {
 import { startHighlightsPoller } from "./highlightsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
-import { computeWatchabilityScore, tierForScore } from "./rubric";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
@@ -94,35 +92,6 @@ app.get("/news", async (req, res) => {
       res.status(500).json({ error: "internal error" });
     }
   }
-});
-
-// TEMPORARY - one-off correction for WNBA games scored before the
-// league-aware rubric calibration deployed (commit 87789fd and follow-ups).
-// Recomputes score/tier from each game's already-stored raw rubric inputs
-// (no ESPN re-fetch) and overwrites only where it actually changed. Scoped
-// to WNBA only, safe to hit more than once (a no-op against already-
-// corrected rows). Remove this route once run against production.
-app.get("/api/admin/rescore-wnba", (_req, res) => {
-  const changes = forceRescoreWnbaGames((row) => {
-    const breakdown = computeWatchabilityScore(
-      {
-        status: row.status,
-        finalMargin: row.finalMargin ?? undefined,
-        largestDeficitOvercome: row.largestDeficitOvercome ?? undefined,
-        leadChanges: row.leadChanges ?? undefined,
-        overtimePeriods: row.overtimePeriods ?? 0,
-        closeInFinalTwoMin: Boolean(row.closeInFinalTwoMin),
-        leadChangeInFinalMin: Boolean(row.leadChangeInFinalMin),
-        decidedOnFinalPossession: Boolean(row.decidedOnFinalPossession),
-        buzzerBeater: Boolean(row.buzzerBeater),
-        starPerformance: row.starPerformance,
-      },
-      row.stakes ?? undefined,
-      "wnba"
-    );
-    return { score: breakdown.total, tier: tierForScore(breakdown.total) };
-  });
-  res.json({ changedCount: changes.length, changes, tierBreakdown: getWnbaTierBreakdown() });
 });
 
 app.listen(PORT, () => {
