@@ -304,11 +304,13 @@ private fun HistoryTab(
     onSettingsClick: () -> Unit
 ) {
     val viewModel: HistoryViewModel = viewModel()
-    // The backfill only covers NBA so far - don't fire a request for a
-    // league that has nothing to return; HistoryScreen shows a blank state
-    // instead once selectedLeague isn't NBA.
+    // Both leagues have their own backfill now - always resets to "This
+    // season" on a league switch (rather than reusing whatever preset was
+    // selected before), since a preset like a named NBA season ("2024-25")
+    // isn't valid for WNBA (whose season labels are plain years) and vice
+    // versa.
     LaunchedEffect(selectedLeague) {
-        if (selectedLeague == LeagueGroup.NBA) viewModel.load()
+        viewModel.load(selectedLeague, HistoryRangePreset.ThisSeason)
     }
 
     HistoryScreen(
@@ -316,7 +318,7 @@ private fun HistoryTab(
         presets = viewModel.presets,
         selectedPreset = viewModel.selectedPreset,
         earliestDate = viewModel.earliestDate,
-        onPresetSelected = viewModel::load,
+        onPresetSelected = { viewModel.load(selectedLeague, it) },
         onRetry = viewModel::retry,
         showNumericScore = showNumericScore,
         onToggleNumericScore = onToggleNumericScore,
@@ -326,7 +328,6 @@ private fun HistoryTab(
         onWatchHighlights = onWatchHighlights,
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
-        leagueGroup = selectedLeague,
         onSettingsClick = onSettingsClick
     )
 }

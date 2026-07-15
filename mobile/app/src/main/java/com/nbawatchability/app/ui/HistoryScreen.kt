@@ -66,26 +66,23 @@ private const val ALL_TIME_MIN_SCORE = 90
 
 /**
  * "Which old games are actually worth going back to watch" - surfaces the
- * NBA watchability backfill, games scoring 70+ only (gameStore.ts's
- * HISTORY_MIN_SCORE - stricter than the "Worth Your Time" tier badge's own
- * >=65), most-watchable-first by default - except "All time"
- * (ALL_TIME_MIN_SCORE above), which holds every season's worth of backfill
- * to a 90+ bar instead. Unlike every
- * other tab, these games are ones the viewer is intentionally browsing
- * rather than following live, so the breakdown is never spoiler-blurred
- * (GameCard's spoilerFree = true) - the tier/score/final result are the
- * point, not something to hide. [showScore] is a separate, purely local
- * "browse blind" preference - unlike spoilerFree, turning it off only hides
- * the two teams' final numeric score digits (tier badge, breakdown, and
- * final result stay visible either way). Defaults to hidden (spoiler-safe)
- * every time this screen is (re)composed - e.g. navigating back to History
- * from another tab - rather than persisting a "showing scores" choice
- * across tab switches, so a viewer can't accidentally get spoiled by
- * whatever state they left it in last time.
- *
- * WNBA has no historical backfill yet (NBA only) - [leagueGroup] gates the
- * whole screen to a plain blank state when WNBA is selected, rather than
- * erroring or showing stale NBA data.
+ * per-league watchability backfill (NBA and WNBA both have one, each scored
+ * through the same league-aware rubric), games scoring 70+ only
+ * (gameStore.ts's HISTORY_MIN_SCORE - stricter than the "Worth Your Time"
+ * tier badge's own >=65), most-watchable-first by default - except "All
+ * time" (ALL_TIME_MIN_SCORE above), which holds every season's worth of
+ * backfill to a 90+ bar instead. Unlike every other tab, these games are
+ * ones the viewer is intentionally browsing rather than following live, so
+ * the breakdown is never spoiler-blurred (GameCard's spoilerFree = true) -
+ * the tier/score/final result are the point, not something to hide.
+ * [showScore] is a separate, purely local "browse blind" preference -
+ * unlike spoilerFree, turning it off only hides the two teams' final
+ * numeric score digits (tier badge, breakdown, and final result stay
+ * visible either way). Defaults to hidden (spoiler-safe) every time this
+ * screen is (re)composed - e.g. navigating back to History from another
+ * tab - rather than persisting a "showing scores" choice across tab
+ * switches, so a viewer can't accidentally get spoiled by whatever state
+ * they left it in last time.
  *
  * No hook/pitch preview text is generated or shown here (unlike the
  * pregame preview on other tabs) - these are already-finished games, so
@@ -109,7 +106,6 @@ fun HistoryScreen(
     onWatchHighlights: (String) -> Unit,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
-    leagueGroup: LeagueGroup,
     onSettingsClick: () -> Unit
 ) {
     // Plain remember (not rememberSaveable) - defaults to hidden every time
@@ -170,21 +166,6 @@ fun HistoryScreen(
             )
         }
     ) { padding ->
-        if (leagueGroup != LeagueGroup.NBA) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = "History isn't built for WNBA yet - check back later.",
-                    color = TextSecondary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(24.dp),
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-            return@Scaffold
-        }
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(

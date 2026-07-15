@@ -23,10 +23,8 @@ object NetworkLeagueContentRepository {
     suspend fun news(baseUrl: String, leagueGroup: LeagueGroup): NewsResponse =
         get("$baseUrl/news?leagueGroup=${leagueGroup.apiValue}")
 
-    // NBA-only for now (the backfill this serves is NBA-only) - no
-    // leagueGroup param unlike the others above.
-    suspend fun history(baseUrl: String, start: LocalDate, end: LocalDate): HistoryResponse =
-        get("$baseUrl/api/history?start=$start&end=$end")
+    suspend fun history(baseUrl: String, start: LocalDate, end: LocalDate, leagueGroup: LeagueGroup): HistoryResponse =
+        get("$baseUrl/api/history?start=$start&end=$end&leagueGroup=${leagueGroup.apiValue}")
 
     private suspend inline fun <reified T> get(url: String): T =
         withContext(Dispatchers.IO) {

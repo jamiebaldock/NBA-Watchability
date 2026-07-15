@@ -11,15 +11,35 @@ import kotlin.math.roundToInt
  * values/thresholds below in sync with rubric.ts if that ever changes.
  */
 private object Rubric {
-    fun marginPoints(margin: Int?): Int {
+    // Margin/comeback/lead-change brackets are calibrated per league, not
+    // universal - grounded in the real backfilled game distributions (2,650
+    // NBA games, 576 WNBA games), the same way the server's star-performance
+    // point thresholds were calibrated off real scoring history rather than
+    // a naive game-length ratio. Keep these three functions' WNBA branches
+    // in sync with backend/src/rubric.ts if that ever changes - clutch and
+    // overtime deliberately stay league-agnostic (verified against real
+    // data that qualification rates already come out close between
+    // leagues under the universal thresholds).
+    fun marginPoints(margin: Int?, isWnba: Boolean): Int {
         val m = abs(margin ?: return 0)
-        return when {
-            m <= 3 -> 25
-            m <= 6 -> 20
-            m <= 10 -> 13
-            m <= 15 -> 7
-            m <= 20 -> 3
-            else -> 0
+        return if (isWnba) {
+            when {
+                m <= 4 -> 25
+                m <= 6 -> 20
+                m <= 9 -> 13
+                m <= 13 -> 7
+                m <= 17 -> 3
+                else -> 0
+            }
+        } else {
+            when {
+                m <= 3 -> 25
+                m <= 6 -> 20
+                m <= 10 -> 13
+                m <= 15 -> 7
+                m <= 20 -> 3
+                else -> 0
+            }
         }
     }
 
@@ -31,17 +51,34 @@ private object Rubric {
         return pts
     }
 
-    fun comebackPoints(largestDeficitOvercome: Int?): Int {
+    fun comebackPoints(largestDeficitOvercome: Int?, isWnba: Boolean): Int {
         val cb = largestDeficitOvercome ?: 0
-        return when {
-            cb >= 20 -> 15
-            cb >= 15 -> 10
-            cb >= 10 -> 6
-            else -> 0
+        return if (isWnba) {
+            when {
+                cb >= 17 -> 15
+                cb >= 14 -> 10
+                cb >= 9 -> 6
+                else -> 0
+            }
+        } else {
+            when {
+                cb >= 20 -> 15
+                cb >= 15 -> 10
+                cb >= 10 -> 6
+                else -> 0
+            }
         }
     }
 
-    fun leadChangePoints(leadChanges: Int?): Int = minOf(10, (leadChanges ?: 0) / 2)
+    // WNBA reaches the 10-point cap at leadChanges=17 rather than NBA's 20
+    // (the value at the same percentile of games in each league's real
+    // distribution) - same linear shape, different cap threshold, so the
+    // NBA branch stays bit-for-bit identical to the pre-league-aware
+    // formula ((leadChanges ?: 0) / 2, since 10/20 = 0.5).
+    fun leadChangePoints(leadChanges: Int?, isWnba: Boolean): Int {
+        val capThreshold = if (isWnba) 17 else 20
+        return minOf(10, ((leadChanges ?: 0) * 10) / capThreshold)
+    }
 
     fun overtimePoints(overtimePeriods: Int): Int = when {
         overtimePeriods <= 0 -> 0
@@ -60,15 +97,16 @@ private object Rubric {
 
     /** No overall cap - the buzzer-beater bonus can push the total over 100, same as the server. */
     fun computeScore(game: Game, weights: RubricWeights): Int {
-        val margin = marginPoints(game.margin) * weights.margin
+        val isWnba = game.league == "wnba"
+        val margin = marginPoints(game.margin, isWnba) * weights.margin
         val clutch = clutchPoints(
             game.closeInFinalTwoMin,
             game.leadChangeInFinalMin,
             game.decidedOnFinalPossession
         ) * weights.clutch
         val buzzerBeater = (if (game.buzzerBeater) 10 else 0) * weights.buzzerBeater
-        val comeback = comebackPoints(game.comeback) * weights.comeback
-        val leadChanges = leadChangePoints(game.leadChanges) * weights.leadChanges
+        val comeback = comebackPoints(game.comeback, isWnba) * weights.comeback
+        val leadChanges = leadChangePoints(game.leadChanges, isWnba) * weights.leadChanges
         val overtime = overtimePoints(game.overtimePeriods) * weights.overtime
         val star = starPoints(game.starPerformance) * weights.starPerformance
         val stakes = stakesPoints(game.stakes) * weights.stakes

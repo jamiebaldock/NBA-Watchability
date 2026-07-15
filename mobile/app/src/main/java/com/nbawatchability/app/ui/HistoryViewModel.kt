@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nbawatchability.app.data.BACKEND_BASE_URL
 import com.nbawatchability.app.data.Game
+import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.NetworkLeagueContentRepository
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -16,6 +17,9 @@ import java.time.LocalDate
  * built dynamically from whatever distinct seasons the backend reports
  * (`HistoryResponse.seasons`), newest first - a season that hasn't been
  * backfilled yet just doesn't have a chip, no code change needed once it is.
+ * [NamedSeason.seasonLabel] is "2024-25"-style for NBA but a plain "2024"
+ * for WNBA (gameStore.ts's seasonLabelForTipoff) - WNBA never plays across
+ * a year boundary, so the label needs no "ends in" convention.
  */
 sealed class HistoryRangePreset(val label: String) {
     data object ThisSeason : HistoryRangePreset("This season")
@@ -33,10 +37,6 @@ sealed interface HistoryUiState {
     data class Loaded(val games: List<Game>) : HistoryUiState
 }
 
-/**
- * NBA-only for now (the backfill this reads from is NBA-only) - no league
- * group parameter, unlike GameListViewModel/StandingsViewModel/etc.
- */
 class HistoryViewModel : ViewModel() {
 
     var uiState by mutableStateOf<HistoryUiState>(HistoryUiState.Loading)
@@ -49,7 +49,10 @@ class HistoryViewModel : ViewModel() {
     // between only exist once a response tells us which seasons the
     // backend actually has (HistoryResponse.seasons), so the first load
     // (always "This season", which needs no season list to compute its own
-    // range) fills these in for every load after.
+    // range) fills these in for every load after. Rebuilt fresh on every
+    // load, so switching league (which always reloads with preset reset to
+    // ThisSeason - see AppRoot.kt) naturally replaces NBA's season chips
+    // with WNBA's and vice versa, never showing a stale mix.
     var presets by mutableStateOf<List<HistoryRangePreset>>(
         listOf(HistoryRangePreset.ThisSeason, HistoryRangePreset.AllTime)
     )
@@ -62,17 +65,21 @@ class HistoryViewModel : ViewModel() {
     var earliestDate: LocalDate? = null
         private set
 
-    fun load(preset: HistoryRangePreset = selectedPreset) {
+    private var leagueGroup: LeagueGroup = LeagueGroup.NBA
+
+    fun load(leagueGroup: LeagueGroup, preset: HistoryRangePreset = selectedPreset) {
+        this.leagueGroup = leagueGroup
         selectedPreset = preset
         uiState = HistoryUiState.Loading
         viewModelScope.launch {
             uiState = try {
                 val today = LocalDate.now()
-                val (start, end) = dateRangeFor(preset, today)
+                val (start, end) = dateRangeFor(preset, today, leagueGroup)
                 val response = NetworkLeagueContentRepository.history(
                     baseUrl = BACKEND_BASE_URL,
                     start = start,
-                    end = end
+                    end = end,
+                    leagueGroup = leagueGroup
                 )
                 earliestDate = LocalDate.parse(response.earliestDate)
                 presets = listOf(HistoryRangePreset.ThisSeason) +
@@ -85,32 +92,48 @@ class HistoryViewModel : ViewModel() {
         }
     }
 
-    fun retry() = load(selectedPreset)
+    fun retry() = load(leagueGroup, selectedPreset)
 }
 
-private fun dateRangeFor(preset: HistoryRangePreset, today: LocalDate): Pair<LocalDate, LocalDate> = when (preset) {
-    // Whatever's happened since the most recent Oct 1 - the current
-    // in-progress period, whatever that is right now (mid-season, or the
-    // Summer League/preseason gap before the next one tips off).
-    is HistoryRangePreset.ThisSeason -> currentSeasonStart(today) to today
-    is HistoryRangePreset.NamedSeason -> seasonDateRange(preset.seasonLabel)
-    // Comfortably before the backfill's own earliest date - the server
-    // clamps this to whatever that actually is (historyService.ts).
-    is HistoryRangePreset.AllTime -> LocalDate.of(2000, 1, 1) to today
-}
+private fun dateRangeFor(preset: HistoryRangePreset, today: LocalDate, leagueGroup: LeagueGroup): Pair<LocalDate, LocalDate> =
+    when (preset) {
+        // Whatever's happened since the season boundary below - the current
+        // in-progress period, whatever that is right now (mid-season, or the
+        // preseason/offseason gap before the next one tips off).
+        is HistoryRangePreset.ThisSeason -> currentSeasonStart(today, leagueGroup) to today
+        is HistoryRangePreset.NamedSeason -> seasonDateRange(preset.seasonLabel, leagueGroup)
+        // Comfortably before the backfill's own earliest date - the server
+        // clamps this to whatever that actually is (historyService.ts).
+        is HistoryRangePreset.AllTime -> LocalDate.of(2000, 1, 1) to today
+    }
 
-// Matches gameStore.ts's seasonLabelForTipoff - a season runs Oct 1 (of the
-// label's start year) through Sep 30 the following year. The server clamps
-// this end date to today if it's in the future (e.g. the still-forming
-// current season), so passing the season's nominal end here is always safe.
-private fun seasonDateRange(label: String): Pair<LocalDate, LocalDate> {
+// Matches gameStore.ts's seasonLabelForTipoff: NBA's "2024-25" runs Oct 1
+// (the label's start year) through Sep 30 the following year; WNBA's is
+// just the plain calendar year, since a WNBA season never crosses a year
+// boundary. The server clamps the end date to today if it's in the future
+// (e.g. the still-forming current season), so passing each season's
+// nominal end here is always safe.
+private fun seasonDateRange(label: String, leagueGroup: LeagueGroup): Pair<LocalDate, LocalDate> {
+    if (leagueGroup == LeagueGroup.WNBA) {
+        val year = label.toInt()
+        return LocalDate.of(year, 1, 1) to LocalDate.of(year, 12, 31)
+    }
     val startYear = label.substringBefore("-").toInt()
     return LocalDate.of(startYear, 10, 1) to LocalDate.of(startYear + 1, 9, 30)
 }
 
-// Same "ends in" season convention as gameStore.ts's seasonLabelForTipoff
-// (a season starting this Oct or last Oct, whichever is more recent).
-private fun currentSeasonStart(today: LocalDate): LocalDate {
+// NBA: same "ends in" convention as gameStore.ts's seasonLabelForTipoff (a
+// season starting this Oct or last Oct, whichever is more recent). WNBA:
+// Apr 1 comfortably precedes the real Apr/May preseason start (same margin
+// backfillHistoricalWatchabilityWnba.ts's own season windows use) - "this
+// season" is whichever calendar year that boundary puts us in, starting
+// from Jan 1 of that year since there's nothing to miss by starting early.
+private fun currentSeasonStart(today: LocalDate, leagueGroup: LeagueGroup): LocalDate {
+    if (leagueGroup == LeagueGroup.WNBA) {
+        val aprilFirstThisYear = LocalDate.of(today.year, 4, 1)
+        val seasonYear = if (!today.isBefore(aprilFirstThisYear)) today.year else today.year - 1
+        return LocalDate.of(seasonYear, 1, 1)
+    }
     val octoberFirstThisYear = LocalDate.of(today.year, 10, 1)
     return if (!today.isBefore(octoberFirstThisYear)) octoberFirstThisYear else LocalDate.of(today.year - 1, 10, 1)
 }
