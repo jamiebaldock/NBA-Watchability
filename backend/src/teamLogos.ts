@@ -1,11 +1,11 @@
 // The original historical backfill only kept each team's ESPN displayName,
 // not its logo URL - live schedule data gets logos
 // straight off the ESPN scoreboard response, but historyService.ts has no
-// live ESPN call to piggyback on for 2024-25/2025-26 games. Static map keyed
-// off exactly the 30 displayName strings ESPN's own teams endpoint returns
+// live ESPN call to piggyback on for backfilled games. Static maps keyed
+// off exactly the displayName strings ESPN's own teams endpoint returns
 // (verified against it directly, not typed from memory) - stable identifiers
 // that don't change season to season.
-const TEAM_ABBREVIATIONS: Record<string, string> = {
+const NBA_TEAM_ABBREVIATIONS: Record<string, string> = {
   "Atlanta Hawks": "atl",
   "Boston Celtics": "bos",
   "Brooklyn Nets": "bkn",
@@ -38,14 +38,42 @@ const TEAM_ABBREVIATIONS: Record<string, string> = {
   "Washington Wizards": "wsh",
 };
 
+// All 15 current WNBA teams (including the Golden State Valkyries' 2025
+// expansion debut and the Portland Fire/Toronto Tempo 2026 expansion) -
+// note WNBA logos live at a different URL shape than NBA's (no
+// "/scoreboard" path segment), confirmed directly against ESPN's teams
+// endpoint per team, not assumed from the NBA pattern.
+const WNBA_TEAM_ABBREVIATIONS: Record<string, string> = {
+  "Atlanta Dream": "atl",
+  "Chicago Sky": "chi",
+  "Connecticut Sun": "con",
+  "Dallas Wings": "dal",
+  "Golden State Valkyries": "gs",
+  "Indiana Fever": "ind",
+  "Las Vegas Aces": "lv",
+  "Los Angeles Sparks": "la",
+  "Minnesota Lynx": "min",
+  "New York Liberty": "ny",
+  "Phoenix Mercury": "phx",
+  "Portland Fire": "por",
+  "Seattle Storm": "sea",
+  "Toronto Tempo": "tor",
+  "Washington Mystics": "wsh",
+};
+
 /**
- * Returns undefined for anything not in the 30-team map - covers the
- * handful of All-Star Weekend exhibition "teams" (Team Chuck, World, etc.)
- * that snuck into the backfill since they're not tagged preseason. None of
- * those clear the worth_your_time score threshold historyService.ts filters
- * on, so this only matters if that filter ever changes.
+ * Returns undefined for anything not in the relevant league's team map -
+ * for NBA, covers the handful of All-Star Weekend exhibition "teams" (Team
+ * Chuck, World, etc.) that snuck into the backfill since they're not
+ * tagged preseason; none of those clear the worth_your_time score
+ * threshold historyService.ts filters on, so this only matters if that
+ * filter ever changes.
  */
-export function teamLogoUrl(displayName: string): string | undefined {
-  const abbr = TEAM_ABBREVIATIONS[displayName];
+export function teamLogoUrl(displayName: string, leagueGroup: "nba" | "wnba" = "nba"): string | undefined {
+  if (leagueGroup === "wnba") {
+    const abbr = WNBA_TEAM_ABBREVIATIONS[displayName];
+    return abbr ? `https://a.espncdn.com/i/teamlogos/wnba/500/${abbr}.png` : undefined;
+  }
+  const abbr = NBA_TEAM_ABBREVIATIONS[displayName];
   return abbr ? `https://a.espncdn.com/i/teamlogos/nba/500/scoreboard/${abbr}.png` : undefined;
 }

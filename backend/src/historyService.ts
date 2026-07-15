@@ -24,8 +24,8 @@ export async function getHistory(start: string, end: string, leagueGroup: League
     // logos (that backfill only kept team display names) - fall back to
     // the static name->abbreviation map for those; live-collected rows
     // always have the real ESPN logo URL already.
-    al: row.awayLogo ?? teamLogoUrl(row.away),
-    hl: row.homeLogo ?? teamLogoUrl(row.home),
+    al: row.awayLogo ?? teamLogoUrl(row.away, leagueGroup),
+    hl: row.homeLogo ?? teamLogoUrl(row.home, leagueGroup),
     stt: "final",
     utc: row.tipoffUtc,
     lg: row.league === "nba" ? "nba" : row.league === "wnba" ? "wnba" : "summer",
