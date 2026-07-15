@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
@@ -22,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,10 +75,7 @@ fun StarredScreen(
                 actions = {
                     SortMenuButton(
                         selected = sortOption,
-                        onSelected = {
-                            sortOption = it
-                            actionLabel = it.label
-                        }
+                        onSelected = { sortOption = it }
                     )
                     IconToggleButton(
                         checked = showNumericScore,
@@ -139,8 +138,17 @@ fun StarredScreen(
                 SortOption.DATE_NEWEST_FIRST -> games.sortedByDescending { it.tipoffUtc }
             }
 
+            val listState = rememberLazyListState()
+            // Without this, LazyColumn's key-based item tracking keeps
+            // whatever tile was on top in view across a re-sort (since it's
+            // usually still in the new list, just at a different index) -
+            // which can make an already-correct sort look wrong, not just
+            // skip the scroll-to-top animation.
+            LaunchedEffect(sortOption) { listState.animateScrollToTopAdaptively() }
+
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
+                state = listState,
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {

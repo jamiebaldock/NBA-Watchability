@@ -169,23 +169,43 @@ export function classifyStarPerformance(
 /**
  * Season/tournament label ("WNBA REGULAR SEASON", "NBA CUP", ...) driven by
  * ESPN's own season.slug + competition notes, not calendar-date guesswork -
- * so preseason/regular-season/playoffs and NBA Cup (In-Season Tournament)
- * games all label themselves correctly year-round with no manual updates as
- * the calendar moves. Only meant for the two real leagues - callers should
- * not call this for Summer League events, which keep their own separate,
- * static "NBA SUMMER LEAGUE" label instead.
+ * so preseason/regular-season/play-in/playoffs and NBA Cup (In-Season
+ * Tournament) games all label themselves correctly year-round with no
+ * manual updates as the calendar moves. Only meant for the two real
+ * leagues - callers should not call this for Summer League events, which
+ * keep their own separate, static "NBA SUMMER LEAGUE" label instead.
+ *
+ * Verified directly against ESPN's live scoreboard responses for the
+ * 2025-26 NBA Cup (rather than assumed): every group-play game carries a
+ * notes headline of exactly "NBA Cup - Group Play", while knockout games
+ * say "NBA Cup - Quarterfinals"/"- Semifinals"/"NBA Cup Championship" -
+ * group play is, for standings purposes, an ordinary regular-season game
+ * (event.season.slug is "regular-season" for both), so only the knockout
+ * headlines should get their own "CUP" label; group play falls through to
+ * the normal slug-based label below. WNBA's Commissioner's Cup notes don't
+ * follow the same "- Group Play" convention (its group-stage games are
+ * just headlined "WNBA Commissioner's Cup" with no qualifier), so for WNBA
+ * every Cup-notes game - group and championship alike - gets the CUP
+ * label; this matches what ESPN itself distinguishes, not a guess. No
+ * calendar-date fallback is used here: ESPN's own fields were sufficient
+ * for every case checked, and a hardcoded date range would need updating
+ * every season anyway - exactly what this is meant to avoid.
  */
 export function deriveCompetitionLabel(event: EspnEvent, league: "nba" | "wnba"): string | undefined {
   const leagueName = league.toUpperCase();
   const notes = event.competitions[0]?.notes ?? [];
-  const isCup = notes.some((n) => n.headline?.toLowerCase().includes("cup"));
-  if (isCup) return `${leagueName} CUP`;
+  const cupNote = notes.find((n) => n.headline?.toLowerCase().includes("cup"));
+  if (cupNote && !cupNote.headline.toLowerCase().includes("group play")) {
+    return `${leagueName} CUP`;
+  }
 
   switch (event.season?.slug) {
     case "preseason":
       return `${leagueName} PRESEASON`;
     case "regular-season":
       return `${leagueName} REGULAR SEASON`;
+    case "play-in-season":
+      return `${leagueName} PLAY-IN`;
     case "post-season":
       return `${leagueName} PLAYOFFS`;
     default:
