@@ -1,5 +1,5 @@
 import { dateStringsBetween } from "./dateRange";
-import { earliestGameDate } from "./gameStore";
+import { earliestGameDate, getMostRecentFinalsEnd } from "./gameStore";
 import { getGamesForDate, getNextScheduledDate } from "./gamesService";
 import { getHistory, HistoryResult } from "./historyService";
 import { getNews } from "./newsService";
@@ -64,6 +64,31 @@ export async function getSeasonWindowForLeagueGroup(
   const leagueGroup = parseLeagueGroup(leagueGroupRaw);
   const window = await getSeasonWindow(leagueGroup);
   return window ?? { start: null, end: null };
+}
+
+export interface CurrentSeasonStartResult {
+  date: string;
+}
+
+/**
+ * The real start of "This season" for [leagueGroup] - the day immediately
+ * after the most recently completed Finals game, per the rule that a
+ * season begins the moment the previous one's Finals conclude (so Summer
+ * League/preseason games fall under the *new* season instead of a fixed
+ * Oct 1/Apr 1 calendar cutoff, which would otherwise keep counting them as
+ * part of the season that already ended). Falls back to Jan 1 of the
+ * current year if no Finals game is on record yet - shouldn't happen
+ * against a populated store, but degrades gracefully rather than erroring.
+ */
+export function getCurrentSeasonStartForLeagueGroup(leagueGroupRaw = "nba"): CurrentSeasonStartResult {
+  const leagueGroup = parseLeagueGroup(leagueGroupRaw);
+  const finalsEnd = getMostRecentFinalsEnd(leagueGroup);
+  if (!finalsEnd) {
+    return { date: `${new Date().getUTCFullYear()}-01-01` };
+  }
+  const dayAfter = new Date(finalsEnd);
+  dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+  return { date: dayAfter.toISOString().slice(0, 10) };
 }
 
 export async function getStandingsForLeagueGroup(leagueGroupRaw = "nba"): Promise<StandingsResponseJson> {

@@ -95,12 +95,15 @@ class HistoryViewModel : ViewModel() {
     fun retry() = load(leagueGroup, selectedPreset)
 }
 
-private fun dateRangeFor(preset: HistoryRangePreset, today: LocalDate, leagueGroup: LeagueGroup): Pair<LocalDate, LocalDate> =
+private suspend fun dateRangeFor(preset: HistoryRangePreset, today: LocalDate, leagueGroup: LeagueGroup): Pair<LocalDate, LocalDate> =
     when (preset) {
         // Whatever's happened since the season boundary below - the current
         // in-progress period, whatever that is right now (mid-season, or the
-        // preseason/offseason gap before the next one tips off).
-        is HistoryRangePreset.ThisSeason -> currentSeasonStart(today, leagueGroup) to today
+        // Summer League/preseason gap before the next regular season tips
+        // off - that gap now correctly counts as part of "This season" too,
+        // per the rule below, rather than being orphaned into the season
+        // that already finished).
+        is HistoryRangePreset.ThisSeason -> currentSeasonStart(leagueGroup) to today
         is HistoryRangePreset.NamedSeason -> seasonDateRange(preset.seasonLabel, leagueGroup)
         // Comfortably before the backfill's own earliest date - the server
         // clamps this to whatever that actually is (historyService.ts).
@@ -122,18 +125,16 @@ private fun seasonDateRange(label: String, leagueGroup: LeagueGroup): Pair<Local
     return LocalDate.of(startYear, 10, 1) to LocalDate.of(startYear + 1, 9, 30)
 }
 
-// NBA: same "ends in" convention as gameStore.ts's seasonLabelForTipoff (a
-// season starting this Oct or last Oct, whichever is more recent). WNBA:
-// Apr 1 comfortably precedes the real Apr/May preseason start (same margin
-// backfillHistoricalWatchabilityWnba.ts's own season windows use) - "this
-// season" is whichever calendar year that boundary puts us in, starting
-// from Jan 1 of that year since there's nothing to miss by starting early.
-private fun currentSeasonStart(today: LocalDate, leagueGroup: LeagueGroup): LocalDate {
-    if (leagueGroup == LeagueGroup.WNBA) {
-        val aprilFirstThisYear = LocalDate.of(today.year, 4, 1)
-        val seasonYear = if (!today.isBefore(aprilFirstThisYear)) today.year else today.year - 1
-        return LocalDate.of(seasonYear, 1, 1)
-    }
-    val octoberFirstThisYear = LocalDate.of(today.year, 10, 1)
-    return if (!today.isBefore(octoberFirstThisYear)) octoberFirstThisYear else LocalDate.of(today.year - 1, 10, 1)
+/**
+ * The real start of "This season" - the day immediately after the most
+ * recently completed Finals game (backend's /current-season-start,
+ * gameStore.ts's getMostRecentFinalsEnd), not a fixed Oct 1/Apr 1 calendar
+ * cutoff. This is what correctly puts NBA Summer League (and any WNBA
+ * equivalent gap) under the *new* season instead of the one that just
+ * ended - a season boundary is the moment the previous one's Finals
+ * conclude, per James's rule, not a calendar date.
+ */
+private suspend fun currentSeasonStart(leagueGroup: LeagueGroup): LocalDate {
+    val response = NetworkLeagueContentRepository.currentSeasonStart(BACKEND_BASE_URL, leagueGroup)
+    return LocalDate.parse(response.date)
 }

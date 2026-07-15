@@ -2,6 +2,7 @@ import compression from "compression";
 import express from "express";
 import {
   BadRequestError,
+  getCurrentSeasonStartForLeagueGroup,
   getHistoryForRange,
   getNewsForLeagueGroup,
   getNextGameDateForLeagueGroup,
@@ -101,6 +102,20 @@ app.get("/season-window", async (req, res) => {
   try {
     const leagueGroup = String(req.query.leagueGroup ?? "nba");
     res.json(await getSeasonWindowForLeagueGroup(leagueGroup));
+  } catch (err) {
+    if (err instanceof BadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
+});
+
+app.get("/current-season-start", (req, res) => {
+  try {
+    const leagueGroup = String(req.query.leagueGroup ?? "nba");
+    res.json(getCurrentSeasonStartForLeagueGroup(leagueGroup));
   } catch (err) {
     if (err instanceof BadRequestError) {
       res.status(400).json({ error: err.message });

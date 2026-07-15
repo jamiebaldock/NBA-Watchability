@@ -4,7 +4,7 @@
 // (rated + highlights found). There's no separate historical dataset
 // anymore; a game finished a year ago and a game that finished five
 // minutes ago are the same kind of row.
-import { earliestGameDate, getSeasonLabels, getWatchableHistory, seasonLabelForTipoff } from "./gameStore";
+import { earliestGameDate, getMostRecentFinalsEnd, getSeasonLabels, getWatchableHistory, seasonLabelForTipoff } from "./gameStore";
 import { teamLogoUrl } from "./teamLogos";
 import { GameJson, LeagueGroup } from "./types";
 
@@ -16,6 +16,7 @@ export interface HistoryResult {
 
 export async function getHistory(start: string, end: string, leagueGroup: LeagueGroup): Promise<HistoryResult> {
   const rows = getWatchableHistory(start, end, leagueGroup);
+  const finalsEnd = getMostRecentFinalsEnd(leagueGroup);
 
   const games: GameJson[] = rows.map((row) => ({
     a: row.away,
@@ -38,7 +39,7 @@ export async function getHistory(start: string, end: string, leagueGroup: League
     // still couldn't resolve. Summer League rows keep their own separate
     // client-side static label (GameCard checks isSummerLeague first) and
     // ignore this field either way.
-    cl: row.seasonStageLabel ?? `${leagueGroup.toUpperCase()} - ${seasonLabelForTipoff(row.tipoffUtc, leagueGroup)}`,
+    cl: row.seasonStageLabel ?? `${leagueGroup.toUpperCase()} - ${seasonLabelForTipoff(row.tipoffUtc, leagueGroup, finalsEnd)}`,
     m: row.finalMargin ?? undefined,
     as: row.awayScore ?? undefined,
     hs: row.homeScore ?? undefined,

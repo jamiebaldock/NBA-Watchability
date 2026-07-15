@@ -8,3 +8,6 @@ data class HistoryResponse(
     val seasons: List<String> = emptyList(),
     val games: List<Game>
 )
+
+@Serializable
+data class CurrentSeasonStartResponse(val date: String)

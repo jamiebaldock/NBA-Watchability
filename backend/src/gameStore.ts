@@ -527,12 +527,56 @@ export function earliestGameDate(leagueGroup?: LeagueGroup): string | undefined 
   return row.earliest?.slice(0, 10) ?? undefined;
 }
 
+/**
+ * The most recently completed season's real Finals-end date (the last
+ * "Playoffs: Finals"-stage game on record) - the season boundary per
+ * James's rule: a season ends the moment its Finals conclude, and
+ * everything after that (Summer League, preseason, the eventual regular
+ * season) belongs to the next one, regardless of calendar date. Undefined
+ * if no Finals game has been recorded yet for this league group (should
+ * only happen against a brand-new, empty store).
+ */
+export function getMostRecentFinalsEnd(leagueGroup: LeagueGroup): string | undefined {
+  const row = db
+    .prepare(`SELECT MAX(tipoff_utc) as end FROM games WHERE league_group = ? AND season_stage_label LIKE '%Playoffs: Finals%'`)
+    .get(leagueGroup) as { end: string | null };
+  return row.end ?? undefined;
+}
+
+// The season immediately following [finalsEndTipoff]'s Finals - NBA's
+// "ends in" convention labels a season by its start year (e.g. Finals in
+// June 2026 conclude the "2025-26" season, so the next one is "2026-27",
+// and finalsEndTipoff's own calendar year IS that next season's start
+// year under this convention). WNBA never spans a year boundary, so its
+// next season is simply next calendar year.
+function upcomingSeasonLabel(finalsEndTipoff: string, leagueGroup: LeagueGroup): string {
+  const finalsYear = new Date(finalsEndTipoff).getUTCFullYear();
+  if (leagueGroup === "wnba") return String(finalsYear + 1);
+  return `${finalsYear}-${String((finalsYear + 1) % 100).padStart(2, "0")}`;
+}
+
 // NBA's "ends in" convention (a season runs Oct 1 - Sep 30, labeled by its
 // start year - e.g. a 2024-10-22 tipoff and a 2025-04-15 tipoff both label
 // "2024-25") doesn't apply to WNBA, which never spans a year boundary - a
 // WNBA season is just the calendar year it plays in, so the tipoff's own
-// UTC year is the whole label.
-export function seasonLabelForTipoff(tipoffUtc: string, leagueGroup: LeagueGroup): string {
+// UTC year is the whole label. Either way, this Oct-1/plain-year math is
+// only used for tipoffs at or before the most recently completed season's
+// real Finals - anything strictly after that always gets the upcoming
+// season's label instead, per James's rule that a season boundary is the
+// moment the previous one's Finals conclude, not a fixed calendar date
+// (this is what correctly puts NBA Summer League into the *next* season's
+// label instead of the one that just ended). [finalsEnd] can be passed in
+// by callers that already know it (e.g. looping over many rows) to avoid
+// re-querying it on every call; callers that don't have it yet get a
+// fresh lookup.
+export function seasonLabelForTipoff(
+  tipoffUtc: string,
+  leagueGroup: LeagueGroup,
+  finalsEnd: string | undefined = getMostRecentFinalsEnd(leagueGroup)
+): string {
+  if (finalsEnd && tipoffUtc > finalsEnd) {
+    return upcomingSeasonLabel(finalsEnd, leagueGroup);
+  }
   const date = new Date(tipoffUtc);
   const year = date.getUTCFullYear();
   if (leagueGroup === "wnba") return String(year);
@@ -554,7 +598,8 @@ export function getSeasonLabels(leagueGroup: LeagueGroup): string[] {
   const rows = db.prepare(`SELECT tipoff_utc FROM games WHERE league = ?`).all(leagueGroup) as {
     tipoff_utc: string;
   }[];
-  const labels = new Set(rows.map((r) => seasonLabelForTipoff(r.tipoff_utc, leagueGroup)));
+  const finalsEnd = getMostRecentFinalsEnd(leagueGroup);
+  const labels = new Set(rows.map((r) => seasonLabelForTipoff(r.tipoff_utc, leagueGroup, finalsEnd)));
   return Array.from(labels).sort().reverse();
 }
 

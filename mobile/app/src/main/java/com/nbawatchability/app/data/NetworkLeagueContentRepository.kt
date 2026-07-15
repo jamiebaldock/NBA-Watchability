@@ -26,6 +26,10 @@ object NetworkLeagueContentRepository {
     suspend fun history(baseUrl: String, start: LocalDate, end: LocalDate, leagueGroup: LeagueGroup): HistoryResponse =
         get("$baseUrl/api/history?start=$start&end=$end&leagueGroup=${leagueGroup.apiValue}")
 
+    /** The real start of "This season" - the day after the most recently completed Finals game, per gameStore.ts's getMostRecentFinalsEnd. */
+    suspend fun currentSeasonStart(baseUrl: String, leagueGroup: LeagueGroup): CurrentSeasonStartResponse =
+        get("$baseUrl/current-season-start?leagueGroup=${leagueGroup.apiValue}")
+
     private suspend inline fun <reified T> get(url: String): T =
         withContext(Dispatchers.IO) {
             val connection = URL(url).openConnection() as HttpURLConnection
