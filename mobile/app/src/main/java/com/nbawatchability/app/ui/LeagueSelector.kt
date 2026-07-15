@@ -50,7 +50,7 @@ fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGr
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = selectedLeague.displayName,
+                text = selectedLeague.shortDisplayName,
                 color = TextPrimary,
                 style = MaterialTheme.typography.titleLarge.copy(fontSize = 24.sp)
             )
