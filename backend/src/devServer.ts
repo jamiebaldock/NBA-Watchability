@@ -4,6 +4,7 @@ import {
   BadRequestError,
   getHistoryForRange,
   getNewsForLeagueGroup,
+  getNextGameDateForLeagueGroup,
   getSchedule,
   getStandingsForLeagueGroup,
   getStatsForLeagueGroup,
@@ -70,6 +71,21 @@ app.get("/api/history", async (req, res) => {
     const end = String(req.query.end ?? "");
     const leagueGroup = String(req.query.leagueGroup ?? "nba");
     res.json(await getHistoryForRange(start, end, leagueGroup));
+  } catch (err) {
+    if (err instanceof BadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
+});
+
+app.get("/next-game-date", async (req, res) => {
+  try {
+    const after = String(req.query.after ?? "");
+    const leagueGroup = String(req.query.leagueGroup ?? "nba");
+    res.json(await getNextGameDateForLeagueGroup(after, leagueGroup));
   } catch (err) {
     if (err instanceof BadRequestError) {
       res.status(400).json({ error: err.message });

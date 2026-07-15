@@ -52,9 +52,18 @@ class GameListViewModel : ViewModel() {
     // threading it through on every pull-to-refresh.
     private var currentLeagueGroup: LeagueGroup = LeagueGroup.NBA
 
+    // Center of the currently-loaded +/-7 day window - starts at "today" but
+    // moves when jumpToNextGame() re-centers the window on a date outside
+    // the previously-loaded range (e.g. Summer League ends and the next
+    // real game is weeks away). Kept separate from [today] itself, which
+    // stays the real device date for "Yesterday"/"Today"/"Tomorrow" labeling
+    // regardless of where the window is currently centered.
+    private var windowCenter: LocalDate = today
+
     /** Full reload for [leagueGroup] - called on first composition and again whenever the league selection changes. */
     fun load(leagueGroup: LeagueGroup) {
         currentLeagueGroup = leagueGroup
+        windowCenter = today
         uiState = ScheduleUiState.Loading
         viewModelScope.launch {
             uiState = try {
@@ -63,6 +72,59 @@ class GameListViewModel : ViewModel() {
                 ScheduleUiState.Loaded(days)
             } catch (e: Exception) {
                 ScheduleUiState.Error(e.message ?: "Couldn't reach the backend")
+            }
+        }
+    }
+
+    // Separate from uiState/isRefreshing, same reasoning as isRefreshing:
+    // a failed jump (or one that finds nothing) shouldn't blow away whatever
+    // empty day the user was already looking at.
+    var isJumping by mutableStateOf(false)
+        private set
+    var jumpError by mutableStateOf<String?>(null)
+        private set
+
+    fun clearJumpError() {
+        jumpError = null
+    }
+
+    /**
+     * Finds and jumps to the next date (possibly outside the currently
+     * loaded window, possibly weeks away) that has a real scheduled game,
+     * starting from whichever day is currently being viewed - the empty day
+     * the user landed on, not necessarily "today".
+     */
+    fun jumpToNextGame() {
+        if (isJumping) return
+        val loadedState = uiState as? ScheduleUiState.Loaded ?: return
+        val fromDate = loadedState.days.getOrNull(selectedDayIndex)?.date ?: return
+
+        isJumping = true
+        jumpError = null
+        viewModelScope.launch {
+            try {
+                val nextDate = NetworkGameRepository.nextGameDate(
+                    baseUrl = BACKEND_BASE_URL,
+                    after = fromDate,
+                    leagueGroup = currentLeagueGroup
+                )
+                if (nextDate == null) {
+                    jumpError = "No upcoming games found yet"
+                } else {
+                    val existingIndex = loadedState.days.indexOfFirst { it.date == nextDate }
+                    if (existingIndex >= 0) {
+                        selectedDayIndex = existingIndex
+                    } else {
+                        windowCenter = nextDate
+                        val days = fetchSchedule()
+                        selectedDayIndex = days.indexOfFirst { it.date == nextDate }.coerceAtLeast(0)
+                        uiState = ScheduleUiState.Loaded(days)
+                    }
+                }
+            } catch (e: Exception) {
+                jumpError = e.message ?: "Couldn't reach the backend"
+            } finally {
+                isJumping = false
             }
         }
     }
@@ -102,11 +164,11 @@ class GameListViewModel : ViewModel() {
     private suspend fun fetchSchedule(): List<DayGames> {
         val fetched = NetworkGameRepository.schedule(
             baseUrl = BACKEND_BASE_URL,
-            start = today.minusDays(DISPLAY_RANGE_DAYS + QUERY_BUFFER_DAYS),
-            end = today.plusDays(DISPLAY_RANGE_DAYS + QUERY_BUFFER_DAYS),
+            start = windowCenter.minusDays(DISPLAY_RANGE_DAYS + QUERY_BUFFER_DAYS),
+            end = windowCenter.plusDays(DISPLAY_RANGE_DAYS + QUERY_BUFFER_DAYS),
             leagueGroup = currentLeagueGroup
         )
-        return rebucketByLocalDate(fetched, today)
+        return rebucketByLocalDate(fetched, windowCenter)
     }
 
     private suspend fun fetchGamesForLocalDate(date: LocalDate): List<Game> {
@@ -129,10 +191,10 @@ class GameListViewModel : ViewModel() {
 private fun localDateOf(game: Game): LocalDate =
     OffsetDateTime.parse(game.tipoffUtc).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate()
 
-private fun rebucketByLocalDate(fetched: List<DayGames>, today: LocalDate): List<DayGames> {
+private fun rebucketByLocalDate(fetched: List<DayGames>, windowCenter: LocalDate): List<DayGames> {
     val byLocalDate = fetched.flatMap { it.games }.groupBy(::localDateOf)
-    val start = today.minusDays(DISPLAY_RANGE_DAYS)
-    val end = today.plusDays(DISPLAY_RANGE_DAYS)
+    val start = windowCenter.minusDays(DISPLAY_RANGE_DAYS)
+    val end = windowCenter.plusDays(DISPLAY_RANGE_DAYS)
     return generateSequence(start) { it.plusDays(1) }
         .takeWhile { !it.isAfter(end) }
         .map { date ->

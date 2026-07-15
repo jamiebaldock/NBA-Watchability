@@ -18,6 +18,9 @@ private data class DayGamesResponse(val date: String, val games: List<Game>)
 private data class ScheduleResponse(val schedule: List<DayGamesResponse>)
 
 @Serializable
+private data class NextGameDateResponse(val date: String? = null)
+
+@Serializable
 private data class ErrorResponse(val error: String? = null)
 
 class BackendRequestException(message: String) : Exception(message)
@@ -59,6 +62,40 @@ object NetworkGameRepository {
 
                 val parsed = json.decodeFromString<ScheduleResponse>(body)
                 parsed.schedule.map { DayGames(date = LocalDate.parse(it.date), games = it.games) }
+            } finally {
+                connection.disconnect()
+            }
+        }
+
+    /**
+     * The next date, strictly after [after], that [leagueGroup] has a real
+     * scheduled game - null if none is known yet (e.g. a season boundary
+     * where the next schedule hasn't been announced). Backs the Games tab's
+     * "jump to next game" action on an empty day.
+     */
+    suspend fun nextGameDate(
+        baseUrl: String,
+        after: LocalDate,
+        leagueGroup: LeagueGroup = LeagueGroup.NBA
+    ): LocalDate? =
+        withContext(Dispatchers.IO) {
+            val url = URL("$baseUrl/next-game-date?after=$after&leagueGroup=${leagueGroup.apiValue}")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.connectTimeout = 45000
+            connection.readTimeout = 45000
+            connection.requestMethod = "GET"
+
+            try {
+                val status = connection.responseCode
+                val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+                val body = BufferedReader(InputStreamReader(stream)).use { it.readText() }
+
+                if (status !in 200..299) {
+                    val message = runCatching { json.decodeFromString<ErrorResponse>(body).error }.getOrNull()
+                    throw BackendRequestException(message ?: "Backend returned HTTP $status")
+                }
+
+                json.decodeFromString<NextGameDateResponse>(body).date?.let { LocalDate.parse(it) }
             } finally {
                 connection.disconnect()
             }

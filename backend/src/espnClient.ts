@@ -118,6 +118,22 @@ export async function fetchSummary(eventId: string, league: League): Promise<Esp
   return getJson<EspnSummary>(`${basePath(league)}/summary?event=${eventId}`);
 }
 
+/**
+ * Every date [league] has at least one scheduled game, for whichever season
+ * ESPN currently considers "current" as of [dateYyyymmdd] (a season already
+ * over, with no next one announced yet, yields dates that are all in the
+ * past - callers need to filter for dates after their own reference point).
+ * One request returns the entire known season's dates (verified directly -
+ * a single call returned 229 NBA dates spanning preseason through Finals),
+ * so finding "the next date with a game" never means scanning day by day.
+ */
+export async function fetchCalendarDates(dateYyyymmdd: string, league: League): Promise<string[]> {
+  const data = await getJson<{ leagues?: Array<{ calendar?: string[] }> }>(
+    `${basePath(league)}/scoreboard?dates=${dateYyyymmdd}`
+  );
+  return (data.leagues?.[0]?.calendar ?? []).map((d) => d.slice(0, 10));
+}
+
 export function toEspnDate(date: Date): string {
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, "0");

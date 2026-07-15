@@ -1,4 +1,4 @@
-import { EspnEvent, League, fetchScoreboard, fetchSummary, toEspnDate } from "./espnClient";
+import { EspnEvent, League, fetchCalendarDates, fetchScoreboard, fetchSummary, toEspnDate } from "./espnClient";
 import { deriveCompetitionLabel, mapEspnState, mapEventToGame } from "./gameMapper";
 import {
   FinalRubric,
@@ -258,6 +258,16 @@ export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "
     const competition = event.competitions[0];
     const away = competition.competitors.find((c) => c.homeAway === "away")!;
     const home = competition.competitors.find((c) => c.homeAway === "home")!;
+    // Summer League's bracket rounds get scheduled on ESPN before the
+    // earlier group-stage games that decide the actual matchup finish -
+    // those slots carry literal "TBD" team names until ESPN fills them in.
+    // Skipped entirely (not even upserted into gameStore) rather than shown
+    // as a placeholder tile, since upsertBaseEntry's insert-once behavior
+    // would otherwise freeze "TBD" as this game's permanent team names, and
+    // there's nothing real to show anyway - once ESPN resolves the real
+    // matchup, this same event naturally starts coming through normally on
+    // a later request for this date.
+    if (away.team.displayName === "TBD" || home.team.displayName === "TBD") continue;
     const status = mapEspnState(competition.status.type.state);
 
     upsertBaseEntry({
@@ -358,4 +368,39 @@ export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "
   }
 
   return results;
+}
+
+/**
+ * The next date, strictly after [afterDate], that [leagueGroup] actually has
+ * a real (non-TBD) game - backs the Games tab's "jump to next game" action
+ * for when a swipe lands on an empty day at a stage boundary (e.g. Summer
+ * League ending) and the next real slate could be days or months away, in
+ * a league within the group the viewer isn't even necessarily thinking
+ * about (e.g. NBA's Summer League variants).
+ *
+ * Each underlying league's ESPN scoreboard calendar lists every date that
+ * league's current season has a game, in one request (fetchCalendarDates) -
+ * so this never scans day by day. If the calendar's earliest post-[afterDate]
+ * date turns out to be a TBD-only slate (the same bracket-scheduling quirk
+ * getGamesForDate filters out), it's skipped in favor of the next
+ * candidate - a real check, not just trusting the calendar blindly. Returns
+ * undefined if none of the group's leagues have a known future date at all
+ * (e.g. a season boundary where the next season's schedule isn't announced
+ * yet - a real, not hypothetical, case for NBA between Summer League ending
+ * and the following season's schedule release).
+ */
+export async function getNextScheduledDate(afterDate: string, leagueGroup: LeagueGroup): Promise<string | undefined> {
+  const anchorEspnDate = toEspnDate(new Date(`${afterDate}T12:00:00Z`));
+  const calendars = await Promise.all(
+    LEAGUE_GROUPS[leagueGroup].map((league) => fetchCalendarDates(anchorEspnDate, league))
+  );
+  const candidateDates = Array.from(new Set(calendars.flat()))
+    .filter((d) => d > afterDate)
+    .sort();
+
+  for (const date of candidateDates) {
+    const games = await getGamesForDate(date, leagueGroup);
+    if (games.length > 0) return date;
+  }
+  return undefined;
 }

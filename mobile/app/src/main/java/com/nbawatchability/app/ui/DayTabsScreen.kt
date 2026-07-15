@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,6 +23,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -84,7 +88,11 @@ fun DayTabsScreen(
     enabledLeagues: Set<LeagueGroup>,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
-    onWatchHighlights: (String) -> Unit
+    onWatchHighlights: (String) -> Unit,
+    isJumpingToNextGame: Boolean,
+    jumpToNextGameError: String?,
+    onJumpToNextGame: () -> Unit,
+    onJumpToNextGameErrorShown: () -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -94,6 +102,16 @@ fun DayTabsScreen(
     }
     LaunchedEffect(selectedDayIndex) {
         if (pagerState.currentPage != selectedDayIndex) pagerState.animateScrollToPage(selectedDayIndex)
+    }
+    // Surfaced through the same small top-right confirmation used for
+    // toggle actions elsewhere on this screen, rather than a second overlay
+    // mechanism - a failed/empty jump is the same kind of transient,
+    // non-blocking notice.
+    LaunchedEffect(jumpToNextGameError) {
+        if (jumpToNextGameError != null) {
+            actionLabel = jumpToNextGameError
+            onJumpToNextGameErrorShown()
+        }
     }
 
     Scaffold(
@@ -150,7 +168,9 @@ fun DayTabsScreen(
                             weights = weights,
                             starredIds = starredIds,
                             onToggleStar = onToggleStar,
-                            onWatchHighlights = onWatchHighlights
+                            onWatchHighlights = onWatchHighlights,
+                            isJumpingToNextGame = isJumpingToNextGame,
+                            onJumpToNextGame = onJumpToNextGame
                         )
                     }
                 }
@@ -240,20 +260,37 @@ private fun DayGamesList(
     weights: RubricWeights,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
-    onWatchHighlights: (String) -> Unit
+    onWatchHighlights: (String) -> Unit,
+    isJumpingToNextGame: Boolean,
+    onJumpToNextGame: () -> Unit
 ) {
     if (games.isEmpty()) {
         Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = "No games scheduled",
                 color = TextSecondary,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                modifier = Modifier.fillMaxWidth(),
                 style = MaterialTheme.typography.titleLarge
             )
+            Spacer(modifier = Modifier.height(20.dp))
+            // A day with nothing scheduled might just be a quiet gap within
+            // an ongoing season, or the tail end of one - either way, rather
+            // than making the viewer keep swiping blindly to find out which,
+            // this looks ahead (possibly weeks past this window, possibly
+            // into a different stage) for whatever the next real game
+            // actually is.
+            Button(onClick = onJumpToNextGame, enabled = !isJumpingToNextGame) {
+                if (isJumpingToNextGame) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Text(text = "Jump to next game")
+                }
+            }
         }
         return
     }

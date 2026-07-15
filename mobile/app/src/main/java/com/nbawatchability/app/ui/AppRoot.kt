@@ -283,7 +283,11 @@ private fun GamesTab(
             enabledLeagues = enabledLeagues,
             starredIds = starredIds,
             onToggleStar = onToggleStar,
-            onWatchHighlights = onWatchHighlights
+            onWatchHighlights = onWatchHighlights,
+            isJumpingToNextGame = viewModel.isJumping,
+            jumpToNextGameError = viewModel.jumpError,
+            onJumpToNextGame = viewModel::jumpToNextGame,
+            onJumpToNextGameErrorShown = viewModel::clearJumpError
         )
     }
 }

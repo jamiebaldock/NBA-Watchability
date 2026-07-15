@@ -1,6 +1,6 @@
 import { dateStringsBetween } from "./dateRange";
 import { earliestGameDate } from "./gameStore";
-import { getGamesForDate } from "./gamesService";
+import { getGamesForDate, getNextScheduledDate } from "./gamesService";
 import { getHistory, HistoryResult } from "./historyService";
 import { getNews } from "./newsService";
 import { getStandings } from "./standingsService";
@@ -44,6 +44,17 @@ export async function getSchedule(start: string, end: string, leagueGroupRaw = "
     schedule.push({ date, games: await getGamesForDate(date, leagueGroup) });
   }
   return schedule;
+}
+
+export interface NextGameDateResult {
+  date: string | null;
+}
+
+export async function getNextGameDateForLeagueGroup(afterRaw: string, leagueGroupRaw = "nba"): Promise<NextGameDateResult> {
+  if (!DATE_RE.test(afterRaw)) throw new BadRequestError("after must be YYYY-MM-DD");
+  const leagueGroup = parseLeagueGroup(leagueGroupRaw);
+  const date = await getNextScheduledDate(afterRaw, leagueGroup);
+  return { date: date ?? null };
 }
 
 export async function getStandingsForLeagueGroup(leagueGroupRaw = "nba"): Promise<StandingsResponseJson> {
