@@ -83,8 +83,9 @@ function ensureColumn(table: string, column: string, definition: string): void {
 // final_at/yt_found_at are the two anchors the self-tuning highlights
 // schedule (below) learns from: the real-world gap between them, for every
 // game a match was ever found for, is what "upload lag" actually means per
-// league - not a guessed constant. yt_check_count tracks which rung of the
-// percentile ladder (p50 -> p75 -> p90 -> daily) a still-missing game is on.
+// league - not a guessed constant. yt_check_count is 0 (not yet checked) or
+// 1 (checked, permanently done regardless of outcome) - the check is
+// single-shot, not a retry ladder.
 ensureColumn("games", "final_at", "TEXT");
 ensureColumn("games", "yt_found_at", "TEXT");
 ensureColumn("games", "yt_check_count", "INTEGER NOT NULL DEFAULT 0");
@@ -339,9 +340,10 @@ export function setHighlightsFromSeed(eventId: string, videoId: string): void {
 }
 
 /**
- * Records a search attempt's timestamp and bumps the check count regardless
- * of outcome - drives retry pacing only (which percentile-ladder rung is
- * next), never gates the precious yt_video_id itself.
+ * Records the single search attempt's timestamp and bumps the check count
+ * regardless of outcome - this is what makes isDueForHighlightsCheck's
+ * "check exactly once" rule stick (ytCheckCount > 0 blocks any further
+ * attempt), never gates the precious yt_video_id itself.
  */
 export function markHighlightsChecked(eventId: string, when: string): void {
   db.prepare(`UPDATE games SET yt_last_checked_at=?, yt_check_count = yt_check_count + 1, updated_at=? WHERE event_id=?`).run(
@@ -353,18 +355,16 @@ export function markHighlightsChecked(eventId: string, when: string): void {
 
 export interface LagPercentiles {
   p50Ms: number;
-  p75Ms: number;
-  p90Ms: number;
   sampleCount: number;
   fromRealData: boolean;
 }
 
-// Bootstrap defaults for a league with no (or too little) real data yet -
+// Bootstrap default for a league with no (or too little) real data yet -
 // roughly matches the actual NBA-channel upload timings observed directly
-// this session (most within an hour of game end, a handful of hours for
-// stragglers). Every league starts here and graduates to its own real
-// percentiles as MIN_LAG_SAMPLES worth of matches get found.
-const DEFAULT_PERCENTILES = { p50Ms: 45 * 60 * 1000, p75Ms: 2 * 60 * 60 * 1000, p90Ms: 6 * 60 * 60 * 1000 };
+// this session (most within an hour of game end). Every league starts here
+// and graduates to its own real median as MIN_LAG_SAMPLES worth of matches
+// get found.
+const DEFAULT_P50_MS = 45 * 60 * 1000;
 const MIN_LAG_SAMPLES = 5;
 
 function percentileOf(sortedMs: number[], p: number): number {
@@ -380,13 +380,15 @@ function observedLagsMs(whereClause: string, param: string): number[] {
 }
 
 /**
- * Real, learned upload-lag percentiles for [league], falling back to
+ * Real, learned median upload lag for [league], falling back to
  * [leagueGroup]-wide data if that specific league doesn't have enough
- * samples yet, and to hardcoded defaults if neither does. This is what lets
- * the highlights check schedule cluster around each league's actual
- * observed delay instead of a single guessed constant applied everywhere -
- * and scale to new leagues for free, since each one just starts on the
- * default and learns its own profile as it accumulates real matches.
+ * samples yet, and to a hardcoded default if neither does. This is what
+ * lets the single highlights check land around each league's actual
+ * observed delay instead of a guessed constant applied everywhere - and
+ * scale to new leagues for free, since each one just starts on the default
+ * and learns its own profile as it accumulates real matches. Only p50 is
+ * tracked - the check is single-shot (isDueForHighlightsCheck), so there's
+ * no retry ladder left to pace with p75/p90.
  */
 export function getLagPercentiles(league: string, leagueGroup: string): LagPercentiles {
   let lags = observedLagsMs("league = ?", league);
@@ -394,12 +396,10 @@ export function getLagPercentiles(league: string, leagueGroup: string): LagPerce
     lags = observedLagsMs("league_group = ?", leagueGroup);
   }
   if (lags.length < MIN_LAG_SAMPLES) {
-    return { ...DEFAULT_PERCENTILES, sampleCount: lags.length, fromRealData: false };
+    return { p50Ms: DEFAULT_P50_MS, sampleCount: lags.length, fromRealData: false };
   }
   return {
     p50Ms: percentileOf(lags, 0.5),
-    p75Ms: percentileOf(lags, 0.75),
-    p90Ms: percentileOf(lags, 0.9),
     sampleCount: lags.length,
     fromRealData: true,
   };

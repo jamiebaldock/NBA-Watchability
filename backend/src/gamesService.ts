@@ -91,42 +91,34 @@ async function ensurePregamePreview(row: GameRow, league: League, event: EspnEve
   setPreview(row.eventId, hook, pitch, stakes);
 }
 
-// Beyond the percentile ladder (p50 -> p75 -> p90, from gameStore's learned
-// per-league lag data), a still-missing game falls back to this cadence
-// forever - never permanently gives up (lifecycle point: a game is never
-// stuck "unfindable"), but doesn't let one video that's genuinely never
-// posted (rare) quietly eat the shared 100/day quota at a tight interval
-// indefinitely.
-const YT_TAIL_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000;
-// Floor under the percentile ladder so a game can never be checked twice in
-// quick succession even in a "catching up after downtime" burst where
-// several rungs are already overdue at once.
+// Floor so a game can never be checked twice in quick succession even if
+// the poller and a demand-driven request both find it due at nearly the
+// same moment.
 const YT_MIN_CHECK_SPACING_MS = 5 * 60 * 1000;
 
 let loggedMissingApiKey = false;
 
 /**
- * Whether [row] is due for its next highlights check. Every check,
- * including the first, is paced by the percentile ladder learned from real
- * match data for this league (gameStore's getLagPercentiles) - there's
- * essentially always some real upload lag before NBA posts a highlights
- * video, so an unconditional instant check on the first attempt would just
- * waste a search on a near-certain miss. Check 0 waits until the league's
- * observed p50 delay since the game went final, check 1 until p75, check 2
- * until p90, then the tail cadence forever after. A league with no history
- * yet uses sane bootstrap defaults and gradually switches over to its own
- * real percentiles as matches get found (see gameStore.ts).
+ * Whether [row] is due for its one-and-only highlights check. Per product
+ * decision, this is a single-shot attempt, not a retry ladder: wait until
+ * the league's learned p50 upload lag has passed since the game went final,
+ * search exactly once, and permanently stop regardless of outcome (a miss
+ * is not retried - if a specific game is later found to be missing its
+ * link, that's a manual fix, not something the app keeps polling for).
+ * Historical/backfill games never reach this at all (gameStore's
+ * recent-only scope). A league with no history yet uses a sane bootstrap
+ * default and gradually switches over to its own real p50 as matches get
+ * found (see gameStore.ts's getLagPercentiles).
  */
 function isDueForHighlightsCheck(row: GameRow, now: number): boolean {
   if (row.ytVideoId) return false;
+  if (row.ytCheckCount > 0) return false;
   if (row.ytLastCheckedAt && now - new Date(row.ytLastCheckedAt).getTime() < YT_MIN_CHECK_SPACING_MS) return false;
 
   const anchor = row.finalAt ?? row.tipoffUtc;
   const sinceFinalMs = now - new Date(anchor).getTime();
-  const { p50Ms, p75Ms, p90Ms } = getLagPercentiles(row.league, row.leagueGroup);
-  const rungs = [p50Ms, p75Ms, p90Ms];
-  const nextDelayMs = row.ytCheckCount < rungs.length ? rungs[row.ytCheckCount] : YT_TAIL_RETRY_INTERVAL_MS;
-  return sinceFinalMs >= nextDelayMs;
+  const { p50Ms } = getLagPercentiles(row.league, row.leagueGroup);
+  return sinceFinalMs >= p50Ms;
 }
 
 /** Searches for and records the result of one game's highlights check - shared by the poller and the demand-driven trigger below so there's exactly one place this happens. */
