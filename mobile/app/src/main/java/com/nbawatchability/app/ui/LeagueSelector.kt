@@ -27,13 +27,16 @@ import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.ui.theme.TextPrimary
 
 /**
- * A tab's top-bar title: a tappable league logo + name, always including
- * WNBA as an option - shared by every tab's top bar (Games, Starred,
- * History, Leaders, News), not just Games, so the league can be switched
- * from wherever the user happens to be.
+ * A tab's top-bar title: a tappable league logo + name - shared by every
+ * tab's top bar (Games, Starred, History, Leaders, News), not just Games,
+ * so the league can be switched from wherever the user happens to be.
+ * [enabledLeagues] (Settings' "Selected Sports") controls which leagues
+ * actually list in the dropdown - filtered against LeagueGroup.entries
+ * (not iterated directly from the Set) so the list always renders in a
+ * stable, consistent order regardless of Set iteration order.
  */
 @Composable
-fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGroup) -> Unit) {
+fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGroup) -> Unit, enabledLeagues: Set<LeagueGroup>) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         Row(
@@ -59,7 +62,7 @@ fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGr
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            LeagueGroup.entries.forEach { league ->
+            LeagueGroup.entries.filter { it in enabledLeagues }.forEach { league ->
                 DropdownMenuItem(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChecklistRtl
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Public
@@ -43,6 +44,7 @@ import com.nbawatchability.app.ui.theme.TierWorthYourTime
 fun SettingsScreen(
     showAllLeaguesInStarred: Boolean,
     onToggleShowAllLeaguesInStarred: () -> Unit,
+    onSelectedSportsClick: () -> Unit,
     onRubricWeightsClick: () -> Unit,
     onAboutClick: () -> Unit,
     onBack: () -> Unit
@@ -82,6 +84,24 @@ fun SettingsScreen(
                     Icon(imageVector = Icons.Default.Tune, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(text = "Watchability rating weights", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                }
+                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+            }
+
+            HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onSelectedSportsClick)
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.ChecklistRtl, contentDescription = null, tint = TextSecondary)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(text = "Selected Sports", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
                 }
                 Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
             }

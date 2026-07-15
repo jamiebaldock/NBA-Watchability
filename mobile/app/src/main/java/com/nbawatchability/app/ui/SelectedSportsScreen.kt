@@ -1,0 +1,100 @@
+package com.nbawatchability.app.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.nbawatchability.app.data.LeagueGroup
+import com.nbawatchability.app.ui.theme.BackgroundBase
+import com.nbawatchability.app.ui.theme.TextMuted
+import com.nbawatchability.app.ui.theme.TextPrimary
+import com.nbawatchability.app.ui.theme.TierWorthYourTime
+
+/**
+ * Controls which leagues actually list in every tab's league dropdown
+ * (TitleLeagueSelector) - includes all six LeagueGroup entries, even the
+ * four not-yet-built placeholders (English Premier League, La Liga, NBL,
+ * UFC), since this is purely about dropdown visibility, not data
+ * availability; selecting a placeholder league elsewhere in the app just
+ * shows a "coming soon" state (AppRoot.kt's ComingSoonTab), it doesn't
+ * crash. AppSettingsViewModel.toggleLeagueEnabled enforces two safety
+ * rules this screen doesn't need to know about: the enabled set can never
+ * go fully empty, and turning off the currently-selected league falls back
+ * to NBA automatically rather than leaving the dropdown pointed at
+ * something no longer in its own list.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SelectedSportsScreen(
+    enabledLeagues: Set<LeagueGroup>,
+    onToggleLeague: (LeagueGroup) -> Unit,
+    onBack: () -> Unit
+) {
+    Scaffold(
+        containerColor = BackgroundBase,
+        topBar = {
+            TopAppBar(
+                title = { Text("Selected Sports", color = TextPrimary) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+        ) {
+            LeagueGroup.entries.forEachIndexed { index, league ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AsyncImage(model = league.logoUrl, contentDescription = null, modifier = Modifier.size(28.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(text = league.displayName, color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Switch(
+                        checked = league in enabledLeagues,
+                        onCheckedChange = { onToggleLeague(league) },
+                        colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime)
+                    )
+                }
+                if (index != LeagueGroup.entries.lastIndex) {
+                    HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
+                }
+            }
+        }
+    }
+}

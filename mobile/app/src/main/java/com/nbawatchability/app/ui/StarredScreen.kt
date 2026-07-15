@@ -72,6 +72,7 @@ fun StarredScreen(
     onRefresh: () -> Unit,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
     showAllLeagues: Boolean,
     onToggleAllLeagues: () -> Unit,
     onSettingsClick: () -> Unit
@@ -95,7 +96,7 @@ fun StarredScreen(
                             modifier = Modifier.clickable { showAllLeaguesInfo = true }
                         )
                     } else {
-                        TitleLeagueSelector(selectedLeague, onLeagueSelected)
+                        TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues)
                     }
                 },
                 actions = {

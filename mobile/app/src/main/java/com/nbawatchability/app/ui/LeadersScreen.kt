@@ -43,6 +43,7 @@ fun LeadersScreen(
     onStatsRetry: () -> Unit,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
     onSettingsClick: () -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = 0) { LEADERS_PAGE_TITLES.size }
@@ -53,7 +54,7 @@ fun LeadersScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    title = { TitleLeagueSelector(selectedLeague, onLeagueSelected) },
+                    title = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
                     actions = {
                         IconButton(onClick = onSettingsClick) {
                             Icon(

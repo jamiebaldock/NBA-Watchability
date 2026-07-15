@@ -106,6 +106,7 @@ fun HistoryScreen(
     onWatchHighlights: (String) -> Unit,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
     onSettingsClick: () -> Unit
 ) {
     // Plain remember (not rememberSaveable) - defaults to hidden every time
@@ -123,7 +124,7 @@ fun HistoryScreen(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected) },
+                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
                 actions = {
                     SortMenuButton(
                         selected = sortOption,

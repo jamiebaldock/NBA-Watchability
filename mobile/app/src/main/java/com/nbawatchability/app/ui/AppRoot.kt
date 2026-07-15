@@ -5,22 +5,27 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsBasketball
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,12 +63,16 @@ private enum class BottomNavTab(val label: String, val icon: ImageVector) {
 
 /**
  * App-wide root: a persistent bottom navigation bar with 5 tabs. Every tab's
- * top bar shows the same tappable league selector (NBA/WNBA) so the league
- * can be switched from anywhere, not just Games. History's backfill is
- * NBA-only for now - selecting WNBA there shows a plain "not built yet"
- * empty state instead of an error. "About" isn't a tab - it's a slot's
- * worth of nav real estate that Starred needed more, so it lives one level
- * deeper, opened from Settings instead.
+ * top bar shows the same tappable league selector so the league can be
+ * switched from anywhere, not just Games - which leagues actually list
+ * there is controlled by Settings' "Selected Sports" section
+ * (AppSettingsViewModel.settings.enabledLeagues). Four of the six
+ * LeagueGroup entries (EPL, La Liga, NBL, UFC) are placeholders with no
+ * backend data at all yet - selecting one short-circuits every tab straight
+ * to ComingSoonTab below rather than firing a network call the backend
+ * doesn't recognize. "About" isn't a tab - it's a slot's worth of nav real
+ * estate that Starred needed more, so it lives one level deeper, opened
+ * from Settings instead.
  */
 @Composable
 fun AppRoot() {
@@ -71,6 +80,7 @@ fun AppRoot() {
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showAbout by rememberSaveable { mutableStateOf(false) }
     var showRubricWeights by rememberSaveable { mutableStateOf(false) }
+    var showSelectedSports by rememberSaveable { mutableStateOf(false) }
     var highlightsVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     val settingsViewModel: RubricSettingsViewModel = viewModel()
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
@@ -91,6 +101,7 @@ fun AppRoot() {
     // straight past it.
     BackHandler(enabled = showAbout) { showAbout = false }
     BackHandler(enabled = showRubricWeights) { showRubricWeights = false }
+    BackHandler(enabled = showSelectedSports) { showSelectedSports = false }
     BackHandler(enabled = highlightsVideoId != null) { highlightsVideoId = null }
 
     if (showAbout) {
@@ -108,10 +119,20 @@ fun AppRoot() {
         return
     }
 
+    if (showSelectedSports) {
+        SelectedSportsScreen(
+            enabledLeagues = appSettingsViewModel.settings.enabledLeagues,
+            onToggleLeague = appSettingsViewModel::toggleLeagueEnabled,
+            onBack = { showSelectedSports = false }
+        )
+        return
+    }
+
     if (showSettings) {
         SettingsScreen(
             showAllLeaguesInStarred = appSettingsViewModel.settings.showAllLeaguesInStarred,
             onToggleShowAllLeaguesInStarred = appSettingsViewModel::toggleShowAllLeaguesInStarred,
+            onSelectedSportsClick = { showSelectedSports = true },
             onRubricWeightsClick = { showRubricWeights = true },
             onAboutClick = { showAbout = true },
             onBack = { showSettings = false }
@@ -147,51 +168,68 @@ fun AppRoot() {
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            when (selectedTab) {
-                BottomNavTab.GAMES -> GamesTab(
-                    weights = settingsViewModel.weights,
-                    onSettingsClick = { showSettings = true },
-                    selectedLeague = appSettingsViewModel.settings.selectedLeague,
+            val selectedLeague = appSettingsViewModel.settings.selectedLeague
+            val enabledLeagues = appSettingsViewModel.settings.enabledLeagues
+
+            if (!selectedLeague.isSupported) {
+                ComingSoonTab(
+                    selectedLeague = selectedLeague,
                     onLeagueSelected = appSettingsViewModel::setSelectedLeague,
-                    showNumericScore = appSettingsViewModel.settings.showNumericScore,
-                    onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
-                    starredIds = starredGamesViewModel.starredIds,
-                    onToggleStar = starredGamesViewModel::toggleStar,
-                    onWatchHighlights = { videoId -> highlightsVideoId = videoId }
-                )
-                BottomNavTab.LEADERS -> LeadersTab(
-                    selectedLeague = appSettingsViewModel.settings.selectedLeague,
-                    onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                    enabledLeagues = enabledLeagues,
                     onSettingsClick = { showSettings = true }
                 )
-                BottomNavTab.NEWS -> NewsTab(
-                    selectedLeague = appSettingsViewModel.settings.selectedLeague,
-                    onLeagueSelected = appSettingsViewModel::setSelectedLeague,
-                    onSettingsClick = { showSettings = true }
-                )
-                BottomNavTab.STARRED -> StarredTab(
-                    starredGamesViewModel = starredGamesViewModel,
-                    selectedLeague = appSettingsViewModel.settings.selectedLeague,
-                    onLeagueSelected = appSettingsViewModel::setSelectedLeague,
-                    showNumericScore = appSettingsViewModel.settings.showNumericScore,
-                    onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
-                    showAllLeagues = appSettingsViewModel.settings.showAllLeaguesInStarred,
-                    onToggleAllLeagues = appSettingsViewModel::toggleShowAllLeaguesInStarred,
-                    weights = settingsViewModel.weights,
-                    onWatchHighlights = { videoId -> highlightsVideoId = videoId },
-                    onSettingsClick = { showSettings = true }
-                )
-                BottomNavTab.HISTORY -> HistoryTab(
-                    weights = settingsViewModel.weights,
-                    selectedLeague = appSettingsViewModel.settings.selectedLeague,
-                    onLeagueSelected = appSettingsViewModel::setSelectedLeague,
-                    showNumericScore = appSettingsViewModel.settings.showNumericScore,
-                    onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
-                    starredIds = starredGamesViewModel.starredIds,
-                    onToggleStar = starredGamesViewModel::toggleStar,
-                    onWatchHighlights = { videoId -> highlightsVideoId = videoId },
-                    onSettingsClick = { showSettings = true }
-                )
+            } else {
+                when (selectedTab) {
+                    BottomNavTab.GAMES -> GamesTab(
+                        weights = settingsViewModel.weights,
+                        onSettingsClick = { showSettings = true },
+                        selectedLeague = selectedLeague,
+                        onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                        enabledLeagues = enabledLeagues,
+                        showNumericScore = appSettingsViewModel.settings.showNumericScore,
+                        onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
+                        starredIds = starredGamesViewModel.starredIds,
+                        onToggleStar = starredGamesViewModel::toggleStar,
+                        onWatchHighlights = { videoId -> highlightsVideoId = videoId }
+                    )
+                    BottomNavTab.LEADERS -> LeadersTab(
+                        selectedLeague = selectedLeague,
+                        onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                        enabledLeagues = enabledLeagues,
+                        onSettingsClick = { showSettings = true }
+                    )
+                    BottomNavTab.NEWS -> NewsTab(
+                        selectedLeague = selectedLeague,
+                        onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                        enabledLeagues = enabledLeagues,
+                        onSettingsClick = { showSettings = true }
+                    )
+                    BottomNavTab.STARRED -> StarredTab(
+                        starredGamesViewModel = starredGamesViewModel,
+                        selectedLeague = selectedLeague,
+                        onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                        enabledLeagues = enabledLeagues,
+                        showNumericScore = appSettingsViewModel.settings.showNumericScore,
+                        onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
+                        showAllLeagues = appSettingsViewModel.settings.showAllLeaguesInStarred,
+                        onToggleAllLeagues = appSettingsViewModel::toggleShowAllLeaguesInStarred,
+                        weights = settingsViewModel.weights,
+                        onWatchHighlights = { videoId -> highlightsVideoId = videoId },
+                        onSettingsClick = { showSettings = true }
+                    )
+                    BottomNavTab.HISTORY -> HistoryTab(
+                        weights = settingsViewModel.weights,
+                        selectedLeague = selectedLeague,
+                        onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                        enabledLeagues = enabledLeagues,
+                        showNumericScore = appSettingsViewModel.settings.showNumericScore,
+                        onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
+                        starredIds = starredGamesViewModel.starredIds,
+                        onToggleStar = starredGamesViewModel::toggleStar,
+                        onWatchHighlights = { videoId -> highlightsVideoId = videoId },
+                        onSettingsClick = { showSettings = true }
+                    )
+                }
             }
         }
     }
@@ -203,6 +241,7 @@ private fun GamesTab(
     onSettingsClick: () -> Unit,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
     starredIds: Set<String>,
@@ -241,6 +280,7 @@ private fun GamesTab(
             onSettingsClick = onSettingsClick,
             selectedLeague = selectedLeague,
             onLeagueSelected = onLeagueSelected,
+            enabledLeagues = enabledLeagues,
             starredIds = starredIds,
             onToggleStar = onToggleStar,
             onWatchHighlights = onWatchHighlights
@@ -253,6 +293,7 @@ private fun StarredTab(
     starredGamesViewModel: StarredGamesViewModel,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
     showAllLeagues: Boolean,
@@ -285,6 +326,7 @@ private fun StarredTab(
         onRefresh = starredGamesViewModel::refreshLiveData,
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
+        enabledLeagues = enabledLeagues,
         showAllLeagues = showAllLeagues,
         onToggleAllLeagues = onToggleAllLeagues,
         onSettingsClick = onSettingsClick
@@ -296,6 +338,7 @@ private fun HistoryTab(
     weights: RubricWeights,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
     starredIds: Set<String>,
@@ -328,6 +371,7 @@ private fun HistoryTab(
         onWatchHighlights = onWatchHighlights,
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
+        enabledLeagues = enabledLeagues,
         onSettingsClick = onSettingsClick
     )
 }
@@ -336,6 +380,7 @@ private fun HistoryTab(
 private fun LeadersTab(
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
     onSettingsClick: () -> Unit
 ) {
     val standingsViewModel: StandingsViewModel = viewModel()
@@ -351,6 +396,7 @@ private fun LeadersTab(
         onStatsRetry = statsViewModel::retry,
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
+        enabledLeagues = enabledLeagues,
         onSettingsClick = onSettingsClick
     )
 }
@@ -359,6 +405,7 @@ private fun LeadersTab(
 private fun NewsTab(
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
     onSettingsClick: () -> Unit
 ) {
     val viewModel: NewsViewModel = viewModel()
@@ -368,8 +415,61 @@ private fun NewsTab(
         onRetry = viewModel::retry,
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
+        enabledLeagues = enabledLeagues,
         onSettingsClick = onSettingsClick
     )
+}
+
+/**
+ * Shown instead of any tab's real content when [selectedLeague] isn't
+ * [LeagueGroup.isSupported] - one shared "coming soon" body for all 5 tabs
+ * rather than special-casing each Screen file individually, since there's
+ * no per-tab distinction to make anyway (no data exists for these
+ * placeholder leagues in Games, Starred, History, Leaders, or News alike).
+ * Keeps its own minimal top bar (league selector + settings gear only, no
+ * tab-specific actions like sort/eye/numeric-score toggles, since none of
+ * those mean anything with no data underneath) so switching back to a
+ * supported league is always one tap away regardless of which bottom-nav
+ * tab happens to be selected.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ComingSoonTab(
+    selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
+    onSettingsClick: () -> Unit
+) {
+    Scaffold(
+        containerColor = BackgroundBase,
+        topBar = {
+            TopAppBar(
+                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
+                actions = {
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = TextSecondary
+                        )
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "${selectedLeague.displayName} isn't built yet - check back later.",
+                color = TextSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+    }
 }
 
 @Composable

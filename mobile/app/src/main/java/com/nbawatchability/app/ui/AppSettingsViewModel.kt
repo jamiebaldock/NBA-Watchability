@@ -46,4 +46,26 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
     fun toggleShowAllLeaguesInStarred() {
         viewModelScope.launch { repository.setShowAllLeaguesInStarred(!settings.showAllLeaguesInStarred) }
     }
+
+    /**
+     * Flips [league] in the dropdown's visible set. Two safety rules the
+     * Settings toggle UI can't enforce on its own: never let the set go
+     * fully empty (would leave the dropdown with nothing to pick), and if
+     * the league being turned off is the one currently selected, fall back
+     * to NBA (or whatever else remains enabled, if NBA itself was somehow
+     * turned off) rather than leaving selectedLeague pointing at a league
+     * that no longer shows in its own dropdown.
+     */
+    fun toggleLeagueEnabled(league: LeagueGroup) {
+        val current = settings.enabledLeagues
+        val updated = if (league in current) current - league else current + league
+        if (updated.isEmpty()) return
+
+        viewModelScope.launch {
+            repository.setEnabledLeagues(updated)
+            if (settings.selectedLeague !in updated) {
+                repository.setSelectedLeague(updated.find { it == LeagueGroup.NBA } ?: updated.first())
+            }
+        }
+    }
 }

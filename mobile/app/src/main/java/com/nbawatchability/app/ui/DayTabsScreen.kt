@@ -81,6 +81,7 @@ fun DayTabsScreen(
     onSettingsClick: () -> Unit,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
     onWatchHighlights: (String) -> Unit
@@ -99,7 +100,7 @@ fun DayTabsScreen(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected) },
+                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
                 actions = {
                     IconToggleButton(
                         checked = showNumericScore,

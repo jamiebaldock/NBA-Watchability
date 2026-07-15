@@ -57,13 +57,14 @@ fun NewsScreen(
     onRetry: () -> Unit,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
     onSettingsClick: () -> Unit
 ) {
     Scaffold(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected) },
+                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
                 actions = {
                     IconButton(onClick = onSettingsClick) {
                         Icon(
