@@ -84,7 +84,8 @@ fun StarredScreen(
     favoritePlayerNames: Set<String> = emptySet(),
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
-    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT
+    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT,
+    onGameClick: (Game) -> Unit = {}
 ) {
     var sortOption by remember { mutableStateOf(SortOption.DATE_NEWEST_FIRST) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -194,7 +195,8 @@ fun StarredScreen(
                         favoriteTeamNames = favoriteTeamNames,
                         onToggleFavoriteTeam = onToggleFavoriteTeam,
                         favoritePlayerNames = favoritePlayerNames,
-                        soccerWeights = soccerWeights
+                        soccerWeights = soccerWeights,
+                        onGameClick = onGameClick
                     )
                 }
             }

@@ -112,7 +112,8 @@ fun DayTabsScreen(
     favoritePlayerNames: Set<String> = emptySet(),
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
-    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT
+    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT,
+    onGameClick: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -237,7 +238,8 @@ fun DayTabsScreen(
                             favoritePlayerNames = favoritePlayerNames,
                             minTierFilterEnabled = minTierFilterEnabled,
                             minTierFilter = minTierFilter,
-                            soccerWeights = soccerWeights
+                            soccerWeights = soccerWeights,
+                            onGameClick = onGameClick
                         )
                     }
                 }
@@ -353,7 +355,8 @@ private fun DayGamesList(
     favoritePlayerNames: Set<String> = emptySet(),
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
-    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT
+    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT,
+    onGameClick: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
     if (games.isEmpty()) {
         Column(
@@ -406,7 +409,8 @@ private fun DayGamesList(
                 favoriteTeamNames = favoriteTeamNames,
                 onToggleFavoriteTeam = onToggleFavoriteTeam,
                 favoritePlayerNames = favoritePlayerNames,
-                soccerWeights = soccerWeights
+                soccerWeights = soccerWeights,
+                onGameClick = onGameClick
             )
         }
     }

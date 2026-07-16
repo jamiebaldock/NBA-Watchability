@@ -29,6 +29,10 @@ private val MIN_TIER_FILTER_ENABLED_KEY = booleanPreferencesKey("min_tier_filter
 private val MIN_TIER_FILTER_KEY = stringPreferencesKey("min_tier_filter")
 private val WIFI_ONLY_HIGHLIGHTS_KEY = booleanPreferencesKey("wifi_only_highlights")
 private val LIGHT_THEME_KEY = booleanPreferencesKey("light_theme")
+// Raw GameDetailTab enum name (e.g. "BREAKDOWN") - which tab the game-detail
+// popup opens on, same string-not-enum reasoning as DEFAULT_LANDING_TAB_KEY
+// above (GameDetailTab lives in the ui package).
+private val DEFAULT_GAME_DETAIL_TAB_KEY = stringPreferencesKey("default_game_detail_tab")
 
 // Every league ships enabled by default, including the four not-yet-built
 // placeholders - Settings' "Selected Sports" section is what a user reaches
@@ -65,7 +69,11 @@ data class AppSettings(
     // ui/theme/Theme.kt/Color.kt for how this reaches every screen, and
     // ui/theme/ThemeAwareLogo.kt for why some team/league logos need their
     // own per-theme URL swap on top of the chrome itself.
-    val lightTheme: Boolean = false
+    val lightTheme: Boolean = false,
+    // BottomNavTab and GameDetailTab enum name reasoning, see comment above
+    // this key's declaration - which of the two tabs the game-detail popup
+    // opens on.
+    val defaultGameDetailTab: String = "BREAKDOWN"
 )
 
 /** Persists the last-selected league, which leagues show in the dropdown, and Games-tab display prefs (numeric score) - on-device only, so they survive an app restart. */
@@ -84,7 +92,8 @@ class AppSettingsRepository(private val context: Context) {
             minTierFilterEnabled = prefs[MIN_TIER_FILTER_ENABLED_KEY] ?: false,
             minTierFilter = prefs[MIN_TIER_FILTER_KEY] ?: "SKIPPABLE",
             wifiOnlyHighlights = prefs[WIFI_ONLY_HIGHLIGHTS_KEY] ?: false,
-            lightTheme = prefs[LIGHT_THEME_KEY] ?: false
+            lightTheme = prefs[LIGHT_THEME_KEY] ?: false,
+            defaultGameDetailTab = prefs[DEFAULT_GAME_DETAIL_TAB_KEY] ?: "BREAKDOWN"
         )
     }
 
@@ -130,5 +139,9 @@ class AppSettingsRepository(private val context: Context) {
 
     suspend fun setLightTheme(value: Boolean) {
         context.appSettingsDataStore.edit { it[LIGHT_THEME_KEY] = value }
+    }
+
+    suspend fun setDefaultGameDetailTab(tabName: String) {
+        context.appSettingsDataStore.edit { it[DEFAULT_GAME_DETAIL_TAB_KEY] = tabName }
     }
 }

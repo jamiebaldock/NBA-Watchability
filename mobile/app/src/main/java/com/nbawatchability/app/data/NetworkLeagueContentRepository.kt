@@ -38,6 +38,10 @@ object NetworkLeagueContentRepository {
     suspend fun roster(baseUrl: String, leagueGroup: LeagueGroup, teamId: String): RosterResponse =
         get("$baseUrl/roster?leagueGroup=${leagueGroup.apiValue}&team=$teamId")
 
+    /** Top performers/head-to-head/standings context for one specific finished game - backs the game-detail popup, fetched on-demand per tap. */
+    suspend fun gameDetail(baseUrl: String, eventId: String): GameDetail =
+        get("$baseUrl/game-detail?eventId=$eventId")
+
     private suspend inline fun <reified T> get(url: String): T =
         withContext(Dispatchers.IO) {
             val connection = URL(url).openConnection() as HttpURLConnection

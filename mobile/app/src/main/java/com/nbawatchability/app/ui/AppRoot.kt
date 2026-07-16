@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -105,6 +106,11 @@ fun AppRoot() {
     var showFavoriteTeams by rememberSaveable { mutableStateOf(false) }
     var showFavoritePlayers by rememberSaveable { mutableStateOf(false) }
     var highlightsVideoId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Plain remember (not rememberSaveable) - Game isn't a Bundle-compatible
+    // type, and losing this particular bit of state across a process death/
+    // rotation (falling back to whatever tab was showing) is an acceptable
+    // tradeoff for not needing a custom Saver just for this one overlay.
+    var showGameDetail by remember { mutableStateOf<com.nbawatchability.app.data.Game?>(null) }
     val settingsViewModel: RubricSettingsViewModel = viewModel()
     val soccerSettingsViewModel: SoccerRubricSettingsViewModel = viewModel()
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
@@ -138,6 +144,7 @@ fun AppRoot() {
     BackHandler(enabled = showFavoriteTeams) { showFavoriteTeams = false }
     BackHandler(enabled = showFavoritePlayers) { showFavoritePlayers = false }
     BackHandler(enabled = highlightsVideoId != null) { highlightsVideoId = null }
+    BackHandler(enabled = showGameDetail != null) { showGameDetail = null }
 
     if (showAbout) {
         AboutScreen(onBack = { showAbout = false })
@@ -193,6 +200,17 @@ fun AppRoot() {
         return
     }
 
+    showGameDetail?.let { game ->
+        GameDetailScreen(
+            game = game,
+            weights = settingsViewModel.weights,
+            soccerWeights = soccerSettingsViewModel.weights,
+            defaultTab = GameDetailTab.entries.find { it.name == appSettingsViewModel.settings.defaultGameDetailTab } ?: GameDetailTab.BREAKDOWN,
+            onBack = { showGameDetail = null }
+        )
+        return
+    }
+
     Scaffold(
         containerColor = BackgroundBase,
         bottomBar = {
@@ -229,7 +247,9 @@ fun AppRoot() {
                     wifiOnlyHighlights = appSettingsViewModel.settings.wifiOnlyHighlights,
                     onToggleWifiOnlyHighlights = appSettingsViewModel::toggleWifiOnlyHighlights,
                     lightTheme = appSettingsViewModel.settings.lightTheme,
-                    onToggleLightTheme = appSettingsViewModel::toggleLightTheme
+                    onToggleLightTheme = appSettingsViewModel::toggleLightTheme,
+                    defaultGameDetailTab = GameDetailTab.entries.find { it.name == appSettingsViewModel.settings.defaultGameDetailTab } ?: GameDetailTab.BREAKDOWN,
+                    onDefaultGameDetailTabChange = { appSettingsViewModel.setDefaultGameDetailTab(it.name) }
                 )
                 BottomNavTab.MY_TEAMS -> MyTeamsScreen(
                     favoriteTeams = favoritesViewModel.favoriteTeams,
@@ -263,7 +283,8 @@ fun AppRoot() {
                             favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet(),
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
                             minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
-                            soccerWeights = soccerSettingsViewModel.weights
+                            soccerWeights = soccerSettingsViewModel.weights,
+                            onGameClick = { showGameDetail = it }
                         )
                         BottomNavTab.LEADERS -> LeadersTab(
                             selectedLeague = selectedLeague,
@@ -292,7 +313,8 @@ fun AppRoot() {
                             favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet(),
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
                             minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
-                            soccerWeights = soccerSettingsViewModel.weights
+                            soccerWeights = soccerSettingsViewModel.weights,
+                            onGameClick = { showGameDetail = it }
                         )
                         BottomNavTab.HISTORY -> HistoryTab(
                             weights = settingsViewModel.weights,
@@ -311,7 +333,8 @@ fun AppRoot() {
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
                             minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
                             showScoresByDefault = appSettingsViewModel.settings.historyShowScoresByDefault,
-                            soccerWeights = soccerSettingsViewModel.weights
+                            soccerWeights = soccerSettingsViewModel.weights,
+                            onGameClick = { showGameDetail = it }
                         )
                         else -> {} // unreachable: SETTINGS/MY_TEAMS handled above
                     }
@@ -376,7 +399,8 @@ private fun GamesTab(
     favoritePlayerNames: Set<String>,
     minTierFilterEnabled: Boolean,
     minTierFilter: Tier,
-    soccerWeights: SoccerRubricWeights
+    soccerWeights: SoccerRubricWeights,
+    onGameClick: (com.nbawatchability.app.data.Game) -> Unit
 ) {
     val viewModel: GameListViewModel = viewModel()
 
@@ -429,7 +453,8 @@ private fun GamesTab(
             favoritePlayerNames = favoritePlayerNames,
             minTierFilterEnabled = minTierFilterEnabled,
             minTierFilter = minTierFilter,
-            soccerWeights = soccerWeights
+            soccerWeights = soccerWeights,
+            onGameClick = onGameClick
         )
     }
 }
@@ -452,7 +477,8 @@ private fun StarredTab(
     favoritePlayerNames: Set<String>,
     minTierFilterEnabled: Boolean,
     minTierFilter: Tier,
-    soccerWeights: SoccerRubricWeights
+    soccerWeights: SoccerRubricWeights,
+    onGameClick: (com.nbawatchability.app.data.Game) -> Unit
 ) {
     // Fires on first composition and again whenever the starred set changes
     // (a star added/removed anywhere in the app) - re-fetches live data for
@@ -487,7 +513,8 @@ private fun StarredTab(
         favoritePlayerNames = favoritePlayerNames,
         minTierFilterEnabled = minTierFilterEnabled,
         minTierFilter = minTierFilter,
-        soccerWeights = soccerWeights
+        soccerWeights = soccerWeights,
+        onGameClick = onGameClick
     )
 }
 
@@ -509,7 +536,8 @@ private fun HistoryTab(
     minTierFilterEnabled: Boolean,
     minTierFilter: Tier,
     showScoresByDefault: Boolean,
-    soccerWeights: SoccerRubricWeights
+    soccerWeights: SoccerRubricWeights,
+    onGameClick: (com.nbawatchability.app.data.Game) -> Unit
 ) {
     val viewModel: HistoryViewModel = viewModel()
     // Both leagues have their own backfill now - always resets to "This
@@ -544,7 +572,8 @@ private fun HistoryTab(
         minTierFilterEnabled = minTierFilterEnabled,
         minTierFilter = minTierFilter,
         showScoresByDefault = showScoresByDefault,
-        soccerWeights = soccerWeights
+        soccerWeights = soccerWeights,
+        onGameClick = onGameClick
     )
 }
 

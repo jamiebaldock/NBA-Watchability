@@ -146,7 +146,8 @@ fun HistoryScreen(
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
     showScoresByDefault: Boolean = false,
-    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT
+    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT,
+    onGameClick: (Game) -> Unit = {}
 ) {
     // Plain remember (not rememberSaveable) - resets to showScoresByDefault
     // every time this composable enters composition, e.g. switching back to
@@ -317,7 +318,8 @@ fun HistoryScreen(
                                     favoriteTeamNames = favoriteTeamNames,
                                     onToggleFavoriteTeam = onToggleFavoriteTeam,
                                     favoritePlayerNames = favoritePlayerNames,
-                                    soccerWeights = soccerWeights
+                                    soccerWeights = soccerWeights,
+                                    onGameClick = onGameClick
                                 )
                             }
                         }

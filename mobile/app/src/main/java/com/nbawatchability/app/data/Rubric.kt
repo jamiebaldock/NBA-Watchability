@@ -216,3 +216,48 @@ fun Game.effectiveScore(weights: RubricWeights, soccerWeights: SoccerRubricWeigh
 
 fun Game.effectiveTier(weights: RubricWeights, soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT): Tier? =
     effectiveScore(weights, soccerWeights)?.let { Tier.fromScore(it) }
+
+/** One line of the game-detail popup's rubric-breakdown tab - a labeled category and the weighted points it actually contributed. */
+data class RubricBreakdownEntry(val label: String, val points: Float)
+
+/**
+ * Per-category breakdown backing the game-detail popup's "why did this score
+ * what it scored" tab - reuses the exact same point functions
+ * effectiveScore/effectiveTier already call, just surfaced individually
+ * instead of summed, so this can never drift out of sync with the actual
+ * total. Empty if the outcome isn't revealed yet (same scoreVisible gate as
+ * effectiveScore).
+ */
+fun Game.rubricBreakdown(weights: RubricWeights, soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT): List<RubricBreakdownEntry> {
+    if (!scoreVisible || score == null) return emptyList()
+    return if (league == "soccer") {
+        listOf(
+            RubricBreakdownEntry("Margin", SoccerRubric.marginPoints(margin) * soccerWeights.margin),
+            RubricBreakdownEntry("Total goals", SoccerRubric.totalGoalsPoints(totalGoals) * soccerWeights.totalGoals),
+            RubricBreakdownEntry("Comeback", SoccerRubric.comebackPoints(comeback) * soccerWeights.comeback),
+            RubricBreakdownEntry("Late drama", SoccerRubric.lateDramaPoints(lateDecisiveGoal) * soccerWeights.lateDrama),
+            RubricBreakdownEntry("Star performance", SoccerRubric.starPoints(maxGoalsByPlayer) * soccerWeights.star),
+            RubricBreakdownEntry("Chances created", SoccerRubric.chancesPoints(combinedShotsOnTarget) * soccerWeights.chances),
+            RubricBreakdownEntry("Red card", SoccerRubric.redCardPoints(anyRedCard) * soccerWeights.redCard),
+            RubricBreakdownEntry("Goalkeeper saves", SoccerRubric.savesPoints(maxSavesByKeeper) * soccerWeights.saves),
+            RubricBreakdownEntry("Free-kick goal", SoccerRubric.freeKickGoalPoints(anyFreeKickGoal) * soccerWeights.freeKickGoal),
+            RubricBreakdownEntry("Penalty miss", SoccerRubric.penaltyMissPoints(anyPenaltyMissed) * soccerWeights.penaltyMiss),
+            RubricBreakdownEntry("Stakes", SoccerRubric.stakesPoints(stakes) * weights.stakes)
+        )
+    } else {
+        val isWnba = league == "wnba"
+        listOf(
+            RubricBreakdownEntry("Margin", Rubric.marginPoints(margin, isWnba) * weights.margin),
+            RubricBreakdownEntry(
+                "Clutch finish",
+                Rubric.clutchPoints(closeInFinalTwoMin, leadChangeInFinalMin, decidedOnFinalPossession) * weights.clutch
+            ),
+            RubricBreakdownEntry("Buzzer-beater", (if (buzzerBeater) 10 else 0) * weights.buzzerBeater),
+            RubricBreakdownEntry("Comeback", Rubric.comebackPoints(comeback, isWnba) * weights.comeback),
+            RubricBreakdownEntry("Lead changes", Rubric.leadChangePoints(leadChanges, isWnba) * weights.leadChanges),
+            RubricBreakdownEntry("Overtime", Rubric.overtimePoints(overtimePeriods) * weights.overtime),
+            RubricBreakdownEntry("Star performance", Rubric.starPoints(starPerformance) * weights.starPerformance),
+            RubricBreakdownEntry("Stakes", Rubric.stakesPoints(stakes) * weights.stakes)
+        )
+    }
+}

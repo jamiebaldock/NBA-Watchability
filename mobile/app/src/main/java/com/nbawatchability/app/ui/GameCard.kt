@@ -110,11 +110,17 @@ fun GameCard(
     // Global favorites (not per-league), same identity match as
     // favoriteTeamNames - backs the standout-performance callout below.
     favoritePlayerNames: Set<String> = emptySet(),
-    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT
+    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT,
+    // Opens the game-detail popup - a no-op default so a tap on an upcoming/
+    // live tile (no rubric breakdown or real top-performer stats yet) does
+    // nothing, same as today's behavior; only invoked when game.hasBreakdown
+    // is true (gated below, not by the caller).
+    onGameClick: (Game) -> Unit = {}
 ) {
     val tier = game.effectiveTier(weights, soccerWeights)
 
     Card(
+        onClick = { if (game.hasBreakdown) onGameClick(game) },
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = SurfaceCardElevated),
         shape = RoundedCornerShape(14.dp),

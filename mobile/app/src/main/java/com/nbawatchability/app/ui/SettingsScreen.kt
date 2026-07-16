@@ -77,7 +77,9 @@ fun SettingsScreen(
     wifiOnlyHighlights: Boolean,
     onToggleWifiOnlyHighlights: () -> Unit,
     lightTheme: Boolean,
-    onToggleLightTheme: () -> Unit
+    onToggleLightTheme: () -> Unit,
+    defaultGameDetailTab: GameDetailTab,
+    onDefaultGameDetailTabChange: (GameDetailTab) -> Unit
 ) {
     Scaffold(
         containerColor = BackgroundBase,
@@ -311,6 +313,10 @@ fun SettingsScreen(
 
             HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
 
+            DefaultGameDetailTabRow(selectedTab = defaultGameDetailTab, onTabSelected = onDefaultGameDetailTabChange)
+
+            HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -355,6 +361,49 @@ private fun DefaultLandingTabRow(selectedTab: BottomNavTab, onTabSelected: (Bott
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             BottomNavTab.entries.forEach { tab ->
+                DropdownMenuItem(
+                    text = { Text(tab.label) },
+                    onClick = {
+                        onTabSelected(tab)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+private val GameDetailTab.label: String
+    get() = when (this) {
+        GameDetailTab.BREAKDOWN -> "Breakdown"
+        GameDetailTab.TOP_PERFORMERS -> "Top Performers"
+    }
+
+/** Which of the game-detail popup's two tabs shows first when it opens - same tap-to-open dropdown pattern as DefaultLandingTabRow above, just 2 options instead of 7. */
+@Composable
+private fun DefaultGameDetailTabRow(selectedTab: GameDetailTab, onTabSelected: (GameDetailTab) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = true }
+                .padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = null, tint = TextSecondary)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(text = "Default game-detail tab", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = selectedTab.label, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+            }
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            GameDetailTab.entries.forEach { tab ->
                 DropdownMenuItem(
                     text = { Text(tab.label) },
                     onClick = {

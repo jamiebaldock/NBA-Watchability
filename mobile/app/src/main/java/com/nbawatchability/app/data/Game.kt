@@ -43,6 +43,15 @@ enum class Tier(val label: String, val emoji: String) {
 /** Mirrors the backend JSON contract in nba-watchability-spec.md section 5. */
 @Serializable
 data class Game(
+    // ESPN's own event id - distinct from this class's own computed [id]
+    // property below (the away@home@utc composite key every existing
+    // screen already uses for LazyColumn/starred/favorite identity, which
+    // stays exactly as-is). Only used as the lookup key for the game-detail
+    // popup's /game-detail?eventId= endpoint (Phase G) - null on any Game
+    // instance that predates this field or was never round-tripped through
+    // the backend (there are none in practice, but this keeps decoding an
+    // older cached response harmless rather than a hard failure).
+    @SerialName("id") val eventId: String? = null,
     @SerialName("a") val away: String,
     @SerialName("h") val home: String,
     @SerialName("al") val awayLogo: String? = null,
