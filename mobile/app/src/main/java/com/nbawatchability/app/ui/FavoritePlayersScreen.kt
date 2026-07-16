@@ -200,7 +200,11 @@ fun FavoritePlayersScreen(
                                     PlayerRow(
                                         player = player,
                                         isFavorite = player.name in favoritePlayerNames,
-                                        onToggle = { onToggleFavoritePlayer(FavoritePlayer(name = player.name, team = team.name)) }
+                                        onToggle = {
+                                            onToggleFavoritePlayer(
+                                                FavoritePlayer(name = player.name, team = team.name, leagueGroup = selectedLeague.apiValue)
+                                            )
+                                        }
                                     )
                                 }
                             }

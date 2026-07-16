@@ -50,5 +50,11 @@ data class RosterResponse(
 @Serializable
 data class FavoritePlayer(
     val name: String,
-    val team: String
+    val team: String,
+    // LeagueGroup's own apiValue - same reasoning as Team.leagueGroup. Null
+    // on any FavoritePlayer favorited before this field existed;
+    // FavoritesViewModel's per-league cap check treats a null leagueGroup as
+    // its own bucket rather than crashing or silently merging it into a real
+    // league's count.
+    val leagueGroup: String? = null
 )

@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.nbawatchability.app.data.FavoritePlayer
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.GameStatus
 import com.nbawatchability.app.data.RubricWeights
@@ -110,6 +111,9 @@ fun GameCard(
     // Global favorites (not per-league), same identity match as
     // favoriteTeamNames - backs the standout-performance callout below.
     favoritePlayerNames: Set<String> = emptySet(),
+    // Long-press quick-add/remove shortcut on a standout-performer name,
+    // mirroring onToggleFavoriteTeam above - same no-op default reasoning.
+    onToggleFavoritePlayer: (FavoritePlayer) -> Unit = {},
     soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT,
     // Opens the game-detail popup - a no-op default so a tap on an upcoming/
     // live tile (no rubric breakdown or real top-performer stats yet) does
@@ -177,12 +181,15 @@ fun GameCard(
                     }
                 }
 
+                // leagueGroupOf(game) (not the screen's own selectedLeague
+                // dropdown) - correct even in Starred's "all leagues" mode,
+                // where a tile's actual league can differ from whatever the
+                // dropdown happens to be sitting on. Hoisted above the team
+                // rows below since the standout-performer callout further
+                // down also needs it to tag a long-press favorite.
+                val gameLeagueGroup = leagueGroupOf(game).apiValue
+
                 Column(modifier = Modifier.padding(top = 8.dp)) {
-                    // leagueGroupOf(game) (not the screen's own selectedLeague
-                    // dropdown) - correct even in Starred's "all leagues"
-                    // mode, where a tile's actual league can differ from
-                    // whatever the dropdown happens to be sitting on.
-                    val gameLeagueGroup = leagueGroupOf(game).apiValue
                     TeamRow(
                         logoUrl = game.awayLogo,
                         name = game.away,
@@ -200,14 +207,28 @@ fun GameCard(
                     )
                 }
 
-                // Independent of tier/score - a favorited player's standout
-                // line surfaces here even on an otherwise Skippable game.
-                // Only meaningful once final (box-score stats aren't
-                // complete before then).
+                // Independent of tier/score - standout lines surface here
+                // even on an otherwise Skippable game. Only meaningful once
+                // final (box-score stats aren't complete before then). Shows
+                // every standout performer, not just already-favorited ones
+                // (favorited names get the accent treatment) - long-pressing
+                // any name here is a quick-add/remove shortcut, same idea as
+                // long-pressing a team logo above, so a player worth
+                // favoriting can be spotted and favorited right from a tile
+                // instead of only via Settings search.
                 if (game.status == GameStatus.FINAL) {
-                    val favoritedStandouts = game.standoutPerformers.orEmpty().filter { it.name in favoritePlayerNames }
-                    if (favoritedStandouts.isNotEmpty()) {
-                        StandoutPerformerCallout(favoritedStandouts, modifier = Modifier.padding(top = 8.dp))
+                    val standouts = game.standoutPerformers.orEmpty()
+                    if (standouts.isNotEmpty()) {
+                        StandoutPerformerCallout(
+                            performers = standouts,
+                            favoritePlayerNames = favoritePlayerNames,
+                            onTogglePlayer = { performer ->
+                                onToggleFavoritePlayer(
+                                    FavoritePlayer(name = performer.name, team = performer.team ?: "", leagueGroup = gameLeagueGroup)
+                                )
+                            },
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
                     }
                 }
 
@@ -302,27 +323,48 @@ private fun StarButton(isStarred: Boolean, onClick: () -> Unit, modifier: Modifi
 }
 
 /**
- * One line per favorited player who had a standout game here - deliberately
- * plain text (name + line), not a full card, since this can appear on any
- * tile regardless of tier, including a Skippable one that otherwise has
- * very little else drawing attention to it.
+ * One line per standout performer in this game - deliberately plain text
+ * (name + line), not a full card, since this can appear on any tile
+ * regardless of tier, including a Skippable one that otherwise has very
+ * little else drawing attention to it. Every standout shows here (not just
+ * already-favorited ones), so a player worth favoriting can be spotted
+ * mid-browse; a favorited name gets the same accent-tint/long-press
+ * treatment TeamRow above gives a favorited team.
  */
 @Composable
-private fun StandoutPerformerCallout(performers: List<StandoutPerformer>, modifier: Modifier = Modifier) {
+private fun StandoutPerformerCallout(
+    performers: List<StandoutPerformer>,
+    favoritePlayerNames: Set<String>,
+    onTogglePlayer: (StandoutPerformer) -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(modifier = modifier) {
         performers.forEach { performer ->
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-                Icon(
-                    imageVector = Icons.Filled.Star,
-                    contentDescription = null,
-                    tint = FavoriteAccent,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
+            val isFavorite = performer.name in favoritePlayerNames
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        if (isFavorite) FavoriteAccent.copy(alpha = 0.16f) else Color.Transparent,
+                        RoundedCornerShape(6.dp)
+                    )
+                    .combinedClickable(onClick = {}, onLongClick = { onTogglePlayer(performer) })
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                if (isFavorite) {
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = null,
+                        tint = FavoriteAccent,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
                 Text(
                     text = "${performer.name}: ${performer.line}",
-                    color = FavoriteAccent,
-                    fontWeight = FontWeight.Bold,
+                    color = if (isFavorite) FavoriteAccent else TextSecondary,
+                    fontWeight = if (isFavorite) FontWeight.Bold else FontWeight.Normal,
                     style = MaterialTheme.typography.bodySmall
                 )
             }

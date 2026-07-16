@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.nbawatchability.app.data.FavoritePlayer
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
@@ -143,6 +144,7 @@ fun HistoryScreen(
     bumpFavoriteTeamGames: Boolean = false,
     onToggleFavoriteTeam: (Team) -> Unit = {},
     favoritePlayerNames: Set<String> = emptySet(),
+    onToggleFavoritePlayer: (FavoritePlayer) -> Unit = {},
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
     showScoresByDefault: Boolean = false,
@@ -318,6 +320,7 @@ fun HistoryScreen(
                                     favoriteTeamNames = favoriteTeamNames,
                                     onToggleFavoriteTeam = onToggleFavoriteTeam,
                                     favoritePlayerNames = favoritePlayerNames,
+                                    onToggleFavoritePlayer = onToggleFavoritePlayer,
                                     soccerWeights = soccerWeights,
                                     onGameClick = onGameClick
                                 )

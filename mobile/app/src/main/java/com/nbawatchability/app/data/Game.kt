@@ -19,7 +19,12 @@ enum class GameStatus {
 @Serializable
 data class StandoutPerformer(
     val name: String,
-    val line: String
+    val line: String,
+    // Which of the game's two teams this player is on (matches Game.away/
+    // Game.home) - null on any row persisted before this field existed.
+    // Lets a tile's long-press quick-add (GameCard.kt) tag a favorited
+    // player with a team, same as every other favorite-player entry point.
+    val team: String? = null
 )
 
 enum class Tier(val label: String, val emoji: String) {

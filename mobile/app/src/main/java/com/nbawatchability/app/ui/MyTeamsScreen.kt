@@ -45,14 +45,16 @@ import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
  * FavoritePlayersScreen), not here, so there's only one place that owns
  * "the full list of every team/player in a league." Both sections stack in
  * one scrollable column rather than nested LazyColumns, since each list is
- * capped at 3 per league - never enough entries to need its own
- * virtualized scroll even with every league maxed out.
+ * capped at MAX_FAVORITE_TEAMS/MAX_FAVORITE_PLAYERS per league - never
+ * enough entries to need its own virtualized scroll even with every league
+ * maxed out.
  *
- * Favorite teams are grouped under a small league header (James' per-league
- * cap makes this worth surfacing - "3 favorites" no longer means "3 total,"
- * so which league each one belongs to is now genuinely useful context, not
- * just decoration). A team favorited before this field existed (leagueGroup
- * null) falls into its own "Other" bucket rather than being dropped.
+ * Both favorite teams and favorite players are grouped under a small league
+ * header (James' per-league caps make this worth surfacing - "N favorites"
+ * no longer means "N total," so which league each one belongs to is now
+ * genuinely useful context, not just decoration). An entry favorited before
+ * its leagueGroup field existed falls into its own "Other" bucket rather
+ * than being dropped.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -115,37 +117,28 @@ fun MyTeamsScreen(
 
             if (favoritePlayers.isEmpty()) {
                 Text(
-                    text = "No favorite players yet - add up to $MAX_FAVORITE_PLAYERS to get called out when they have a big game.",
+                    text = "No favorite players yet - add up to $MAX_FAVORITE_PLAYERS per league to get called out when they have a big game.",
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(modifier = Modifier.height(12.dp))
             } else {
-                favoritePlayers.forEach { player ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
-                            Text(text = player.team, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                        }
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Remove ${player.name}",
-                            tint = TextMuted,
-                            modifier = Modifier.size(22.dp).clickable { onRemoveFavoritePlayer(player) }
-                        )
+                val playersByLeague = favoritePlayers.groupBy { it.leagueGroup }
+                LeagueGroup.entries.forEach { league ->
+                    val playersInLeague = playersByLeague[league.apiValue].orEmpty()
+                    if (playersInLeague.isNotEmpty()) {
+                        FavoritePlayersLeagueGroup(league.displayName, playersInLeague, onRemoveFavoritePlayer)
                     }
+                }
+                val unknownLeaguePlayers = playersByLeague[null].orEmpty()
+                if (unknownLeaguePlayers.isNotEmpty()) {
+                    FavoritePlayersLeagueGroup("Other", unknownLeaguePlayers, onRemoveFavoritePlayer)
                 }
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
-            if (favoritePlayers.size < MAX_FAVORITE_PLAYERS) {
-                Button(onClick = onAddPlayerClick, modifier = Modifier.fillMaxWidth()) {
-                    Text("Add a favorite player")
-                }
+            Button(onClick = onAddPlayerClick, modifier = Modifier.fillMaxWidth()) {
+                Text("Add a favorite player")
             }
         }
     }
@@ -177,6 +170,34 @@ private fun FavoriteTeamsLeagueGroup(leagueLabel: String, teams: List<Team>, onR
                 contentDescription = "Remove ${team.name}",
                 tint = TextMuted,
                 modifier = Modifier.size(22.dp).clickable { onRemoveFavoriteTeam(team) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun FavoritePlayersLeagueGroup(leagueLabel: String, players: List<FavoritePlayer>, onRemoveFavoritePlayer: (FavoritePlayer) -> Unit) {
+    Text(
+        text = leagueLabel,
+        color = TextSecondary,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+    )
+    players.forEach { player ->
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
+                Text(text = player.team, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            }
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Remove ${player.name}",
+                tint = TextMuted,
+                modifier = Modifier.size(22.dp).clickable { onRemoveFavoritePlayer(player) }
             )
         }
     }

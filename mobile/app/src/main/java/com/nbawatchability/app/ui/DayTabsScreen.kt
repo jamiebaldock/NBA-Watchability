@@ -110,6 +110,7 @@ fun DayTabsScreen(
     bumpFavoriteTeamGames: Boolean = false,
     onToggleFavoriteTeam: (Team) -> Unit = {},
     favoritePlayerNames: Set<String> = emptySet(),
+    onToggleFavoritePlayer: (com.nbawatchability.app.data.FavoritePlayer) -> Unit = {},
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
     soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT,
@@ -236,6 +237,7 @@ fun DayTabsScreen(
                             bumpFavoriteTeamGames = bumpFavoriteTeamGames,
                             onToggleFavoriteTeam = onToggleFavoriteTeam,
                             favoritePlayerNames = favoritePlayerNames,
+                            onToggleFavoritePlayer = onToggleFavoritePlayer,
                             minTierFilterEnabled = minTierFilterEnabled,
                             minTierFilter = minTierFilter,
                             soccerWeights = soccerWeights,
@@ -353,6 +355,7 @@ private fun DayGamesList(
     bumpFavoriteTeamGames: Boolean = false,
     onToggleFavoriteTeam: (Team) -> Unit = {},
     favoritePlayerNames: Set<String> = emptySet(),
+    onToggleFavoritePlayer: (com.nbawatchability.app.data.FavoritePlayer) -> Unit = {},
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
     soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT,
@@ -409,6 +412,7 @@ private fun DayGamesList(
                 favoriteTeamNames = favoriteTeamNames,
                 onToggleFavoriteTeam = onToggleFavoriteTeam,
                 favoritePlayerNames = favoritePlayerNames,
+                onToggleFavoritePlayer = onToggleFavoritePlayer,
                 soccerWeights = soccerWeights,
                 onGameClick = onGameClick
             )

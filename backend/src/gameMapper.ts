@@ -196,7 +196,8 @@ export function findStandoutPerformers(
         if (pts >= good || isTripleDouble) {
           performers.push({
             name: athlete.athlete.displayName,
-            line: isTripleDouble ? `${pts} PTS, ${reb} REB, ${ast} AST` : `${pts} PTS`
+            line: isTripleDouble ? `${pts} PTS, ${reb} REB, ${ast} AST` : `${pts} PTS`,
+            team: team.team.displayName
           });
         }
       }

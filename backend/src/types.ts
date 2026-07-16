@@ -96,6 +96,12 @@ export interface GameJson {
 export interface StandoutPerformerJson {
   name: string;
   line: string;
+  // Which of the game's two teams this player is on (display name, matching
+  // GameJson's own a/h fields) - optional since any row persisted before this
+  // field existed decodes without it. Needed so a tile's long-press quick-add
+  // (mobile GameCard.kt) can tag a favorited player with a team, the same way
+  // every other favorite-player entry point already does.
+  team?: string;
 }
 
 export interface StandingsTeamJson {

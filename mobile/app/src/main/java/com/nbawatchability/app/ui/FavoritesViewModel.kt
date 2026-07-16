@@ -12,8 +12,8 @@ import com.nbawatchability.app.data.FavoritesRepository
 import com.nbawatchability.app.data.Team
 import kotlinx.coroutines.launch
 
-const val MAX_FAVORITE_TEAMS = 3
-const val MAX_FAVORITE_PLAYERS = 3
+const val MAX_FAVORITE_TEAMS = 5
+const val MAX_FAVORITE_PLAYERS = 10
 
 class FavoritesViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -74,12 +74,21 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { repository.setFavoriteTeams(updated) }
     }
 
-    /** Same toggle/cap shape as toggleFavoriteTeam above, for the player search/browse screen. */
+    /**
+     * Same per-league cap shape as toggleFavoriteTeam above (James' request
+     * to match the teams cap change) - up to MAX_FAVORITE_PLAYERS in NBA
+     * *and* MAX_FAVORITE_PLAYERS in EPL *and* ..., counted by matching
+     * [player]'s own leagueGroup against every other currently-favorited
+     * player's, not the total list size.
+     */
     fun toggleFavoritePlayer(player: FavoritePlayer) {
         val alreadyFavorited = isFavoritePlayer(player.name)
-        if (!alreadyFavorited && favoritePlayers.size >= MAX_FAVORITE_PLAYERS) {
-            Toast.makeText(getApplication(), "Up to $MAX_FAVORITE_PLAYERS favorite players for now", Toast.LENGTH_SHORT).show()
-            return
+        if (!alreadyFavorited) {
+            val countInSameLeague = favoritePlayers.count { it.leagueGroup == player.leagueGroup }
+            if (countInSameLeague >= MAX_FAVORITE_PLAYERS) {
+                Toast.makeText(getApplication(), "Up to $MAX_FAVORITE_PLAYERS favorite players per league for now", Toast.LENGTH_SHORT).show()
+                return
+            }
         }
         val updated = if (alreadyFavorited) favoritePlayers.filterNot { it.name == player.name } else favoritePlayers + player
         viewModelScope.launch { repository.setFavoritePlayers(updated) }

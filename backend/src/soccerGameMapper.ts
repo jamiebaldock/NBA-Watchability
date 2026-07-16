@@ -108,13 +108,19 @@ function statValue(team: EspnSoccerBoxscoreTeam, name: string): number {
  */
 function findStandoutScorers(goals: ParsedGoal[]): StandoutPerformerJson[] {
   const counts: Record<string, number> = {};
+  const teamByScorer: Record<string, string> = {};
   for (const g of goals) {
     if (g.ownGoal || !g.scorer) continue;
     counts[g.scorer] = (counts[g.scorer] ?? 0) + 1;
+    teamByScorer[g.scorer] = g.team;
   }
   return Object.entries(counts)
     .filter(([, count]) => count >= 2)
-    .map(([name, count]) => ({ name, line: count >= 3 ? `Hat-trick (${count} goals)` : `${count} goals` }));
+    .map(([name, count]) => ({
+      name,
+      line: count >= 3 ? `Hat-trick (${count} goals)` : `${count} goals`,
+      team: teamByScorer[name]
+    }));
 }
 
 export interface MappedSoccerGame {
