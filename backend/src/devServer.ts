@@ -13,6 +13,7 @@ import {
 } from "./httpHandler";
 import { startHighlightsPoller } from "./highlightsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
+import { getLagPercentiles } from "./gameStore";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
 
 const app = express();
@@ -124,6 +125,25 @@ app.get("/current-season-start", (req, res) => {
       res.status(500).json({ error: "internal error" });
     }
   }
+});
+
+// TEMPORARY read-only diagnostic route - reports the current learned
+// highlights-search lag percentiles per league, for James's request.
+// Remove once reported.
+app.get("/admin/lag-percentiles", (_req, res) => {
+  const leagues: Array<{ league: string; leagueGroup: string }> = [
+    { league: "nba", leagueGroup: "nba" },
+    { league: "nba-summer-las-vegas", leagueGroup: "nba" },
+    { league: "nba-summer-utah", leagueGroup: "nba" },
+    { league: "nba-summer-sacramento", leagueGroup: "nba" },
+    { league: "wnba", leagueGroup: "wnba" },
+  ];
+  res.json(
+    leagues.map(({ league, leagueGroup }) => ({
+      league,
+      ...getLagPercentiles(league, leagueGroup),
+    }))
+  );
 });
 
 app.get("/news", async (req, res) => {
