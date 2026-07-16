@@ -708,17 +708,6 @@ export function recordSearchQuotaSpend(): void {
   ).run(todayUtcKey());
 }
 
-// Temporary diagnostic (devServer.ts's /admin/search-budget-history) -
-// exposes our own persisted daily search.list spend counter, to compare
-// against Google Cloud Console's reported per-day usage. Remove once the
-// quota-overage investigation is resolved.
-export function getSearchBudgetHistory(): { date: string; count: number }[] {
-  return db.prepare(`SELECT date, count FROM youtube_search_budget ORDER BY date DESC LIMIT 10`).all() as {
-    date: string;
-    count: number;
-  }[];
-}
-
 export function closeDb(): void {
   db.close();
 }

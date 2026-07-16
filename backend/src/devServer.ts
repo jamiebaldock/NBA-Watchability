@@ -14,7 +14,6 @@ import {
 import { startHighlightsPoller } from "./highlightsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
-import { getSearchBudgetHistory } from "./gameStore";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
@@ -138,17 +137,6 @@ app.get("/news", async (req, res) => {
       console.error(err);
       res.status(500).json({ error: "internal error" });
     }
-  }
-});
-
-// Temporary read-only diagnostic - investigating a YouTube search.list quota
-// spike James spotted in Google Cloud Console. Removed once resolved.
-app.get("/admin/search-budget-history", (_req, res) => {
-  try {
-    res.json(getSearchBudgetHistory());
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "internal error" });
   }
 });
 
