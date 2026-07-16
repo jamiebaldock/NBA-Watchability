@@ -14,6 +14,8 @@ import {
 import { startHighlightsPoller } from "./highlightsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
+import { ALL_LEAGUES } from "./espnClient";
+import { getLagPercentiles } from "./gameStore";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
@@ -138,6 +140,16 @@ app.get("/news", async (req, res) => {
       res.status(500).json({ error: "internal error" });
     }
   }
+});
+
+// Temporary read-only diagnostic - reports current learned highlights-search
+// lag per league for James, then gets removed once reported.
+app.get("/admin/lag-percentiles", (_req, res) => {
+  const result = ALL_LEAGUES.map((league) => {
+    const leagueGroup = league === "wnba" ? "wnba" : "nba";
+    return { league, leagueGroup, ...getLagPercentiles(league, leagueGroup) };
+  });
+  res.json(result);
 });
 
 app.listen(PORT, () => {
