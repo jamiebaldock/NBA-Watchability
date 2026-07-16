@@ -97,10 +97,12 @@ fun AppRoot() {
     var showAbout by rememberSaveable { mutableStateOf(false) }
     var showRubricWeights by rememberSaveable { mutableStateOf(false) }
     var showSelectedSports by rememberSaveable { mutableStateOf(false) }
+    var showFavoriteTeams by rememberSaveable { mutableStateOf(false) }
     var highlightsVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     val settingsViewModel: RubricSettingsViewModel = viewModel()
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
     val starredGamesViewModel: StarredGamesViewModel = viewModel()
+    val favoritesViewModel: FavoritesViewModel = viewModel()
 
     // Persisted settings (last league, sort, numeric score) load from
     // DataStore asynchronously - rendering a tab before they arrive would
@@ -117,6 +119,7 @@ fun AppRoot() {
     BackHandler(enabled = showAbout) { showAbout = false }
     BackHandler(enabled = showRubricWeights) { showRubricWeights = false }
     BackHandler(enabled = showSelectedSports) { showSelectedSports = false }
+    BackHandler(enabled = showFavoriteTeams) { showFavoriteTeams = false }
     BackHandler(enabled = highlightsVideoId != null) { highlightsVideoId = null }
 
     if (showAbout) {
@@ -139,6 +142,15 @@ fun AppRoot() {
             enabledLeagues = appSettingsViewModel.settings.enabledLeagues,
             onToggleLeague = appSettingsViewModel::toggleLeagueEnabled,
             onBack = { showSelectedSports = false }
+        )
+        return
+    }
+
+    if (showFavoriteTeams) {
+        FavoriteTeamsScreen(
+            favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
+            onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
+            onBack = { showFavoriteTeams = false }
         )
         return
     }
@@ -168,9 +180,16 @@ fun AppRoot() {
                     onToggleShowAllLeaguesInStarred = appSettingsViewModel::toggleShowAllLeaguesInStarred,
                     onSelectedSportsClick = { showSelectedSports = true },
                     onRubricWeightsClick = { showRubricWeights = true },
-                    onAboutClick = { showAbout = true }
+                    onAboutClick = { showAbout = true },
+                    onFavoriteTeamsClick = { showFavoriteTeams = true },
+                    bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
+                    onToggleBumpFavoriteTeamGames = appSettingsViewModel::toggleBumpFavoriteTeamGames
                 )
-                BottomNavTab.MY_TEAMS -> MyTeamsScreen()
+                BottomNavTab.MY_TEAMS -> MyTeamsScreen(
+                    favoriteTeams = favoritesViewModel.favoriteTeams,
+                    onRemoveFavorite = favoritesViewModel::toggleFavoriteTeam,
+                    onAddTeamClick = { showFavoriteTeams = true }
+                )
                 else -> if (!selectedLeague.isSupported) {
                     ComingSoonTab(
                         selectedLeague = selectedLeague,
@@ -188,7 +207,10 @@ fun AppRoot() {
                             onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
                             starredIds = starredGamesViewModel.starredIds,
                             onToggleStar = starredGamesViewModel::toggleStar,
-                            onWatchHighlights = { videoId -> highlightsVideoId = videoId }
+                            onWatchHighlights = { videoId -> highlightsVideoId = videoId },
+                            favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
+                            bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
+                            onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam
                         )
                         BottomNavTab.LEADERS -> LeadersTab(
                             selectedLeague = selectedLeague,
@@ -210,7 +232,10 @@ fun AppRoot() {
                             showAllLeagues = appSettingsViewModel.settings.showAllLeaguesInStarred,
                             onToggleAllLeagues = appSettingsViewModel::toggleShowAllLeaguesInStarred,
                             weights = settingsViewModel.weights,
-                            onWatchHighlights = { videoId -> highlightsVideoId = videoId }
+                            onWatchHighlights = { videoId -> highlightsVideoId = videoId },
+                            favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
+                            bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
+                            onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam
                         )
                         BottomNavTab.HISTORY -> HistoryTab(
                             weights = settingsViewModel.weights,
@@ -221,7 +246,10 @@ fun AppRoot() {
                             onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
                             starredIds = starredGamesViewModel.starredIds,
                             onToggleStar = starredGamesViewModel::toggleStar,
-                            onWatchHighlights = { videoId -> highlightsVideoId = videoId }
+                            onWatchHighlights = { videoId -> highlightsVideoId = videoId },
+                            favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
+                            bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
+                            onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam
                         )
                         else -> {} // unreachable: SETTINGS/MY_TEAMS handled above
                     }
@@ -279,7 +307,10 @@ private fun GamesTab(
     onToggleNumericScore: () -> Unit,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
-    onWatchHighlights: (String) -> Unit
+    onWatchHighlights: (String) -> Unit,
+    favoriteTeamNames: Set<String>,
+    bumpFavoriteTeamGames: Boolean,
+    onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit
 ) {
     val viewModel: GameListViewModel = viewModel()
 
@@ -325,7 +356,10 @@ private fun GamesTab(
             fullSeasonRange = viewModel.fullSeasonRange,
             datesWithGames = viewModel.datesWithGames,
             isJumpingToDate = viewModel.isJumpingToDate,
-            onJumpToDate = viewModel::jumpToDate
+            onJumpToDate = viewModel::jumpToDate,
+            favoriteTeamNames = favoriteTeamNames,
+            bumpFavoriteTeamGames = bumpFavoriteTeamGames,
+            onToggleFavoriteTeam = onToggleFavoriteTeam
         )
     }
 }
@@ -341,7 +375,10 @@ private fun StarredTab(
     showAllLeagues: Boolean,
     onToggleAllLeagues: () -> Unit,
     weights: RubricWeights,
-    onWatchHighlights: (String) -> Unit
+    onWatchHighlights: (String) -> Unit,
+    favoriteTeamNames: Set<String>,
+    bumpFavoriteTeamGames: Boolean,
+    onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit
 ) {
     // Fires on first composition and again whenever the starred set changes
     // (a star added/removed anywhere in the app) - re-fetches live data for
@@ -369,7 +406,10 @@ private fun StarredTab(
         onLeagueSelected = onLeagueSelected,
         enabledLeagues = enabledLeagues,
         showAllLeagues = showAllLeagues,
-        onToggleAllLeagues = onToggleAllLeagues
+        onToggleAllLeagues = onToggleAllLeagues,
+        favoriteTeamNames = favoriteTeamNames,
+        bumpFavoriteTeamGames = bumpFavoriteTeamGames,
+        onToggleFavoriteTeam = onToggleFavoriteTeam
     )
 }
 
@@ -383,7 +423,10 @@ private fun HistoryTab(
     onToggleNumericScore: () -> Unit,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
-    onWatchHighlights: (String) -> Unit
+    onWatchHighlights: (String) -> Unit,
+    favoriteTeamNames: Set<String>,
+    bumpFavoriteTeamGames: Boolean,
+    onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit
 ) {
     val viewModel: HistoryViewModel = viewModel()
     // Both leagues have their own backfill now - always resets to "This
@@ -410,7 +453,10 @@ private fun HistoryTab(
         onWatchHighlights = onWatchHighlights,
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
-        enabledLeagues = enabledLeagues
+        enabledLeagues = enabledLeagues,
+        favoriteTeamNames = favoriteTeamNames,
+        bumpFavoriteTeamGames = bumpFavoriteTeamGames,
+        onToggleFavoriteTeam = onToggleFavoriteTeam
     )
 }
 

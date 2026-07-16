@@ -7,7 +7,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,9 +51,11 @@ import coil.compose.AsyncImage
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.GameStatus
 import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.data.effectiveTier
+import com.nbawatchability.app.ui.theme.FavoriteAccent
 import com.nbawatchability.app.ui.theme.LiveRed
 import com.nbawatchability.app.ui.theme.SurfaceCardElevated
 import com.nbawatchability.app.ui.theme.TextMuted
@@ -90,7 +94,16 @@ fun GameCard(
     // watchability rating (tier badge + breakdown), which stay visible
     // either way - the rating is the point of this tab, only the literal
     // score is optional to peek at.
-    showScore: Boolean = true
+    showScore: Boolean = true,
+    // Global favorites (not per-league) - checked against by exact team name
+    // match, same identity every favorites surface in the app uses.
+    favoriteTeamNames: Set<String> = emptySet(),
+    // Long-press quick-add/remove shortcut, wired through from wherever this
+    // card is rendered - a no-op default so tiles that don't pass a
+    // FavoritesViewModel (there are none left after this phase, but keeps
+    // the parameter list backward-compatible) simply don't respond to a
+    // long-press rather than crashing.
+    onToggleFavoriteTeam: (Team) -> Unit = {}
 ) {
     val tier = game.effectiveTier(weights)
 
@@ -152,9 +165,21 @@ fun GameCard(
                 }
 
                 Column(modifier = Modifier.padding(top = 8.dp)) {
-                    TeamRow(logoUrl = game.awayLogo, name = game.away, score = game.awayScore.takeIf { showScore })
+                    TeamRow(
+                        logoUrl = game.awayLogo,
+                        name = game.away,
+                        score = game.awayScore.takeIf { showScore },
+                        isFavorite = game.away in favoriteTeamNames,
+                        onLongPress = { onToggleFavoriteTeam(Team(game.away, game.awayLogo)) }
+                    )
                     Spacer(modifier = Modifier.height(4.dp))
-                    TeamRow(logoUrl = game.homeLogo, name = game.home, score = game.homeScore.takeIf { showScore })
+                    TeamRow(
+                        logoUrl = game.homeLogo,
+                        name = game.home,
+                        score = game.homeScore.takeIf { showScore },
+                        isFavorite = game.home in favoriteTeamNames,
+                        onLongPress = { onToggleFavoriteTeam(Team(game.home, game.homeLogo)) }
+                    )
                 }
 
                 // Once the game is final, the pregame preview area is fully
@@ -287,9 +312,34 @@ private val TEAM_NAME_FONT_SIZE = 20.sp
 // [score] is only ever non-null on the History tab (see Game.awayScore/
 // homeScore) - every other tab leaves it null and this row renders exactly
 // as before.
+//
+// [isFavorite] renders as a subtle full-row background tint rather than a
+// colored border - tier already owns the border channel (Worth Your Time's
+// green outline, etc.), so a second color there would compete with it
+// instead of reading as a distinct signal. Long-pressing the row (anywhere
+// in it, not just the logo - a larger, easier target) is this tile's
+// quick-add/remove shortcut; a plain tap is intentionally a no-op here,
+// since this row has never been individually tappable.
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TeamRow(logoUrl: String?, name: String, score: Int? = null) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun TeamRow(
+    logoUrl: String?,
+    name: String,
+    score: Int? = null,
+    isFavorite: Boolean = false,
+    onLongPress: () -> Unit = {}
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (isFavorite) FavoriteAccent.copy(alpha = 0.16f) else Color.Transparent,
+                RoundedCornerShape(6.dp)
+            )
+            .combinedClickable(onClick = {}, onLongClick = onLongPress)
+            .padding(horizontal = 4.dp, vertical = 2.dp)
+    ) {
         if (logoUrl != null) {
             AsyncImage(
                 model = logoUrl,

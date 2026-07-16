@@ -17,6 +17,7 @@ private val SELECTED_LEAGUE_KEY = stringPreferencesKey("selected_league")
 private val SHOW_NUMERIC_SCORE_KEY = booleanPreferencesKey("show_numeric_score")
 private val SHOW_ALL_LEAGUES_IN_STARRED_KEY = booleanPreferencesKey("show_all_leagues_in_starred")
 private val ENABLED_LEAGUES_KEY = stringSetPreferencesKey("enabled_leagues")
+private val BUMP_FAVORITE_TEAM_GAMES_KEY = booleanPreferencesKey("bump_favorite_team_games")
 
 // Every league ships enabled by default, including the four not-yet-built
 // placeholders - Settings' "Selected Sports" section is what a user reaches
@@ -28,7 +29,12 @@ data class AppSettings(
     val selectedLeague: LeagueGroup = LeagueGroup.NBA,
     val showNumericScore: Boolean = false,
     val showAllLeaguesInStarred: Boolean = false,
-    val enabledLeagues: Set<LeagueGroup> = LeagueGroup.entries.toSet()
+    val enabledLeagues: Set<LeagueGroup> = LeagueGroup.entries.toSet(),
+    // Default (false) is "visual marking only" - a favorited team's games
+    // still show in whatever order the tab already uses (score/date), just
+    // tinted. Turning this on additionally bumps them to the top of that
+    // same order, as a stable partition rather than a re-sort by score.
+    val bumpFavoriteTeamGames: Boolean = false
 )
 
 /** Persists the last-selected league, which leagues show in the dropdown, and Games-tab display prefs (numeric score) - on-device only, so they survive an app restart. */
@@ -40,7 +46,8 @@ class AppSettingsRepository(private val context: Context) {
             selectedLeague = LeagueGroup.entries.find { it.apiValue == prefs[SELECTED_LEAGUE_KEY] } ?: LeagueGroup.NBA,
             showNumericScore = prefs[SHOW_NUMERIC_SCORE_KEY] ?: false,
             showAllLeaguesInStarred = prefs[SHOW_ALL_LEAGUES_IN_STARRED_KEY] ?: false,
-            enabledLeagues = LeagueGroup.entries.filter { it.apiValue in enabledApiValues }.toSet()
+            enabledLeagues = LeagueGroup.entries.filter { it.apiValue in enabledApiValues }.toSet(),
+            bumpFavoriteTeamGames = prefs[BUMP_FAVORITE_TEAM_GAMES_KEY] ?: false
         )
     }
 
@@ -58,5 +65,9 @@ class AppSettingsRepository(private val context: Context) {
 
     suspend fun setEnabledLeagues(leagues: Set<LeagueGroup>) {
         context.appSettingsDataStore.edit { it[ENABLED_LEAGUES_KEY] = leagues.map { league -> league.apiValue }.toSet() }
+    }
+
+    suspend fun setBumpFavoriteTeamGames(value: Boolean) {
+        context.appSettingsDataStore.edit { it[BUMP_FAVORITE_TEAM_GAMES_KEY] = value }
     }
 }

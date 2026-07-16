@@ -47,6 +47,10 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch { repository.setShowAllLeaguesInStarred(!settings.showAllLeaguesInStarred) }
     }
 
+    fun toggleBumpFavoriteTeamGames() {
+        viewModelScope.launch { repository.setBumpFavoriteTeamGames(!settings.bumpFavoriteTeamGames) }
+    }
+
     /**
      * Flips [league] in the dropdown's visible set. Two safety rules the
      * Settings toggle UI can't enforce on its own: never let the set go

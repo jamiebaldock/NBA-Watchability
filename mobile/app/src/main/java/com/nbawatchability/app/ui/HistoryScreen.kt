@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.Team
+import com.nbawatchability.app.data.bumpFavoriteTeamGames
 import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
@@ -130,7 +132,10 @@ fun HistoryScreen(
     onWatchHighlights: (String) -> Unit,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
-    enabledLeagues: Set<LeagueGroup>
+    enabledLeagues: Set<LeagueGroup>,
+    favoriteTeamNames: Set<String> = emptySet(),
+    bumpFavoriteTeamGames: Boolean = false,
+    onToggleFavoriteTeam: (Team) -> Unit = {}
 ) {
     // Plain remember (not rememberSaveable) - defaults to hidden every time
     // this composable enters composition, e.g. switching back to History
@@ -268,7 +273,7 @@ fun HistoryScreen(
                             SortOption.RATING_LOWEST_FIRST -> displayGames.sortedBy { it.effectiveScore(weights) }
                             SortOption.DATE_OLDEST_FIRST -> displayGames.sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
                             SortOption.DATE_NEWEST_FIRST -> displayGames.sortedByDescending { OffsetDateTime.parse(it.tipoffUtc) }
-                        }
+                        }.bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
                         val listState = rememberLazyListState()
                         // Without this, LazyColumn's key-based item tracking
@@ -295,7 +300,9 @@ fun HistoryScreen(
                                     onWatchHighlights = onWatchHighlights,
                                     showDate = true,
                                     spoilerFree = true,
-                                    showScore = showScore
+                                    showScore = showScore,
+                                    favoriteTeamNames = favoriteTeamNames,
+                                    onToggleFavoriteTeam = onToggleFavoriteTeam
                                 )
                             }
                         }

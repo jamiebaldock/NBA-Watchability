@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChecklistRtl
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Tune
@@ -44,7 +45,10 @@ fun SettingsScreen(
     onToggleShowAllLeaguesInStarred: () -> Unit,
     onSelectedSportsClick: () -> Unit,
     onRubricWeightsClick: () -> Unit,
-    onAboutClick: () -> Unit
+    onAboutClick: () -> Unit,
+    onFavoriteTeamsClick: () -> Unit,
+    bumpFavoriteTeamGames: Boolean,
+    onToggleBumpFavoriteTeamGames: () -> Unit
 ) {
     Scaffold(
         containerColor = BackgroundBase,
@@ -93,6 +97,49 @@ fun SettingsScreen(
                     Text(text = "Selected Sports", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
                 }
                 Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+            }
+
+            HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onFavoriteTeamsClick)
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = TextSecondary)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(text = "Favorite Teams", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                }
+                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+            }
+
+            HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
+
+            // Default (off) is "visual marking only" - a favorited team's
+            // games still show in whatever order Games/Starred/History
+            // already use, just tinted (GameCard's TeamRow). Turning this on
+            // additionally bumps them to the top of that same order.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = TextSecondary)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(text = "Bump favorite teams' games to top", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                }
+                Switch(
+                    checked = bumpFavoriteTeamGames,
+                    onCheckedChange = { onToggleBumpFavoriteTeamGames() },
+                    colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime)
+                )
             }
 
             HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))

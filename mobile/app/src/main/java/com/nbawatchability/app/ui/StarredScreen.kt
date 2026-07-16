@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.sp
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.Team
+import com.nbawatchability.app.data.bumpFavoriteTeamGames
 import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
@@ -72,7 +74,10 @@ fun StarredScreen(
     onLeagueSelected: (LeagueGroup) -> Unit,
     enabledLeagues: Set<LeagueGroup>,
     showAllLeagues: Boolean,
-    onToggleAllLeagues: () -> Unit
+    onToggleAllLeagues: () -> Unit,
+    favoriteTeamNames: Set<String> = emptySet(),
+    bumpFavoriteTeamGames: Boolean = false,
+    onToggleFavoriteTeam: (Team) -> Unit = {}
 ) {
     var sortOption by remember { mutableStateOf(SortOption.DATE_NEWEST_FIRST) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -153,7 +158,7 @@ fun StarredScreen(
                 }
                 SortOption.DATE_OLDEST_FIRST -> visibleGames.sortedBy { it.tipoffUtc }
                 SortOption.DATE_NEWEST_FIRST -> visibleGames.sortedByDescending { it.tipoffUtc }
-            }
+            }.bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
             val listState = rememberLazyListState()
             // Without this, LazyColumn's key-based item tracking keeps
@@ -177,7 +182,9 @@ fun StarredScreen(
                         isStarred = starredIds.contains(game.id),
                         onToggleStar = { onToggleStar(game) },
                         onWatchHighlights = onWatchHighlights,
-                        showDate = true
+                        showDate = true,
+                        favoriteTeamNames = favoriteTeamNames,
+                        onToggleFavoriteTeam = onToggleFavoriteTeam
                     )
                 }
             }

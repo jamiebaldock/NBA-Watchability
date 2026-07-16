@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.DayGames
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.Team
+import com.nbawatchability.app.data.bumpFavoriteTeamGames
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
@@ -100,7 +102,10 @@ fun DayTabsScreen(
     fullSeasonRange: Pair<LocalDate, LocalDate>?,
     datesWithGames: Set<LocalDate>,
     isJumpingToDate: Boolean,
-    onJumpToDate: (LocalDate) -> Unit
+    onJumpToDate: (LocalDate) -> Unit,
+    favoriteTeamNames: Set<String> = emptySet(),
+    bumpFavoriteTeamGames: Boolean = false,
+    onToggleFavoriteTeam: (Team) -> Unit = {}
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -218,7 +223,10 @@ fun DayTabsScreen(
                             onToggleStar = onToggleStar,
                             onWatchHighlights = onWatchHighlights,
                             isJumpingToNextGame = isJumpingToNextGame,
-                            onJumpToNextGame = onJumpToNextGame
+                            onJumpToNextGame = onJumpToNextGame,
+                            favoriteTeamNames = favoriteTeamNames,
+                            bumpFavoriteTeamGames = bumpFavoriteTeamGames,
+                            onToggleFavoriteTeam = onToggleFavoriteTeam
                         )
                     }
                 }
@@ -327,7 +335,10 @@ private fun DayGamesList(
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
     isJumpingToNextGame: Boolean,
-    onJumpToNextGame: () -> Unit
+    onJumpToNextGame: () -> Unit,
+    favoriteTeamNames: Set<String> = emptySet(),
+    bumpFavoriteTeamGames: Boolean = false,
+    onToggleFavoriteTeam: (Team) -> Unit = {}
 ) {
     if (games.isEmpty()) {
         Column(
@@ -360,19 +371,23 @@ private fun DayGamesList(
         return
     }
 
+    val orderedGames = games.bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(games, key = { it.id }) { game ->
+        items(orderedGames, key = { it.id }) { game ->
             GameCard(
                 game = game,
                 showNumericScore = showNumericScore,
                 weights = weights,
                 isStarred = starredIds.contains(game.id),
                 onToggleStar = { onToggleStar(game) },
-                onWatchHighlights = onWatchHighlights
+                onWatchHighlights = onWatchHighlights,
+                favoriteTeamNames = favoriteTeamNames,
+                onToggleFavoriteTeam = onToggleFavoriteTeam
             )
         }
     }
