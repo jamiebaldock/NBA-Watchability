@@ -86,6 +86,11 @@ function parseIsoDurationSeconds(duration: string): number | null {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
+// videos.list caps the id param at 50 per call - batching here is what
+// keeps a league with more than 50 matched samples (e.g. WNBA) from
+// silently getting zero results back instead of a partial/erroring request.
+const YOUTUBE_VIDEOS_ID_BATCH_SIZE = 50;
+
 // Temporary diagnostic (devServer.ts's /admin/lag-samples) - fetches each
 // matched video's own snippet.publishedAt, the one measure of true YouTube
 // upload time that's independent of when our poller happened to look.
@@ -96,21 +101,27 @@ export async function fetchPublishedAtTimes(videoIds: string[]): Promise<Map<str
   const apiKey = getApiKey();
   if (!apiKey) return published;
 
-  const params = new URLSearchParams({
-    key: apiKey,
-    part: "snippet",
-    id: videoIds.join(","),
-  });
+  for (let i = 0; i < videoIds.length; i += YOUTUBE_VIDEOS_ID_BATCH_SIZE) {
+    const batch = videoIds.slice(i, i + YOUTUBE_VIDEOS_ID_BATCH_SIZE);
+    const params = new URLSearchParams({
+      key: apiKey,
+      part: "snippet",
+      id: batch.join(","),
+    });
 
-  try {
-    const res = await fetch(`${YOUTUBE_VIDEOS_URL}?${params.toString()}`);
-    if (!res.ok) return published;
-    const data = (await res.json()) as { items?: { id?: string; snippet?: { publishedAt?: string } }[] };
-    for (const item of data.items ?? []) {
-      if (item.id && item.snippet?.publishedAt) published.set(item.id, item.snippet.publishedAt);
+    try {
+      const res = await fetch(`${YOUTUBE_VIDEOS_URL}?${params.toString()}`);
+      if (!res.ok) {
+        console.error(`YouTube videos.list (publishedAt check) failed: ${res.status} ${res.statusText}`);
+        continue;
+      }
+      const data = (await res.json()) as { items?: { id?: string; snippet?: { publishedAt?: string } }[] };
+      for (const item of data.items ?? []) {
+        if (item.id && item.snippet?.publishedAt) published.set(item.id, item.snippet.publishedAt);
+      }
+    } catch (err) {
+      console.error("YouTube videos.list (publishedAt check) failed", err);
     }
-  } catch (err) {
-    console.error("YouTube videos.list (publishedAt check) failed", err);
   }
 
   return published;
