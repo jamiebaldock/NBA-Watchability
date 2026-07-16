@@ -413,32 +413,6 @@ function observedLagsMs(whereClause: string, param: string): number[] {
   return rows.map((r) => new Date(r.yt_found_at).getTime() - new Date(r.final_at).getTime()).sort((a, b) => a - b);
 }
 
-// Temporary diagnostic (devServer.ts's /admin/lag-samples) - exposes the raw
-// per-game data points behind getLagPercentiles' aggregate, so each one can
-// be checked against YouTube's own video publish timestamp (ground truth
-// independent of when our own poller happened to look). Remove once the
-// upload-lag-measurement investigation is resolved.
-export interface RawLagSample {
-  event_id: string;
-  league: string;
-  away: string;
-  home: string;
-  final_at: string;
-  yt_found_at: string;
-  yt_video_id: string;
-  yt_check_count: number;
-}
-export function getRawLagSamples(leagueGroup: string): RawLagSample[] {
-  return db
-    .prepare(
-      `SELECT event_id, league, away, home, final_at, yt_found_at, yt_video_id, yt_check_count
-       FROM games
-       WHERE league_group = ? AND final_at IS NOT NULL AND yt_found_at IS NOT NULL AND yt_video_id IS NOT NULL
-       ORDER BY final_at ASC`
-    )
-    .all(leagueGroup) as RawLagSample[];
-}
-
 /**
  * Real, learned median upload lag for [league], falling back to
  * [leagueGroup]-wide data if that specific league doesn't have enough
