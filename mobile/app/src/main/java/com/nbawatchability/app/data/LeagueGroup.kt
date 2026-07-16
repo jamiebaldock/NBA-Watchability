@@ -34,14 +34,14 @@ enum class LeagueGroup(
     // app's near-black surfaces - ESPN's own "-dark" variant (a white
     // version, built for exactly this) is used instead, verified directly
     // against ESPN's asset set rather than assumed.
-    EPL(
-        "epl",
-        "English Premier League",
-        "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/23.png",
-        isSupported = false,
-        shortDisplayName = "EPL"
-    ),
-    LA_LIGA("la-liga", "La Liga", "https://a.espncdn.com/i/leaguelogos/soccer/500/15.png", isSupported = false),
+    //
+    // isSupported = true: Games tab is live (real ESPN fixtures, scored via
+    // soccerRubric.ts) as of the soccer-pipeline work - History/Leaders/
+    // Starred/News are still not built out for this league (product
+    // decision, Games tab first) but degrade gracefully (empty results,
+    // not crashes) rather than needing their own isSupported flag.
+    EPL("epl", "English Premier League", "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/23.png", shortDisplayName = "EPL"),
+    LA_LIGA("la-liga", "La Liga", "https://a.espncdn.com/i/leaguelogos/soccer/500/15.png"),
     NBL("nbl", "NBL", "https://a.espncdn.com/i/teamlogos/leagues/500/nbl.png", isSupported = false),
     UFC("ufc", "UFC", "https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png", isSupported = false),
     // Same dark-crest-on-dark-background problem as EPL - ESPN's default

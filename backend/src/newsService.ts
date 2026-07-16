@@ -1,11 +1,22 @@
 import { ContentLeague, fetchNews } from "./espnClient";
 import { loadLeagueCache, saveLeagueCache, todayKey } from "./leagueCache";
-import { LeagueGroup, NewsArticleJson, NewsResponseJson } from "./types";
+import { LeagueGroup, NewsArticleJson, NewsResponseJson, SPORT_FOR_LEAGUE_GROUP } from "./types";
 
 const ARTICLE_LIMIT = 15;
 
 /** Cached once per calendar day per league group - same tradeoff as standings/stats: less fresh than a live feed, but keeps ESPN/Render load flat regardless of user count. */
 export async function getNews(leagueGroup: LeagueGroup): Promise<NewsResponseJson> {
+  // Unlike standings/stats (whose ESPN endpoints tolerate an unrecognized
+  // league slug and just come back empty) and unlike leaders (whose
+  // fetchLeaders already catches), news' basketball-namespaced URL 404s for
+  // a soccer leagueGroup and getJson throws - short-circuit before ever
+  // building that request rather than letting an unhandled rejection surface
+  // as a 500. No News tab exists for soccer leagues yet (Games tab first,
+  // same as History), so an empty result is the correct answer here anyway.
+  if (SPORT_FOR_LEAGUE_GROUP[leagueGroup] !== "basketball") {
+    return { articles: [] };
+  }
+
   const league = leagueGroup as ContentLeague;
   const now = new Date();
   const dateKey = todayKey(now);
