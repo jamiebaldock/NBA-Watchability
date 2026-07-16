@@ -353,6 +353,56 @@ export function getGame(eventId: string): GameRow | undefined {
   return raw ? mapRow(raw) : undefined;
 }
 
+export interface HeadToHeadGame {
+  eventId: string;
+  tipoffUtc: string;
+  away: string;
+  home: string;
+  awayScore: number;
+  homeScore: number;
+}
+
+interface RawHeadToHeadRow {
+  event_id: string;
+  tipoff_utc: string;
+  away: string;
+  home: string;
+  away_score: number;
+  home_score: number;
+}
+
+/**
+ * Past meetings between these two exact teams within [leagueGroup], most
+ * recent first - backs the game-detail popup's head-to-head context, pulled
+ * straight from this same durable table rather than a fresh ESPN call
+ * (every past meeting between two real teams is already sitting in this
+ * table, live or backfilled). Not season-scoped - a simpler "most recent N
+ * meetings regardless of season" rather than computing this app's various
+ * per-league season-boundary rules a second time here, since the popup's
+ * job is just "how have these two played recently," not a strict season
+ * split.
+ */
+export function getHeadToHead(leagueGroup: LeagueGroup, teamA: string, teamB: string, excludeEventId: string, limit = 5): HeadToHeadGame[] {
+  const rows = db
+    .prepare(
+      `SELECT event_id, tipoff_utc, away, home, away_score, home_score FROM games
+       WHERE league_group=@leagueGroup AND status='final' AND event_id != @excludeEventId
+         AND ((away=@teamA AND home=@teamB) OR (away=@teamB AND home=@teamA))
+       ORDER BY tipoff_utc DESC
+       LIMIT @limit`
+    )
+    .all({ leagueGroup, excludeEventId, teamA, teamB, limit }) as RawHeadToHeadRow[];
+
+  return rows.map((r) => ({
+    eventId: r.event_id,
+    tipoffUtc: r.tipoff_utc,
+    away: r.away,
+    home: r.home,
+    awayScore: r.away_score,
+    homeScore: r.home_score,
+  }));
+}
+
 /** Pregame preview (hook/pitch/stakes) - set once, 24h before tipoff, permanent. */
 export function setPreview(eventId: string, hook: string, pitch: string, stakes: number): void {
   db.prepare(`UPDATE games SET hook=?, pitch=?, stakes=?, updated_at=? WHERE event_id=? AND hook IS NULL`).run(

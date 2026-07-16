@@ -78,6 +78,7 @@ async function ensureSoccerPregamePreview(row: GameRow, leagueGroup: SoccerLeagu
 
 function toSoccerGameJson(row: GameRow, competitionLabel: string, status: "upcoming" | "live", q?: number, clk?: string): GameJson {
   return {
+    id: row.eventId,
     a: row.away,
     h: row.home,
     al: row.awayLogo ?? undefined,
@@ -179,6 +180,7 @@ export async function getSoccerGamesForDate(date: string, leagueGroup: SoccerLea
     }
 
     results.push({
+      id: row.eventId,
       a: row.away,
       h: row.home,
       al: row.awayLogo ?? undefined,

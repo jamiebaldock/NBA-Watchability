@@ -3,6 +3,7 @@ import express from "express";
 import {
   BadRequestError,
   getCurrentSeasonStartForLeagueGroup,
+  getGameDetailForEvent,
   getHistoryForRange,
   getNewsForLeagueGroup,
   getNextGameDateForLeagueGroup,
@@ -161,6 +162,20 @@ app.get("/roster", async (req, res) => {
     const leagueGroup = String(req.query.leagueGroup ?? "nba");
     const team = String(req.query.team ?? "");
     res.json(await getRosterForTeam(leagueGroup, team));
+  } catch (err) {
+    if (err instanceof BadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
+});
+
+app.get("/game-detail", async (req, res) => {
+  try {
+    const eventId = String(req.query.eventId ?? "");
+    res.json(await getGameDetailForEvent(eventId));
   } catch (err) {
     if (err instanceof BadRequestError) {
       res.status(400).json({ error: err.message });

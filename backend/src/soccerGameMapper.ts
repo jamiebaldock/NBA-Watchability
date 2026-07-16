@@ -18,7 +18,7 @@ export function mapSoccerEspnState(state: "pre" | "in" | "post"): GameStatus {
   return "upcoming";
 }
 
-interface ParsedGoal {
+export interface ParsedGoal {
   team: string;
   minuteValueSeconds: number;
   scorer?: string;
@@ -33,7 +33,7 @@ interface ParsedGoal {
 // drop volleys/headers/own goals/penalties. Confirmed directly against real
 // matches while building this module (a volley and an own goal both showed
 // up with distinct type.type strings, both with scoringPlay: true).
-function parseGoals(keyEvents: EspnSoccerKeyEvent[]): ParsedGoal[] {
+export function parseGoals(keyEvents: EspnSoccerKeyEvent[]): ParsedGoal[] {
   return keyEvents
     .filter((e) => e.scoringPlay)
     .map((e) => ({

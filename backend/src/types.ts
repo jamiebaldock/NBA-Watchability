@@ -32,6 +32,11 @@ export const SPORT_FOR_LEAGUE_GROUP: Record<LeagueGroup, Sport> = {
 };
 
 export interface GameJson {
+  // ESPN's own event id - not used for the client's own identity/dedup
+  // logic (Game.id in Game.kt is still the away@home@utc composite key,
+  // unrelated to this), only as the lookup key for the on-demand
+  // game-detail popup's /game-detail?eventId= endpoint (Phase G).
+  id?: string;
   a: string;
   h: string;
   al?: string;
@@ -187,6 +192,43 @@ export interface RubricInputs {
   buzzerBeater: boolean;
   starPerformance: StarPerformance;
   standoutPerformers?: StandoutPerformerJson[];
+}
+
+// Backs the game-detail popup (Phase G) - fetched fresh on-demand when a
+// user taps a specific finished tile, not persisted, since this is a rare
+// per-tap action rather than something every game needs computed up front.
+export interface TopPerformerJson {
+  name: string;
+  team: string;
+  line: string;
+}
+
+export interface HeadToHeadGameJson {
+  eventId: string;
+  utc: string;
+  away: string;
+  home: string;
+  awayScore: number;
+  homeScore: number;
+}
+
+// Deliberately simplified from a true "clinches playoff spot" computation
+// (division/conference tiebreakers and magic-number math aren't something
+// ESPN's standings response hands over directly) - just each team's current
+// rank/record/group, which is still useful context and derivable from data
+// this app already fetches (standingsService.ts) rather than needing new
+// ESPN plumbing.
+export interface TeamStandingsContextJson {
+  rank?: number;
+  record?: string;
+  groupName?: string;
+}
+
+export interface GameDetailResponseJson {
+  topPerformers: TopPerformerJson[];
+  headToHead: HeadToHeadGameJson[];
+  awayStandings: TeamStandingsContextJson;
+  homeStandings: TeamStandingsContextJson;
 }
 
 export interface ScoredGame extends RubricInputs {

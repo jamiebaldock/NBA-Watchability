@@ -1,5 +1,6 @@
 import { dateStringsBetween } from "./dateRange";
 import { currentSoccerSeasonStartDate, earliestGameDate, getMostRecentFinalsEnd } from "./gameStore";
+import { getGameDetail } from "./gameDetailService";
 import { getGamesForDate, getNextScheduledDate } from "./gamesService";
 import { getHistory, HistoryResult } from "./historyService";
 import { getNews } from "./newsService";
@@ -10,6 +11,7 @@ import { getStandings } from "./standingsService";
 import { getStats } from "./statsService";
 import { getTeams } from "./teamsService";
 import {
+  GameDetailResponseJson,
   GameJson,
   LeagueGroup,
   NewsResponseJson,
@@ -140,6 +142,11 @@ export async function getTeamsForLeagueGroup(leagueGroupRaw = "nba"): Promise<Te
 export async function getRosterForTeam(leagueGroupRaw: string, teamId: string): Promise<RosterResponseJson> {
   if (!teamId) throw new BadRequestError("team is required");
   return getRoster(parseLeagueGroup(leagueGroupRaw), teamId);
+}
+
+export async function getGameDetailForEvent(eventId: string): Promise<GameDetailResponseJson> {
+  if (!eventId) throw new BadRequestError("eventId is required");
+  return getGameDetail(eventId);
 }
 
 /**

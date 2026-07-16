@@ -20,6 +20,7 @@ export async function getHistory(start: string, end: string, leagueGroup: League
   const finalsEnd = getMostRecentFinalsEnd(leagueGroup);
 
   const games: GameJson[] = rows.map((row) => ({
+    id: row.eventId,
     a: row.away,
     h: row.home,
     // Historical rows migrated from the pre-gameStore backfill never had

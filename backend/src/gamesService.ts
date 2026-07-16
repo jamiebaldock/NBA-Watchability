@@ -238,6 +238,7 @@ export async function checkPendingHighlights(): Promise<void> {
 function toGameJson(row: GameRow, status: "upcoming" | "live", cl: string | undefined, q?: number, clk?: string): GameJson {
   const lg: GameJson["lg"] = row.league === "nba" ? "nba" : row.league === "wnba" ? "wnba" : "summer";
   return {
+    id: row.eventId,
     a: row.away,
     h: row.home,
     al: row.awayLogo ?? undefined,
@@ -367,6 +368,7 @@ export async function getGamesForDate(date: string, leagueGroup: BasketballLeagu
 
     const lg: GameJson["lg"] = row.league === "nba" ? "nba" : row.league === "wnba" ? "wnba" : "summer";
     results.push({
+      id: row.eventId,
       a: row.away,
       h: row.home,
       al: row.awayLogo ?? undefined,
