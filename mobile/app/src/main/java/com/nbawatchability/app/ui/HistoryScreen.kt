@@ -74,6 +74,21 @@ private val earliestDateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
 private const val ALL_TIME_MIN_SCORE_NBA = 90
 private const val ALL_TIME_MIN_SCORE_WNBA = 75
 
+// Shared across EPL and La Liga (not split like NBA/WNBA) - both leagues
+// run through the exact same soccerRubric.ts scale/calibration, and their
+// real backfilled score distributions land close enough together (p95: 62
+// vs 63, p99: 80 vs 80.8 out of the 760-match-each 2024-25+2025-26
+// backfill) that a per-league split isn't warranted. Grounded the same way
+// as WNBA's bar above - reusing NBA's literal 90 would leave EPL down to a
+// single qualifying match (1 of 760) - but landed on 85 rather than 90:
+// it's the 99.3rd percentile of the full 1,520-game combined backfill (10
+// games total, a healthier 4 EPL + 6 La Liga split) and, conveniently,
+// exactly Tier.fromScore's own instant_classic cutoff - "All-time" for
+// soccer reads as "every real Instant Classic in the backfill," a bar
+// that's self-documenting rather than an arbitrary number tuned to hit a
+// target count.
+private const val ALL_TIME_MIN_SCORE_SOCCER = 85
+
 /**
  * "Which old games are actually worth going back to watch" - surfaces the
  * per-league watchability backfill (NBA and WNBA both have one, each scored
@@ -228,7 +243,11 @@ fun HistoryScreen(
 
                 is HistoryUiState.Loaded -> {
                     val displayGames = if (selectedPreset is HistoryRangePreset.AllTime) {
-                        val allTimeMinScore = if (selectedLeague == LeagueGroup.WNBA) ALL_TIME_MIN_SCORE_WNBA else ALL_TIME_MIN_SCORE_NBA
+                        val allTimeMinScore = when (selectedLeague) {
+                            LeagueGroup.WNBA -> ALL_TIME_MIN_SCORE_WNBA
+                            LeagueGroup.EPL, LeagueGroup.LA_LIGA -> ALL_TIME_MIN_SCORE_SOCCER
+                            else -> ALL_TIME_MIN_SCORE_NBA
+                        }
                         uiState.games.filter { (it.effectiveScore(weights) ?: 0) >= allTimeMinScore }
                     } else {
                         uiState.games

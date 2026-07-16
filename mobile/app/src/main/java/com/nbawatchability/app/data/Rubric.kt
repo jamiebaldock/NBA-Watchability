@@ -119,9 +119,23 @@ private object Rubric {
  * Weight-adjusted score, or null if the game's outcome isn't revealed yet -
  * mirrors the same scoreVisible gate the server uses, so recomputing locally
  * never leaks a score early regardless of what weights are set.
+ *
+ * Soccer games skip the recompute entirely and just return the server's raw
+ * score as-is. Rubric.computeScore only ever implements backend/src/
+ * rubric.ts's basketball formula (margin/clutch/comeback/lead-changes/
+ * overtime/star/stakes from m/cb/lc/ot/c5/lcf/fp/bz/st) - none of which a
+ * soccer Game ever populates (soccerRubric.ts's own inputs - goals, saves,
+ * red cards - aren't sent over the wire at all, only the final score/tier
+ * are). Running a soccer game through the basketball formula wouldn't just
+ * be inaccurate, it'd silently return 0 for every one (marginPoints(null)
+ * short-circuits to 0, and every other term is equally absent) - there's
+ * also no per-category weights UI for soccer yet, so there's nothing
+ * meaningful to adjust anyway.
  */
 fun Game.effectiveScore(weights: RubricWeights): Int? =
-    if (scoreVisible && score != null) Rubric.computeScore(this, weights) else null
+    if (scoreVisible && score != null) {
+        if (league == "soccer") score else Rubric.computeScore(this, weights)
+    } else null
 
 fun Game.effectiveTier(weights: RubricWeights): Tier? =
     effectiveScore(weights)?.let { Tier.fromScore(it) }
