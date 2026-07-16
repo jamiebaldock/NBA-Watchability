@@ -8,8 +8,28 @@ export type StarPerformance = "historic" | "great" | "good" | null;
 // Which mutually-exclusive slate the client is currently viewing (settings
 // toggle + top-left dropdown). Distinct from espnClient.ts's League - a
 // LeagueGroup determines which underlying ESPN leagues get unioned together
-// for a request (gamesService.ts's LEAGUE_GROUPS), never both at once.
-export type LeagueGroup = "nba" | "wnba";
+// for a request (gamesService.ts's LEAGUE_GROUPS), never both at once. "epl"/
+// "la-liga" are soccer, routed to an entirely separate ESPN client/mapper/
+// rubric (soccerEspnClient.ts/soccerGameMapper.ts/soccerRubric.ts) - see
+// SPORT_FOR_LEAGUE_GROUP below for the dispatch point.
+export type LeagueGroup = "nba" | "wnba" | "epl" | "la-liga";
+
+export type Sport = "basketball" | "soccer";
+
+// The single choke point every sport-dispatching call site (httpHandler.ts's
+// getSchedule/getNextGameDateForLeagueGroup/getSeasonWindowForLeagueGroup,
+// gamesService.ts's highlights-eligibility guard) checks before deciding
+// whether to run the basketball pipeline (gamesService.ts/gameMapper.ts/
+// rubric.ts) or the soccer one (soccerGamesService.ts/soccerGameMapper.ts/
+// soccerRubric.ts) for a given leagueGroup - adding a third sport later means
+// adding one entry here, not hunting down every place that currently assumes
+// only two.
+export const SPORT_FOR_LEAGUE_GROUP: Record<LeagueGroup, Sport> = {
+  nba: "basketball",
+  wnba: "basketball",
+  epl: "soccer",
+  "la-liga": "soccer"
+};
 
 export interface GameJson {
   a: string;
@@ -18,7 +38,7 @@ export interface GameJson {
   hl?: string;
   stt: GameStatus;
   utc: string;
-  lg: "nba" | "wnba" | "summer";
+  lg: "nba" | "wnba" | "summer" | "soccer";
   cl?: string;
   q?: number;
   clk?: string;

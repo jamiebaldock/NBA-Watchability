@@ -4,6 +4,7 @@ import { getGamesForDate, getNextScheduledDate } from "./gamesService";
 import { getHistory, HistoryResult } from "./historyService";
 import { getNews } from "./newsService";
 import { getSeasonWindow, SeasonWindow } from "./seasonWindowService";
+import { getNextSoccerScheduledDate, getSoccerGamesForDate, isSoccerLeagueGroup } from "./soccerGamesService";
 import { getStandings } from "./standingsService";
 import { getStats } from "./statsService";
 import { GameJson, LeagueGroup, NewsResponseJson, StandingsResponseJson, StatsResponseJson } from "./types";
@@ -26,7 +27,15 @@ export class BadRequestError extends Error {}
 function parseLeagueGroup(raw: string): LeagueGroup {
   if (raw === "" || raw === "nba") return "nba";
   if (raw === "wnba") return "wnba";
-  throw new BadRequestError('leagueGroup must be "nba" or "wnba"');
+  if (raw === "epl") return "epl";
+  if (raw === "la-liga") return "la-liga";
+  throw new BadRequestError('leagueGroup must be one of "nba", "wnba", "epl", "la-liga"');
+}
+
+/** Dispatches to the basketball or soccer live-schedule pipeline (types.ts's SPORT_FOR_LEAGUE_GROUP) - the one choke point where a request's leagueGroup decides which sport's data layer actually runs. */
+function getGamesForDateAnySport(date: string, leagueGroup: LeagueGroup): Promise<GameJson[]> {
+  if (isSoccerLeagueGroup(leagueGroup)) return getSoccerGamesForDate(date, leagueGroup);
+  return getGamesForDate(date, leagueGroup);
 }
 
 export async function getSchedule(start: string, end: string, leagueGroupRaw = "nba"): Promise<DaySchedule[]> {
@@ -42,7 +51,7 @@ export async function getSchedule(start: string, end: string, leagueGroupRaw = "
 
   const schedule: DaySchedule[] = [];
   for (const date of dates) {
-    schedule.push({ date, games: await getGamesForDate(date, leagueGroup) });
+    schedule.push({ date, games: await getGamesForDateAnySport(date, leagueGroup) });
   }
   return schedule;
 }
@@ -54,7 +63,9 @@ export interface NextGameDateResult {
 export async function getNextGameDateForLeagueGroup(afterRaw: string, leagueGroupRaw = "nba"): Promise<NextGameDateResult> {
   if (!DATE_RE.test(afterRaw)) throw new BadRequestError("after must be YYYY-MM-DD");
   const leagueGroup = parseLeagueGroup(leagueGroupRaw);
-  const date = await getNextScheduledDate(afterRaw, leagueGroup);
+  const date = isSoccerLeagueGroup(leagueGroup)
+    ? await getNextSoccerScheduledDate(afterRaw, leagueGroup)
+    : await getNextScheduledDate(afterRaw, leagueGroup);
   return { date: date ?? null };
 }
 

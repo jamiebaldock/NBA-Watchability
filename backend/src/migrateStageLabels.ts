@@ -17,6 +17,7 @@
 import { EspnEvent, League, fetchScoreboard, toEspnDate } from "./espnClient";
 import { deriveCompetitionLabel } from "./gameMapper";
 import { getGamesMissingStageLabel, setSeasonStageLabel } from "./gameStore";
+import { SPORT_FOR_LEAGUE_GROUP } from "./types";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -56,7 +57,13 @@ async function findEvent(league: League, tipoffUtc: string, eventId: string): Pr
 }
 
 export async function migrateStageLabels(): Promise<{ updated: number; unresolved: number }> {
-  const rows = getGamesMissingStageLabel();
+  // Basketball-only pass - deriveCompetitionLabel/findEvent both speak
+  // espnClient.ts's basketball shape, and this script predates soccer
+  // entirely. Soccer rows never get a season_stage_label from this script
+  // (their competition label is computed inline in soccerGamesService.ts
+  // instead), so they'd otherwise show up here forever and fail against
+  // the basketball-only ESPN client.
+  const rows = getGamesMissingStageLabel().filter((row) => SPORT_FOR_LEAGUE_GROUP[row.leagueGroup] === "basketball");
   console.log(`migrateStageLabels: ${rows.length} rows missing season_stage_label`);
 
   let updated = 0;
@@ -64,8 +71,8 @@ export async function migrateStageLabels(): Promise<{ updated: number; unresolve
   let done = 0;
 
   for (const row of rows) {
-    const event = await findEvent(row.league, row.tipoffUtc, row.eventId);
-    const label = event ? deriveCompetitionLabel(event, row.leagueGroup) : undefined;
+    const event = await findEvent(row.league as League, row.tipoffUtc, row.eventId);
+    const label = event ? deriveCompetitionLabel(event, row.leagueGroup as "nba" | "wnba") : undefined;
     if (label) {
       setSeasonStageLabel(row.eventId, label);
       updated++;

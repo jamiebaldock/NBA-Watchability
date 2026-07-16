@@ -22,7 +22,14 @@ import Database from "better-sqlite3";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { League } from "./espnClient";
-import { GameStatus, LeagueGroup, StarPerformance } from "./types";
+import { SoccerLeague } from "./soccerEspnClient";
+import { GameStatus, LeagueGroup, SPORT_FOR_LEAGUE_GROUP, StarPerformance } from "./types";
+
+// A game row's own "league" column is one specific ESPN league (basketball's
+// "nba"/"nba-summer-*"/"wnba", or soccer's "eng.1"/"esp.1") - broader than
+// the mutually-exclusive LeagueGroup a request is scoped to, narrower than
+// "any string", so a typo'd league name still fails to compile.
+export type AnyLeague = League | SoccerLeague;
 
 const DATA_DIR = process.env.DATA_DIR ?? join(__dirname, "..", "data");
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
@@ -137,7 +144,7 @@ export interface FinalRubric {
 
 export interface GameRow {
   eventId: string;
-  league: League;
+  league: AnyLeague;
   leagueGroup: LeagueGroup;
   away: string;
   home: string;
@@ -172,7 +179,7 @@ export interface GameRow {
 /** Creates the row if this eventId has never been seen before; a no-op otherwise - never touches an existing row's already-collected fields. */
 export function upsertBaseEntry(entry: {
   eventId: string;
-  league: League;
+  league: AnyLeague;
   leagueGroup: LeagueGroup;
   away: string;
   home: string;
@@ -214,7 +221,7 @@ export function updateStatus(eventId: string, status: GameStatus): void {
 // runtime; without this, every field silently read as undefined).
 interface RawGameRow {
   event_id: string;
-  league: League;
+  league: AnyLeague;
   league_group: LeagueGroup;
   away: string;
   home: string;
@@ -349,6 +356,40 @@ export function setFinalRubric(eventId: string, rubric: FinalRubric, finalAt: st
     score: rubric.score,
     tier: rubric.tier,
     updatedAt: now(),
+  });
+}
+
+export interface SoccerFinalResult {
+  awayScore: number;
+  homeScore: number;
+  score: number;
+  tier: string;
+}
+
+/**
+ * Soccer's equivalent of setFinalRubric - only touches the fields soccer
+ * actually has (away/home score, the soccerRubric.ts total, and its tier).
+ * Deliberately doesn't touch the basketball-shaped rubric columns (lead
+ * changes, overtime periods, star performance, etc.) - those simply stay
+ * NULL for a soccer row, which every reader already treats as "not
+ * applicable"/"unknown" rather than a special case to guard against. Same
+ * "never overwrite" WHERE-guard as setFinalRubric.
+ */
+export function setSoccerFinalRubric(eventId: string, result: SoccerFinalResult, finalAt: string | null = now()): void {
+  db.prepare(
+    `UPDATE games SET
+       status='final', final_at=@finalAt,
+       away_score=@awayScore, home_score=@homeScore, score=@score, tier=@tier,
+       updated_at=@updatedAt
+     WHERE event_id=@eventId AND score IS NULL`
+  ).run({
+    eventId,
+    finalAt,
+    awayScore: result.awayScore,
+    homeScore: result.homeScore,
+    score: result.score,
+    tier: result.tier,
+    updatedAt: now()
   });
 }
 
@@ -502,7 +543,16 @@ const RECENT_GAMES_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 export function getFinalGamesMissingHighlights(): GameRow[] {
   const cutoffTime = Date.now() - RECENT_GAMES_WINDOW_MS;
   const raws = db.prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL`).all() as RawGameRow[];
-  return raws.map(mapRow).filter((row) => new Date(row.tipoffUtc).getTime() >= cutoffTime);
+  return raws
+    .map(mapRow)
+    .filter((row) => new Date(row.tipoffUtc).getTime() >= cutoffTime)
+    // No soccer YouTube channel is configured (youtubeClient.ts's search is
+    // NBA/WNBA-channel-only) - without this guard, soccer rows would sit
+    // here forever "missing highlights" and gamesService.ts's demand-driven
+    // check would eventually search the *NBA* channel for an EPL matchup
+    // (checkGameHighlights's HighlightsLeague derivation has no soccer
+    // branch), wasting real search.list quota on a near-certain miss.
+    .filter((row) => SPORT_FOR_LEAGUE_GROUP[row.leagueGroup] === "basketball");
 }
 
 /**

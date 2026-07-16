@@ -34,12 +34,22 @@ function hasReachedPreviewGate(tipoffUtc: string, now: Date = new Date()): boole
 // variants are within the "nba" group. gameStore rows are keyed by eventId
 // (globally unique across ESPN sports), so both groups safely share the same
 // store with no risk of collision.
+//
+// The two basketball-sport LeagueGroup values - narrower than LeagueGroup
+// itself now that "epl"/"la-liga" (soccer, an entirely separate ESPN client/
+// mapper/rubric) are members of that type too. Every function in this file
+// only ever handles basketball, so they're typed against this narrower alias
+// rather than LeagueGroup - the sport dispatch (SPORT_FOR_LEAGUE_GROUP,
+// types.ts) happens one layer up, in httpHandler.ts, before a soccer
+// leagueGroup would ever reach here.
+export type BasketballLeagueGroup = "nba" | "wnba";
+
 // Exported so seasonWindowService.ts can derive a group's full-season
 // browsing range from the same set of member leagues the live schedule
 // itself unions - NBA's group spans 4 separate ESPN "leagues" (the real
 // season plus 3 Summer League sites), and a season-window fetch scoped to
 // only one of them would miss whichever isn't currently in its own season.
-export const LEAGUE_GROUPS: Record<LeagueGroup, readonly League[]> = {
+export const LEAGUE_GROUPS: Record<BasketballLeagueGroup, readonly League[]> = {
   nba: ["nba", "nba-summer-las-vegas", "nba-summer-utah", "nba-summer-sacramento"],
   wnba: ["wnba"],
 };
@@ -54,7 +64,7 @@ interface LeagueEvent {
 }
 
 /** Each league is its own ESPN "sport", so a day's full slate is the union of separate per-league fetches. */
-async function fetchAllEvents(espnDate: string, leagueGroup: LeagueGroup): Promise<LeagueEvent[]> {
+async function fetchAllEvents(espnDate: string, leagueGroup: BasketballLeagueGroup): Promise<LeagueEvent[]> {
   const perLeague = await Promise.all(
     LEAGUE_GROUPS[leagueGroup].map(async (league) => {
       const events = await fetchScoreboard(espnDate, league);
@@ -263,7 +273,7 @@ function toGameJson(row: GameRow, status: "upcoming" | "live", cl: string | unde
  * so live games show LIVE + quarter + clock but no watchability score - the
  * score only appears once, all at once, when the game ends.
  */
-export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "nba"): Promise<GameJson[]> {
+export async function getGamesForDate(date: string, leagueGroup: BasketballLeagueGroup = "nba"): Promise<GameJson[]> {
   const espnDate = toEspnDate(new Date(`${date}T12:00:00Z`));
   const leagueEvents = await fetchAllEvents(espnDate, leagueGroup);
 
@@ -404,7 +414,7 @@ export async function getGamesForDate(date: string, leagueGroup: LeagueGroup = "
  * yet - a real, not hypothetical, case for NBA between Summer League ending
  * and the following season's schedule release).
  */
-export async function getNextScheduledDate(afterDate: string, leagueGroup: LeagueGroup): Promise<string | undefined> {
+export async function getNextScheduledDate(afterDate: string, leagueGroup: BasketballLeagueGroup): Promise<string | undefined> {
   const anchorEspnDate = toEspnDate(new Date(`${afterDate}T12:00:00Z`));
   const calendars = await Promise.all(
     LEAGUE_GROUPS[leagueGroup].map((league) => fetchCalendarDates(anchorEspnDate, league))

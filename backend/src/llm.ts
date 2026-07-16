@@ -73,6 +73,12 @@ export interface MatchupContext {
   awayRecord?: string;
   homeRecord?: string;
   notes?: string; // e.g. "Both teams fighting for the final play-in spot"
+  // Shown in the prompt as "{league} matchup:" - defaults to "NBA" (every
+  // call site before soccer existed omitted this, so this keeps their
+  // prompts byte-identical) rather than something generic like "basketball",
+  // since a real league name gives the model better context than a sport
+  // name alone.
+  league?: string;
 }
 
 /** Fallback used when ANTHROPIC_API_KEY isn't set, so the rest of the backend is testable without a key. */
@@ -98,7 +104,7 @@ export async function generateHookAndStakes(ctx: MatchupContext): Promise<Matchu
         {
           role: "user",
           content:
-            `NBA matchup: ${ctx.away}${ctx.awayRecord ? ` (${ctx.awayRecord})` : ""} at ` +
+            `${ctx.league ?? "NBA"} matchup: ${ctx.away}${ctx.awayRecord ? ` (${ctx.awayRecord})` : ""} at ` +
             `${ctx.home}${ctx.homeRecord ? ` (${ctx.homeRecord})` : ""}.` +
             (ctx.notes ? ` Context: ${ctx.notes}.` : "") +
             `\n\nWrite a one-line, spoiler-free "hook" sentence that sells the matchup/storylines ` +

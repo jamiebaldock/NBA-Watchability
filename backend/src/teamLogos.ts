@@ -69,13 +69,22 @@ const WNBA_TEAM_ABBREVIATIONS: Record<string, string> = {
  * threshold historyService.ts filters on, so this only matters if that
  * filter ever changes.
  */
-export function teamLogoUrl(displayName: string, leagueGroup: "nba" | "wnba" = "nba"): string | undefined {
+// leagueGroup is typed as the full LeagueGroup (not just "nba"|"wnba") so
+// this compiles for any caller widened to soccer's leagueGroup values too -
+// in practice this is only ever a fallback for historical-backfill rows
+// missing a logo, and no soccer backfill exists yet (Games-tab-only scope),
+// so an unrecognized group just falls through to undefined rather than
+// needing its own static team map yet.
+export function teamLogoUrl(displayName: string, leagueGroup: string = "nba"): string | undefined {
   if (leagueGroup === "wnba") {
     const abbr = WNBA_TEAM_ABBREVIATIONS[displayName];
     return preferDarkLogoVariant(abbr ? `https://a.espncdn.com/i/teamlogos/wnba/500/${abbr}.png` : undefined);
   }
-  const abbr = NBA_TEAM_ABBREVIATIONS[displayName];
-  return abbr ? `https://a.espncdn.com/i/teamlogos/nba/500/scoreboard/${abbr}.png` : undefined;
+  if (leagueGroup === "nba") {
+    const abbr = NBA_TEAM_ABBREVIATIONS[displayName];
+    return abbr ? `https://a.espncdn.com/i/teamlogos/nba/500/scoreboard/${abbr}.png` : undefined;
+  }
+  return undefined;
 }
 
 // Some team crests are a dark, saturated color that reads poorly against

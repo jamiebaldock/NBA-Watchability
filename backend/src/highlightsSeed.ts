@@ -10,13 +10,12 @@
 // into the learned upload-lag schedule as if they were real search
 // discoveries - they weren't found via the natural wait-and-search process
 // at all, and doing so would badly skew future scheduling.
-import { getGamesForDate } from "./gamesService";
+import { BasketballLeagueGroup, getGamesForDate } from "./gamesService";
 import { setHighlightsFromSeed } from "./gameStore";
-import { LeagueGroup } from "./types";
 
 interface SeedEntry {
   date: string; // YYYY-MM-DD, just to know which schedule fetch surfaces this event
-  leagueGroup: LeagueGroup;
+  leagueGroup: BasketballLeagueGroup;
   eventId: string;
   videoId: string;
 }
@@ -54,7 +53,7 @@ export async function applySeedHighlights(): Promise<void> {
   }
 
   for (const [key, entries] of byDate) {
-    const [date, leagueGroup] = key.split("|") as [string, LeagueGroup];
+    const [date, leagueGroup] = key.split("|") as [string, BasketballLeagueGroup];
     try {
       // Ensures a real, fully-formed row exists for each event (via the
       // exact same path every normal request uses - never hand-built),
