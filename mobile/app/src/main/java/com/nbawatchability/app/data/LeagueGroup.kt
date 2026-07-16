@@ -43,5 +43,18 @@ enum class LeagueGroup(
     ),
     LA_LIGA("la-liga", "La Liga", "https://a.espncdn.com/i/leaguelogos/soccer/500/15.png", isSupported = false),
     NBL("nbl", "NBL", "https://a.espncdn.com/i/teamlogos/leagues/500/nbl.png", isSupported = false),
-    UFC("ufc", "UFC", "https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png", isSupported = false)
+    UFC("ufc", "UFC", "https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png", isSupported = false),
+    // Same dark-crest-on-dark-background problem as EPL - ESPN's default
+    // logo (id 2) is solid black, illegible here, so the "-dark" (white)
+    // variant is used instead. ESPN's own API slug for this competition is
+    // "uefa.champions" (for whenever it's actually wired up) - apiValue
+    // here is just a short display code like the other placeholders, not
+    // that slug, since there's no backend route to match it against yet.
+    UEFA_CHAMPIONS_LEAGUE(
+        "ucl",
+        "UEFA Champions League",
+        "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/2.png",
+        isSupported = false,
+        shortDisplayName = "UCL"
+    )
 }
