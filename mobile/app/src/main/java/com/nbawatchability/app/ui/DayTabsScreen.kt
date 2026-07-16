@@ -108,8 +108,19 @@ fun DayTabsScreen(
     var actionLabel by remember { mutableStateOf<String?>(null) }
     var showCalendar by remember { mutableStateOf(false) }
 
-    LaunchedEffect(pagerState.currentPage) {
-        if (pagerState.currentPage != selectedDayIndex) onDaySelected(pagerState.currentPage)
+    // settledPage (not currentPage) drives the push-up-to-ViewModel side of
+    // this sync deliberately - currentPage changes on every intermediate
+    // page a programmatic animateScrollToPage animation crosses, and for a
+    // far calendar-picker jump (e.g. today -> two months away) that's dozens
+    // of pages. Syncing selectedDayIndex off currentPage fed each of those
+    // transient pages back into the effect below, which re-triggered
+    // animateScrollToPage toward that transient (wrong) target and
+    // cancelled the in-flight one — producing exactly the stuck
+    // half-settled/split-page state reported against the calendar picker.
+    // settledPage only changes once the pager is done moving (swipe or
+    // programmatic), so it can't reintroduce that loop.
+    LaunchedEffect(pagerState.settledPage) {
+        if (pagerState.settledPage != selectedDayIndex) onDaySelected(pagerState.settledPage)
     }
     LaunchedEffect(selectedDayIndex) {
         if (pagerState.currentPage != selectedDayIndex) pagerState.animateScrollToPage(selectedDayIndex)
