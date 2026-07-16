@@ -163,7 +163,17 @@ export async function getSoccerGamesForDate(date: string, leagueGroup: SoccerLea
         homeScore: mapped.homeScore,
         score,
         tier: tierForScore(score),
-        standoutPerformers: mapped.standoutPerformers
+        standoutPerformers: mapped.standoutPerformers,
+        finalMargin: mapped.rubricInputs.margin,
+        largestDeficitOvercome: mapped.rubricInputs.largestDeficitOvercome,
+        totalGoals: mapped.rubricInputs.totalGoals,
+        lateDecisiveGoal: mapped.rubricInputs.lateDecisiveGoal,
+        maxGoalsByPlayer: mapped.rubricInputs.maxGoalsByPlayer,
+        combinedShotsOnTarget: mapped.rubricInputs.combinedShotsOnTarget,
+        anyRedCard: mapped.rubricInputs.anyRedCard,
+        maxSavesByKeeper: mapped.rubricInputs.maxSavesByKeeper,
+        anyFreeKickGoal: mapped.rubricInputs.anyFreeKickGoal,
+        anyPenaltyMissed: mapped.rubricInputs.anyPenaltyMissed
       });
       row = getGame(event.id)!;
     }
@@ -184,6 +194,16 @@ export async function getSoccerGamesForDate(date: string, leagueGroup: SoccerLea
       bz: false,
       st: null,
       sop: row.standoutPerformers,
+      m: row.finalMargin ?? undefined,
+      cb: row.largestDeficitOvercome ?? undefined,
+      tg: row.totalGoals ?? undefined,
+      ldg: Boolean(row.lateDecisiveGoal),
+      mgp: row.maxGoalsByPlayer ?? undefined,
+      cst: row.combinedShotsOnTarget ?? undefined,
+      rc: Boolean(row.anyRedCard),
+      sv: row.maxSavesByKeeper ?? undefined,
+      fkg: Boolean(row.anyFreeKickGoal),
+      pm: Boolean(row.anyPenaltyMissed),
       sk: row.stakes ?? undefined,
       hook: row.hook ?? fallbackHook(row.away, row.home),
       pitch: row.pitch ?? undefined,

@@ -143,9 +143,27 @@ function migrateSoccerFile(fileName: string, leagueGroup: SoccerLeagueGroup): nu
     // costs nothing and avoids a surprise if that changes later).
     setSoccerFinalRubric(
       g.eventId,
-      // Same gap as the basketball backfill above - this migration predates
-      // standout-scorer capture, so these rows just get an empty list.
-      { awayScore: g.awayScore, homeScore: g.homeScore, score: g.score, tier: g.tier, standoutPerformers: [] },
+      {
+        awayScore: g.awayScore,
+        homeScore: g.homeScore,
+        score: g.score,
+        tier: g.tier,
+        // Same gap as the basketball backfill above - this migration
+        // predates standout-scorer capture, so these rows just get an
+        // empty list.
+        standoutPerformers: [],
+        // Derivable straight from the scores this backfill already has -
+        // no gap here, unlike the 6 fields below.
+        finalMargin: Math.abs(g.awayScore - g.homeScore),
+        totalGoals: g.awayScore + g.homeScore,
+        // Genuinely unrecoverable from this backfill (it never recorded
+        // goal-by-goal detail, only final scores) - these 6 stay
+        // permanently null/false for pre-migration rows, same as
+        // standoutPerformers above.
+        largestDeficitOvercome: 0,
+        lateDecisiveGoal: false,
+        maxGoalsByPlayer: 0
+      },
       null
     );
   }

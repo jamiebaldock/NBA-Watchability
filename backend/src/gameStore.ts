@@ -131,6 +131,22 @@ ensureColumn("games", "season_stage_label", "TEXT");
 // historical backfill scripts (predate this column), so older rows are
 // simply NULL/empty rather than retroactively enriched.
 ensureColumn("games", "standout_performers", "TEXT");
+// Soccer's own rubric-input facts, set once at finalization by
+// setSoccerFinalRubric - the soccer analogue of the basketball-shaped
+// final_margin/largest_deficit_overcome/etc. columns above, which soccer
+// rows never populate (soccer reuses final_margin/largest_deficit_overcome
+// directly instead of duplicating those two, since the concept is identical
+// in both sports; these 6 have no basketball equivalent). Lets a device
+// recompute a weight-adjusted soccer score locally, the same way the
+// basketball columns already do - see mobile's Rubric.kt.
+ensureColumn("games", "total_goals", "INTEGER");
+ensureColumn("games", "late_decisive_goal", "INTEGER");
+ensureColumn("games", "max_goals_by_player", "INTEGER");
+ensureColumn("games", "combined_shots_on_target", "INTEGER");
+ensureColumn("games", "any_red_card", "INTEGER");
+ensureColumn("games", "max_saves_by_keeper", "INTEGER");
+ensureColumn("games", "any_free_kick_goal", "INTEGER");
+ensureColumn("games", "any_penalty_missed", "INTEGER");
 
 function now(): string {
   return new Date().toISOString();
@@ -186,6 +202,14 @@ export interface GameRow {
   ytFoundAt: string | null;
   ytCheckCount: number;
   seasonStageLabel: string | null;
+  totalGoals: number | null;
+  lateDecisiveGoal: number | null;
+  maxGoalsByPlayer: number | null;
+  combinedShotsOnTarget: number | null;
+  anyRedCard: number | null;
+  maxSavesByKeeper: number | null;
+  anyFreeKickGoal: number | null;
+  anyPenaltyMissed: number | null;
 }
 
 /** Creates the row if this eventId has never been seen before; a no-op otherwise - never touches an existing row's already-collected fields. */
@@ -264,6 +288,14 @@ interface RawGameRow {
   yt_found_at: string | null;
   yt_check_count: number;
   season_stage_label: string | null;
+  total_goals: number | null;
+  late_decisive_goal: number | null;
+  max_goals_by_player: number | null;
+  combined_shots_on_target: number | null;
+  any_red_card: number | null;
+  max_saves_by_keeper: number | null;
+  any_free_kick_goal: number | null;
+  any_penalty_missed: number | null;
 }
 
 function parseStandoutPerformers(raw: string | null): StandoutPerformerJson[] {
@@ -305,6 +337,14 @@ function mapRow(raw: RawGameRow): GameRow {
     ytFoundAt: raw.yt_found_at,
     ytCheckCount: raw.yt_check_count,
     seasonStageLabel: raw.season_stage_label,
+    totalGoals: raw.total_goals,
+    lateDecisiveGoal: raw.late_decisive_goal,
+    maxGoalsByPlayer: raw.max_goals_by_player,
+    combinedShotsOnTarget: raw.combined_shots_on_target,
+    anyRedCard: raw.any_red_card,
+    maxSavesByKeeper: raw.max_saves_by_keeper,
+    anyFreeKickGoal: raw.any_free_kick_goal,
+    anyPenaltyMissed: raw.any_penalty_missed,
   };
 }
 
@@ -386,16 +426,31 @@ export interface SoccerFinalResult {
   score: number;
   tier: string;
   standoutPerformers: StandoutPerformerJson[];
+  // Reuses the basketball-shaped final_margin/largest_deficit_overcome
+  // columns directly (same concept in both sports); the remaining 6 have no
+  // basketball equivalent and get their own columns above.
+  finalMargin: number;
+  largestDeficitOvercome: number;
+  totalGoals: number;
+  lateDecisiveGoal: boolean;
+  maxGoalsByPlayer: number;
+  combinedShotsOnTarget?: number;
+  anyRedCard?: boolean;
+  maxSavesByKeeper?: number;
+  anyFreeKickGoal?: boolean;
+  anyPenaltyMissed?: boolean;
 }
 
 /**
- * Soccer's equivalent of setFinalRubric - only touches the fields soccer
- * actually has (away/home score, the soccerRubric.ts total, its tier, and
- * standout scorers). Deliberately doesn't touch the basketball-shaped
- * rubric columns (lead changes, overtime periods, star performance, etc.) -
- * those simply stay NULL for a soccer row, which every reader already
- * treats as "not applicable"/"unknown" rather than a special case to guard
- * against. Same "never overwrite" WHERE-guard as setFinalRubric.
+ * Soccer's equivalent of setFinalRubric - touches soccer's own rubric-input
+ * facts (away/home score, the soccerRubric.ts total, its tier, standout
+ * scorers, and the 10 facts a client-side weight-adjusted recompute needs -
+ * see soccerRubric.ts's SoccerRubricInputs). Deliberately doesn't touch the
+ * remaining basketball-only rubric columns (lead changes, overtime periods,
+ * star performance tier, clutch booleans) - those simply stay NULL for a
+ * soccer row, which every reader already treats as "not applicable"/
+ * "unknown" rather than a special case to guard against. Same
+ * "never overwrite" WHERE-guard as setFinalRubric.
  */
 export function setSoccerFinalRubric(eventId: string, result: SoccerFinalResult, finalAt: string | null = now()): void {
   db.prepare(
@@ -403,6 +458,10 @@ export function setSoccerFinalRubric(eventId: string, result: SoccerFinalResult,
        status='final', final_at=@finalAt,
        away_score=@awayScore, home_score=@homeScore, score=@score, tier=@tier,
        standout_performers=@standoutPerformers,
+       final_margin=@finalMargin, largest_deficit_overcome=@largestDeficitOvercome,
+       total_goals=@totalGoals, late_decisive_goal=@lateDecisiveGoal, max_goals_by_player=@maxGoalsByPlayer,
+       combined_shots_on_target=@combinedShotsOnTarget, any_red_card=@anyRedCard,
+       max_saves_by_keeper=@maxSavesByKeeper, any_free_kick_goal=@anyFreeKickGoal, any_penalty_missed=@anyPenaltyMissed,
        updated_at=@updatedAt
      WHERE event_id=@eventId AND score IS NULL`
   ).run({
@@ -413,6 +472,16 @@ export function setSoccerFinalRubric(eventId: string, result: SoccerFinalResult,
     score: result.score,
     tier: result.tier,
     standoutPerformers: JSON.stringify(result.standoutPerformers),
+    finalMargin: result.finalMargin,
+    largestDeficitOvercome: result.largestDeficitOvercome,
+    totalGoals: result.totalGoals,
+    lateDecisiveGoal: result.lateDecisiveGoal ? 1 : 0,
+    maxGoalsByPlayer: result.maxGoalsByPlayer,
+    combinedShotsOnTarget: result.combinedShotsOnTarget ?? null,
+    anyRedCard: result.anyRedCard === undefined ? null : result.anyRedCard ? 1 : 0,
+    maxSavesByKeeper: result.maxSavesByKeeper ?? null,
+    anyFreeKickGoal: result.anyFreeKickGoal === undefined ? null : result.anyFreeKickGoal ? 1 : 0,
+    anyPenaltyMissed: result.anyPenaltyMissed === undefined ? null : result.anyPenaltyMissed ? 1 : 0,
     updatedAt: now()
   });
 }

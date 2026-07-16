@@ -72,6 +72,20 @@ export interface GameJson {
   score?: number;
   score_visible: boolean;
   yt?: string;
+  // Soccer-only rubric-input facts (client-side weight-adjusted recompute
+  // needs these the same way basketball's m/cb/lc/ot/c5/lcf/fp/bz/st already
+  // let a device recompute that sport's score locally). `m`/`cb` above are
+  // reused as-is for soccer (both already mean "final margin"/"largest
+  // deficit overcome" in spoiler-safe derived-fact form, same as basketball)
+  // rather than duplicated under new names.
+  tg?: number;
+  ldg?: boolean;
+  mgp?: number;
+  cst?: number;
+  rc?: boolean;
+  sv?: number;
+  fkg?: boolean;
+  pm?: boolean;
 }
 
 export interface StandoutPerformerJson {
