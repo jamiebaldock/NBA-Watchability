@@ -4,17 +4,27 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.view.ViewGroup
 import android.webkit.WebView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -25,10 +35,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.getSystemService
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -36,6 +49,9 @@ import androidx.core.view.doOnNextLayout
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.nbawatchability.app.ui.theme.BackgroundBase
+import com.nbawatchability.app.ui.theme.TextPrimary
+import com.nbawatchability.app.ui.theme.TextSecondary
+import com.nbawatchability.app.ui.theme.TierWorthYourTime
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
@@ -93,6 +109,13 @@ private fun LockLandscapeFullscreen() {
     }
 }
 
+private fun isOnWifi(context: Context): Boolean {
+    val connectivityManager = context.getSystemService<ConnectivityManager>() ?: return false
+    val network = connectivityManager.activeNetwork ?: return false
+    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+}
+
 /**
  * Full-screen, edge-to-edge, landscape-locked player for a game's official
  * full-game-highlights video - no title bar, so the video itself is the
@@ -106,13 +129,30 @@ private fun LockLandscapeFullscreen() {
  * is ever alive at a time, mounted while this is open and torn down on back
  * - a scrolling list of finished-game cards could otherwise hold many
  * expensive WebView instances at once.
+ *
+ * [wifiOnlyEnabled] (a persisted Settings choice) gates the actual video
+ * load - not just a warning after the fact - behind an explicit "watch
+ * anyway" tap whenever the device isn't on Wi-Fi at the moment this screen
+ * opens, so a user who's turned this on never has highlights silently start
+ * consuming cellular data.
  */
 @Composable
-fun HighlightsPlayerScreen(videoId: String, onBack: () -> Unit) {
+fun HighlightsPlayerScreen(videoId: String, onBack: () -> Unit, wifiOnlyEnabled: Boolean) {
     LockLandscapeFullscreen()
 
+    val context = LocalContext.current
+    // Checked once per screen visit (not re-polled) - a connection dropping
+    // mid-playback is out of scope here; this only gates the initial load.
+    val isWifiConnected = remember(videoId) { isOnWifi(context) }
+    var proceedOnCellular by remember(videoId) { mutableStateOf(false) }
+    val needsWifiPrompt = wifiOnlyEnabled && !isWifiConnected && !proceedOnCellular
+
     Box(modifier = Modifier.fillMaxSize().background(BackgroundBase)) {
-        YoutubePlayer(videoId = videoId)
+        if (needsWifiPrompt) {
+            WifiOnlyPrompt(onWatchAnyway = { proceedOnCellular = true }, onCancel = onBack)
+        } else {
+            YoutubePlayer(videoId = videoId)
+        }
 
         // A small floating affordance rather than a title bar - the system
         // back gesture/button already exits this screen (AppRoot.kt's
@@ -131,6 +171,35 @@ fun HighlightsPlayerScreen(videoId: String, onBack: () -> Unit) {
                 contentDescription = "Back",
                 tint = Color.White
             )
+        }
+    }
+}
+
+@Composable
+private fun WifiOnlyPrompt(onWatchAnyway: () -> Unit, onCancel: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "You're not on Wi-Fi",
+            color = TextPrimary,
+            style = MaterialTheme.typography.titleLarge
+        )
+        Text(
+            text = "Watching this highlight will use mobile data. Wi-Fi-only playback is on in Settings.",
+            color = TextSecondary,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 8.dp, bottom = 20.dp)
+        )
+        Button(onClick = onWatchAnyway, colors = ButtonDefaults.buttonColors(containerColor = TierWorthYourTime)) {
+            Text("Watch on Mobile Data")
+        }
+        Spacer(modifier = Modifier.padding(top = 8.dp))
+        OutlinedButton(onClick = onCancel) {
+            Text("Cancel")
         }
     }
 }

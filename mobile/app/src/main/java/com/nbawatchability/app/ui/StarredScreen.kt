@@ -38,8 +38,10 @@ import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.Team
+import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.data.bumpFavoriteTeamGames
 import com.nbawatchability.app.data.effectiveScore
+import com.nbawatchability.app.data.filterByMinTier
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
@@ -78,7 +80,9 @@ fun StarredScreen(
     favoriteTeamNames: Set<String> = emptySet(),
     bumpFavoriteTeamGames: Boolean = false,
     onToggleFavoriteTeam: (Team) -> Unit = {},
-    favoritePlayerNames: Set<String> = emptySet()
+    favoritePlayerNames: Set<String> = emptySet(),
+    minTierFilterEnabled: Boolean = false,
+    minTierFilter: Tier = Tier.SKIPPABLE
 ) {
     var sortOption by remember { mutableStateOf(SortOption.DATE_NEWEST_FIRST) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -159,7 +163,8 @@ fun StarredScreen(
                 }
                 SortOption.DATE_OLDEST_FIRST -> visibleGames.sortedBy { it.tipoffUtc }
                 SortOption.DATE_NEWEST_FIRST -> visibleGames.sortedByDescending { it.tipoffUtc }
-            }.bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
+            }.filterByMinTier(minTierFilterEnabled, minTierFilter, weights)
+                .bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
             val listState = rememberLazyListState()
             // Without this, LazyColumn's key-based item tracking keeps

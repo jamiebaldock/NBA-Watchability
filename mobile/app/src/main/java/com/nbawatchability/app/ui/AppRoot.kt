@@ -47,13 +47,18 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.SurfaceCardElevated
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 
-private enum class BottomNavTab(val label: String, val icon: ImageVector) {
+// Not private: AppSettingsRepository stores the default-landing-tab choice
+// as a plain string (its .name) to avoid a data-layer -> ui-layer type
+// dependency, but SettingsScreen.kt (same package) still needs the enum
+// itself to build the picker UI.
+enum class BottomNavTab(val label: String, val icon: ImageVector) {
     GAMES("Games", Icons.Default.SportsBasketball),
     STARRED("Starred", Icons.Default.Star),
     // Team-crest icon, distinct from Starred's star (favorite games) - this
@@ -93,7 +98,6 @@ private enum class BottomNavTab(val label: String, val icon: ImageVector) {
  */
 @Composable
 fun AppRoot() {
-    var selectedTab by rememberSaveable { mutableStateOf(BottomNavTab.GAMES) }
     var showAbout by rememberSaveable { mutableStateOf(false) }
     var showRubricWeights by rememberSaveable { mutableStateOf(false) }
     var showSelectedSports by rememberSaveable { mutableStateOf(false) }
@@ -112,6 +116,15 @@ fun AppRoot() {
     if (!appSettingsViewModel.isLoaded) {
         LoadingScreen()
         return
+    }
+
+    // Declared after the isLoaded gate above (not before, like every other
+    // rememberSaveable here) so its initial value can actually read the
+    // user's persisted default-landing-tab choice - this composable never
+    // reaches this line at all while settings are still loading, so there's
+    // no race between "first composition" and "settings arrived".
+    var selectedTab by rememberSaveable {
+        mutableStateOf(BottomNavTab.entries.find { it.name == appSettingsViewModel.settings.defaultLandingTab } ?: BottomNavTab.GAMES)
     }
 
     // Back from About/rating weights/Selected Sports returns to whatever tab
@@ -167,7 +180,11 @@ fun AppRoot() {
     }
 
     highlightsVideoId?.let { videoId ->
-        HighlightsPlayerScreen(videoId = videoId, onBack = { highlightsVideoId = null })
+        HighlightsPlayerScreen(
+            videoId = videoId,
+            onBack = { highlightsVideoId = null },
+            wifiOnlyEnabled = appSettingsViewModel.settings.wifiOnlyHighlights
+        )
         return
     }
 
@@ -195,7 +212,17 @@ fun AppRoot() {
                     onFavoriteTeamsClick = { showFavoriteTeams = true },
                     onFavoritePlayersClick = { showFavoritePlayers = true },
                     bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
-                    onToggleBumpFavoriteTeamGames = appSettingsViewModel::toggleBumpFavoriteTeamGames
+                    onToggleBumpFavoriteTeamGames = appSettingsViewModel::toggleBumpFavoriteTeamGames,
+                    defaultLandingTab = BottomNavTab.entries.find { it.name == appSettingsViewModel.settings.defaultLandingTab } ?: BottomNavTab.GAMES,
+                    onDefaultLandingTabChange = { appSettingsViewModel.setDefaultLandingTab(it.name) },
+                    historyShowScoresByDefault = appSettingsViewModel.settings.historyShowScoresByDefault,
+                    onToggleHistoryShowScoresByDefault = appSettingsViewModel::toggleHistoryShowScoresByDefault,
+                    minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
+                    onToggleMinTierFilterEnabled = appSettingsViewModel::toggleMinTierFilterEnabled,
+                    minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
+                    onMinTierFilterChange = { appSettingsViewModel.setMinTierFilter(it.name) },
+                    wifiOnlyHighlights = appSettingsViewModel.settings.wifiOnlyHighlights,
+                    onToggleWifiOnlyHighlights = appSettingsViewModel::toggleWifiOnlyHighlights
                 )
                 BottomNavTab.MY_TEAMS -> MyTeamsScreen(
                     favoriteTeams = favoritesViewModel.favoriteTeams,
@@ -226,7 +253,9 @@ fun AppRoot() {
                             favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
                             bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
                             onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
-                            favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet()
+                            favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet(),
+                            minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
+                            minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE
                         )
                         BottomNavTab.LEADERS -> LeadersTab(
                             selectedLeague = selectedLeague,
@@ -252,7 +281,9 @@ fun AppRoot() {
                             favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
                             bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
                             onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
-                            favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet()
+                            favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet(),
+                            minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
+                            minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE
                         )
                         BottomNavTab.HISTORY -> HistoryTab(
                             weights = settingsViewModel.weights,
@@ -267,7 +298,10 @@ fun AppRoot() {
                             favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
                             bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
                             onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
-                            favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet()
+                            favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet(),
+                            minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
+                            minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
+                            showScoresByDefault = appSettingsViewModel.settings.historyShowScoresByDefault
                         )
                         else -> {} // unreachable: SETTINGS/MY_TEAMS handled above
                     }
@@ -329,7 +363,9 @@ private fun GamesTab(
     favoriteTeamNames: Set<String>,
     bumpFavoriteTeamGames: Boolean,
     onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit,
-    favoritePlayerNames: Set<String>
+    favoritePlayerNames: Set<String>,
+    minTierFilterEnabled: Boolean,
+    minTierFilter: Tier
 ) {
     val viewModel: GameListViewModel = viewModel()
 
@@ -379,7 +415,9 @@ private fun GamesTab(
             favoriteTeamNames = favoriteTeamNames,
             bumpFavoriteTeamGames = bumpFavoriteTeamGames,
             onToggleFavoriteTeam = onToggleFavoriteTeam,
-            favoritePlayerNames = favoritePlayerNames
+            favoritePlayerNames = favoritePlayerNames,
+            minTierFilterEnabled = minTierFilterEnabled,
+            minTierFilter = minTierFilter
         )
     }
 }
@@ -399,7 +437,9 @@ private fun StarredTab(
     favoriteTeamNames: Set<String>,
     bumpFavoriteTeamGames: Boolean,
     onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit,
-    favoritePlayerNames: Set<String>
+    favoritePlayerNames: Set<String>,
+    minTierFilterEnabled: Boolean,
+    minTierFilter: Tier
 ) {
     // Fires on first composition and again whenever the starred set changes
     // (a star added/removed anywhere in the app) - re-fetches live data for
@@ -431,7 +471,9 @@ private fun StarredTab(
         favoriteTeamNames = favoriteTeamNames,
         bumpFavoriteTeamGames = bumpFavoriteTeamGames,
         onToggleFavoriteTeam = onToggleFavoriteTeam,
-        favoritePlayerNames = favoritePlayerNames
+        favoritePlayerNames = favoritePlayerNames,
+        minTierFilterEnabled = minTierFilterEnabled,
+        minTierFilter = minTierFilter
     )
 }
 
@@ -449,7 +491,10 @@ private fun HistoryTab(
     favoriteTeamNames: Set<String>,
     bumpFavoriteTeamGames: Boolean,
     onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit,
-    favoritePlayerNames: Set<String>
+    favoritePlayerNames: Set<String>,
+    minTierFilterEnabled: Boolean,
+    minTierFilter: Tier,
+    showScoresByDefault: Boolean
 ) {
     val viewModel: HistoryViewModel = viewModel()
     // Both leagues have their own backfill now - always resets to "This
@@ -480,7 +525,10 @@ private fun HistoryTab(
         favoriteTeamNames = favoriteTeamNames,
         bumpFavoriteTeamGames = bumpFavoriteTeamGames,
         onToggleFavoriteTeam = onToggleFavoriteTeam,
-        favoritePlayerNames = favoritePlayerNames
+        favoritePlayerNames = favoritePlayerNames,
+        minTierFilterEnabled = minTierFilterEnabled,
+        minTierFilter = minTierFilter,
+        showScoresByDefault = showScoresByDefault
     )
 }
 

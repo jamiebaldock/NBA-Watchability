@@ -55,7 +55,9 @@ import com.nbawatchability.app.data.DayGames
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.Team
+import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.data.bumpFavoriteTeamGames
+import com.nbawatchability.app.data.filterByMinTier
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
@@ -106,7 +108,9 @@ fun DayTabsScreen(
     favoriteTeamNames: Set<String> = emptySet(),
     bumpFavoriteTeamGames: Boolean = false,
     onToggleFavoriteTeam: (Team) -> Unit = {},
-    favoritePlayerNames: Set<String> = emptySet()
+    favoritePlayerNames: Set<String> = emptySet(),
+    minTierFilterEnabled: Boolean = false,
+    minTierFilter: Tier = Tier.SKIPPABLE
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -228,7 +232,9 @@ fun DayTabsScreen(
                             favoriteTeamNames = favoriteTeamNames,
                             bumpFavoriteTeamGames = bumpFavoriteTeamGames,
                             onToggleFavoriteTeam = onToggleFavoriteTeam,
-                            favoritePlayerNames = favoritePlayerNames
+                            favoritePlayerNames = favoritePlayerNames,
+                            minTierFilterEnabled = minTierFilterEnabled,
+                            minTierFilter = minTierFilter
                         )
                     }
                 }
@@ -341,7 +347,9 @@ private fun DayGamesList(
     favoriteTeamNames: Set<String> = emptySet(),
     bumpFavoriteTeamGames: Boolean = false,
     onToggleFavoriteTeam: (Team) -> Unit = {},
-    favoritePlayerNames: Set<String> = emptySet()
+    favoritePlayerNames: Set<String> = emptySet(),
+    minTierFilterEnabled: Boolean = false,
+    minTierFilter: Tier = Tier.SKIPPABLE
 ) {
     if (games.isEmpty()) {
         Column(
@@ -374,7 +382,9 @@ private fun DayGamesList(
         return
     }
 
-    val orderedGames = games.bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
+    val orderedGames = games
+        .filterByMinTier(minTierFilterEnabled, minTierFilter, weights)
+        .bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),

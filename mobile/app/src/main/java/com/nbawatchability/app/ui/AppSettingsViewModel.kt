@@ -51,6 +51,26 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch { repository.setBumpFavoriteTeamGames(!settings.bumpFavoriteTeamGames) }
     }
 
+    fun setDefaultLandingTab(tabName: String) {
+        viewModelScope.launch { repository.setDefaultLandingTab(tabName) }
+    }
+
+    fun toggleHistoryShowScoresByDefault() {
+        viewModelScope.launch { repository.setHistoryShowScoresByDefault(!settings.historyShowScoresByDefault) }
+    }
+
+    fun toggleMinTierFilterEnabled() {
+        viewModelScope.launch { repository.setMinTierFilterEnabled(!settings.minTierFilterEnabled) }
+    }
+
+    fun setMinTierFilter(tierName: String) {
+        viewModelScope.launch { repository.setMinTierFilter(tierName) }
+    }
+
+    fun toggleWifiOnlyHighlights() {
+        viewModelScope.launch { repository.setWifiOnlyHighlights(!settings.wifiOnlyHighlights) }
+    }
+
     /**
      * Flips [league] in the dropdown's visible set. Two safety rules the
      * Settings toggle UI can't enforce on its own: never let the set go

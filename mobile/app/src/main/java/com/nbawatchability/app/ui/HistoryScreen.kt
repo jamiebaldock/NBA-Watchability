@@ -43,8 +43,10 @@ import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.Team
+import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.data.bumpFavoriteTeamGames
 import com.nbawatchability.app.data.effectiveScore
+import com.nbawatchability.app.data.filterByMinTier
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
@@ -104,11 +106,14 @@ private const val ALL_TIME_MIN_SCORE_SOCCER = 85
  * [showScore] is a separate, purely local "browse blind" preference -
  * unlike spoilerFree, turning it off only hides the two teams' final
  * numeric score digits (tier badge, breakdown, and final result stay
- * visible either way). Defaults to hidden (spoiler-safe) every time this
+ * visible either way). Resets to [showScoresByDefault] every time this
  * screen is (re)composed - e.g. navigating back to History from another
- * tab - rather than persisting a "showing scores" choice across tab
- * switches, so a viewer can't accidentally get spoiled by whatever state
- * they left it in last time.
+ * tab - rather than remembering whatever the toggle was last left at
+ * within a single session, so an accidental peek doesn't linger past a
+ * tab switch. [showScoresByDefault] itself is a persisted Settings choice
+ * (default false, i.e. spoiler-safe), not a session toggle - a user who's
+ * decided they don't mind seeing scores can make that the starting state
+ * instead of hidden.
  *
  * No hook/pitch preview text is generated or shown here (unlike the
  * pregame preview on other tabs) - these are already-finished games, so
@@ -136,13 +141,17 @@ fun HistoryScreen(
     favoriteTeamNames: Set<String> = emptySet(),
     bumpFavoriteTeamGames: Boolean = false,
     onToggleFavoriteTeam: (Team) -> Unit = {},
-    favoritePlayerNames: Set<String> = emptySet()
+    favoritePlayerNames: Set<String> = emptySet(),
+    minTierFilterEnabled: Boolean = false,
+    minTierFilter: Tier = Tier.SKIPPABLE,
+    showScoresByDefault: Boolean = false
 ) {
-    // Plain remember (not rememberSaveable) - defaults to hidden every time
-    // this composable enters composition, e.g. switching back to History
-    // from another tab, so a "showing scores" choice never survives a tab
-    // switch and can't accidentally spoil something.
-    var showScore by remember { mutableStateOf(false) }
+    // Plain remember (not rememberSaveable) - resets to showScoresByDefault
+    // every time this composable enters composition, e.g. switching back to
+    // History from another tab, so a "showing scores" choice never survives
+    // a tab switch and can't accidentally spoil something beyond what the
+    // user's own persisted default already allows.
+    var showScore by remember { mutableStateOf(showScoresByDefault) }
     // A single 4-option sort dropdown (SortMenuButton) rather than two
     // independent toggles - defaults to highest-rated first, matching this
     // tab's own "most watchable first" framing.
@@ -274,7 +283,8 @@ fun HistoryScreen(
                             SortOption.RATING_LOWEST_FIRST -> displayGames.sortedBy { it.effectiveScore(weights) }
                             SortOption.DATE_OLDEST_FIRST -> displayGames.sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
                             SortOption.DATE_NEWEST_FIRST -> displayGames.sortedByDescending { OffsetDateTime.parse(it.tipoffUtc) }
-                        }.bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
+                        }.filterByMinTier(minTierFilterEnabled, minTierFilter, weights)
+                            .bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
                         val listState = rememberLazyListState()
                         // Without this, LazyColumn's key-based item tracking
