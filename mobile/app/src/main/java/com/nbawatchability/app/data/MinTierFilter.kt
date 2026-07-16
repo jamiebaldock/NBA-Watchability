@@ -8,10 +8,15 @@ package com.nbawatchability.app.data
  * intended. Tier's ordinal order (INSTANT_CLASSIC=0 ... SKIPPABLE=3) means
  * "at least as good as the minimum" is a `<=` comparison, not `>=`.
  */
-fun List<Game>.filterByMinTier(enabled: Boolean, minTier: Tier, weights: RubricWeights): List<Game> {
+fun List<Game>.filterByMinTier(
+    enabled: Boolean,
+    minTier: Tier,
+    weights: RubricWeights,
+    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT
+): List<Game> {
     if (!enabled) return this
     return filter { game ->
-        val tier = game.effectiveTier(weights) ?: return@filter true
+        val tier = game.effectiveTier(weights, soccerWeights) ?: return@filter true
         tier.ordinal <= minTier.ordinal
     }
 }

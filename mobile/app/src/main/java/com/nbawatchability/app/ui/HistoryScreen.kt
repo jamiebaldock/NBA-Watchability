@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.data.bumpFavoriteTeamGames
@@ -144,7 +145,8 @@ fun HistoryScreen(
     favoritePlayerNames: Set<String> = emptySet(),
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
-    showScoresByDefault: Boolean = false
+    showScoresByDefault: Boolean = false,
+    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT
 ) {
     // Plain remember (not rememberSaveable) - resets to showScoresByDefault
     // every time this composable enters composition, e.g. switching back to
@@ -253,7 +255,7 @@ fun HistoryScreen(
                             LeagueGroup.EPL, LeagueGroup.LA_LIGA -> ALL_TIME_MIN_SCORE_SOCCER
                             else -> ALL_TIME_MIN_SCORE_NBA
                         }
-                        uiState.games.filter { (it.effectiveScore(weights) ?: 0) >= allTimeMinScore }
+                        uiState.games.filter { (it.effectiveScore(weights, soccerWeights) ?: 0) >= allTimeMinScore }
                     } else {
                         uiState.games
                     }
@@ -279,11 +281,11 @@ fun HistoryScreen(
                         // every History game already has a score, so unlike
                         // Starred there's no unscored tail to fall back to.
                         val ordered = when (sortOption) {
-                            SortOption.RATING_HIGHEST_FIRST -> displayGames.sortedByDescending { it.effectiveScore(weights) }
-                            SortOption.RATING_LOWEST_FIRST -> displayGames.sortedBy { it.effectiveScore(weights) }
+                            SortOption.RATING_HIGHEST_FIRST -> displayGames.sortedByDescending { it.effectiveScore(weights, soccerWeights) }
+                            SortOption.RATING_LOWEST_FIRST -> displayGames.sortedBy { it.effectiveScore(weights, soccerWeights) }
                             SortOption.DATE_OLDEST_FIRST -> displayGames.sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
                             SortOption.DATE_NEWEST_FIRST -> displayGames.sortedByDescending { OffsetDateTime.parse(it.tipoffUtc) }
-                        }.filterByMinTier(minTierFilterEnabled, minTierFilter, weights)
+                        }.filterByMinTier(minTierFilterEnabled, minTierFilter, weights, soccerWeights)
                             .bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
                         val listState = rememberLazyListState()
@@ -314,7 +316,8 @@ fun HistoryScreen(
                                     showScore = showScore,
                                     favoriteTeamNames = favoriteTeamNames,
                                     onToggleFavoriteTeam = onToggleFavoriteTeam,
-                                    favoritePlayerNames = favoritePlayerNames
+                                    favoritePlayerNames = favoritePlayerNames,
+                                    soccerWeights = soccerWeights
                                 )
                             }
                         }

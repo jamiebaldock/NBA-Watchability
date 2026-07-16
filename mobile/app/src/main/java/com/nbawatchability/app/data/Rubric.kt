@@ -116,26 +116,103 @@ private object Rubric {
 }
 
 /**
+ * Client-side port of backend/src/soccerRubric.ts's computeSoccerWatchabilityScore,
+ * soccer's sibling to the private Rubric object above - a separate object
+ * (not folded into Rubric) since the two sports' dimensions don't overlap
+ * beyond stakes, which RubricWeights.stakes already covers for both. Point
+ * values/thresholds must stay in sync with soccerRubric.ts if that ever
+ * changes.
+ */
+private object SoccerRubric {
+    fun marginPoints(margin: Int?): Int {
+        val m = abs(margin ?: return 0)
+        return when {
+            m == 0 -> 20
+            m == 1 -> 15
+            m == 2 -> 8
+            else -> 0
+        }
+    }
+
+    fun totalGoalsPoints(totalGoals: Int?): Int = when {
+        (totalGoals ?: 0) <= 1 -> 0
+        totalGoals!! <= 3 -> 5
+        totalGoals <= 5 -> 12
+        else -> 20
+    }
+
+    fun comebackPoints(largestDeficitOvercome: Int?): Int {
+        val cb = largestDeficitOvercome ?: 0
+        return when {
+            cb <= 0 -> 0
+            cb == 1 -> 10
+            cb == 2 -> 20
+            else -> 30
+        }
+    }
+
+    fun lateDramaPoints(lateDecisiveGoal: Boolean): Int = if (lateDecisiveGoal) 15 else 0
+
+    fun starPoints(maxGoalsByPlayer: Int?): Int = when {
+        (maxGoalsByPlayer ?: 0) >= 3 -> 15
+        maxGoalsByPlayer == 2 -> 5
+        else -> 0
+    }
+
+    fun chancesPoints(combinedShotsOnTarget: Int?): Int = if ((combinedShotsOnTarget ?: 0) >= 12) 8 else 0
+
+    fun redCardPoints(anyRedCard: Boolean): Int = if (anyRedCard) 5 else 0
+
+    fun savesPoints(maxSavesByKeeper: Int?): Int {
+        val saves = maxSavesByKeeper ?: 0
+        return when {
+            saves >= 9 -> 15
+            saves >= 7 -> 5
+            else -> 0
+        }
+    }
+
+    fun freeKickGoalPoints(anyFreeKickGoal: Boolean): Int = if (anyFreeKickGoal) 10 else 0
+
+    fun penaltyMissPoints(anyPenaltyMissed: Boolean): Int = if (anyPenaltyMissed) 10 else 0
+
+    fun stakesPoints(stakes: Int?): Int = (stakes ?: 0).coerceIn(0, 10)
+
+    fun computeScore(game: Game, weights: RubricWeights, soccerWeights: SoccerRubricWeights): Int {
+        val margin = marginPoints(game.margin) * soccerWeights.margin
+        val totalGoals = totalGoalsPoints(game.totalGoals) * soccerWeights.totalGoals
+        val comeback = comebackPoints(game.comeback) * soccerWeights.comeback
+        val lateDrama = lateDramaPoints(game.lateDecisiveGoal) * soccerWeights.lateDrama
+        val star = starPoints(game.maxGoalsByPlayer) * soccerWeights.star
+        val chances = chancesPoints(game.combinedShotsOnTarget) * soccerWeights.chances
+        val redCard = redCardPoints(game.anyRedCard) * soccerWeights.redCard
+        val saves = savesPoints(game.maxSavesByKeeper) * soccerWeights.saves
+        val freeKickGoal = freeKickGoalPoints(game.anyFreeKickGoal) * soccerWeights.freeKickGoal
+        val penaltyMiss = penaltyMissPoints(game.anyPenaltyMissed) * soccerWeights.penaltyMiss
+        // Stakes deliberately uses the shared RubricWeights.stakes, not a
+        // soccer-only weight - see SoccerRubricWeights's doc comment.
+        val stakes = stakesPoints(game.stakes) * weights.stakes
+
+        return (margin + totalGoals + comeback + lateDrama + star + chances + redCard + saves + freeKickGoal + penaltyMiss + stakes)
+            .roundToInt()
+    }
+}
+
+/**
  * Weight-adjusted score, or null if the game's outcome isn't revealed yet -
  * mirrors the same scoreVisible gate the server uses, so recomputing locally
- * never leaks a score early regardless of what weights are set.
- *
- * Soccer games skip the recompute entirely and just return the server's raw
- * score as-is. Rubric.computeScore only ever implements backend/src/
- * rubric.ts's basketball formula (margin/clutch/comeback/lead-changes/
- * overtime/star/stakes from m/cb/lc/ot/c5/lcf/fp/bz/st) - none of which a
- * soccer Game ever populates (soccerRubric.ts's own inputs - goals, saves,
- * red cards - aren't sent over the wire at all, only the final score/tier
- * are). Running a soccer game through the basketball formula wouldn't just
- * be inaccurate, it'd silently return 0 for every one (marginPoints(null)
- * short-circuits to 0, and every other term is equally absent) - there's
- * also no per-category weights UI for soccer yet, so there's nothing
- * meaningful to adjust anyway.
+ * never leaks a score early regardless of what weights are set. Dispatches
+ * to whichever sport's rubric actually applies - Rubric.computeScore for
+ * basketball (margin/clutch/comeback/lead-changes/overtime/star/stakes from
+ * m/cb/lc/ot/c5/lcf/fp/bz/st) or SoccerRubric.computeScore for soccer
+ * (margin/totalGoals/comeback/lateDrama/star/chances/redCard/saves/
+ * freeKickGoal/penaltyMiss from the sport-specific fields Phase E added to
+ * GameJson).
  */
-fun Game.effectiveScore(weights: RubricWeights): Int? =
+fun Game.effectiveScore(weights: RubricWeights, soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT): Int? =
     if (scoreVisible && score != null) {
-        if (league == "soccer") score else Rubric.computeScore(this, weights)
+        if (league == "soccer") SoccerRubric.computeScore(this, weights, soccerWeights) else Rubric.computeScore(this, weights)
     } else null
 
-fun Game.effectiveTier(weights: RubricWeights): Tier? =
-    effectiveScore(weights)?.let { Tier.fromScore(it) }
+fun Game.effectiveTier(weights: RubricWeights, soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT): Tier? =
+    effectiveScore(weights, soccerWeights)?.let { Tier.fromScore(it) }

@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.data.bumpFavoriteTeamGames
@@ -82,7 +83,8 @@ fun StarredScreen(
     onToggleFavoriteTeam: (Team) -> Unit = {},
     favoritePlayerNames: Set<String> = emptySet(),
     minTierFilterEnabled: Boolean = false,
-    minTierFilter: Tier = Tier.SKIPPABLE
+    minTierFilter: Tier = Tier.SKIPPABLE,
+    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT
 ) {
     var sortOption by remember { mutableStateOf(SortOption.DATE_NEWEST_FIRST) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -154,16 +156,16 @@ fun StarredScreen(
             // (future/live) starred games, since those have no rating to sort by.
             val ordered = when (sortOption) {
                 SortOption.RATING_HIGHEST_FIRST -> {
-                    val (scored, unscored) = visibleGames.partition { it.effectiveScore(weights) != null }
-                    scored.sortedByDescending { it.effectiveScore(weights) } + unscored.sortedByDescending { it.tipoffUtc }
+                    val (scored, unscored) = visibleGames.partition { it.effectiveScore(weights, soccerWeights) != null }
+                    scored.sortedByDescending { it.effectiveScore(weights, soccerWeights) } + unscored.sortedByDescending { it.tipoffUtc }
                 }
                 SortOption.RATING_LOWEST_FIRST -> {
-                    val (scored, unscored) = visibleGames.partition { it.effectiveScore(weights) != null }
-                    scored.sortedBy { it.effectiveScore(weights) } + unscored.sortedByDescending { it.tipoffUtc }
+                    val (scored, unscored) = visibleGames.partition { it.effectiveScore(weights, soccerWeights) != null }
+                    scored.sortedBy { it.effectiveScore(weights, soccerWeights) } + unscored.sortedByDescending { it.tipoffUtc }
                 }
                 SortOption.DATE_OLDEST_FIRST -> visibleGames.sortedBy { it.tipoffUtc }
                 SortOption.DATE_NEWEST_FIRST -> visibleGames.sortedByDescending { it.tipoffUtc }
-            }.filterByMinTier(minTierFilterEnabled, minTierFilter, weights)
+            }.filterByMinTier(minTierFilterEnabled, minTierFilter, weights, soccerWeights)
                 .bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
             val listState = rememberLazyListState()
@@ -191,7 +193,8 @@ fun StarredScreen(
                         showDate = true,
                         favoriteTeamNames = favoriteTeamNames,
                         onToggleFavoriteTeam = onToggleFavoriteTeam,
-                        favoritePlayerNames = favoritePlayerNames
+                        favoritePlayerNames = favoritePlayerNames,
+                        soccerWeights = soccerWeights
                     )
                 }
             }

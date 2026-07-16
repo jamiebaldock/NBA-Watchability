@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.SurfaceCardElevated
@@ -105,6 +106,7 @@ fun AppRoot() {
     var showFavoritePlayers by rememberSaveable { mutableStateOf(false) }
     var highlightsVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     val settingsViewModel: RubricSettingsViewModel = viewModel()
+    val soccerSettingsViewModel: SoccerRubricSettingsViewModel = viewModel()
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
     val starredGamesViewModel: StarredGamesViewModel = viewModel()
     val favoritesViewModel: FavoritesViewModel = viewModel()
@@ -147,6 +149,9 @@ fun AppRoot() {
             weights = settingsViewModel.weights,
             onWeightChange = settingsViewModel::updateWeight,
             onReset = settingsViewModel::resetToDefaults,
+            soccerWeights = soccerSettingsViewModel.weights,
+            onSoccerWeightChange = soccerSettingsViewModel::updateWeight,
+            onSoccerReset = soccerSettingsViewModel::resetToDefaults,
             onBack = { showRubricWeights = false }
         )
         return
@@ -255,7 +260,8 @@ fun AppRoot() {
                             onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
                             favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet(),
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
-                            minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE
+                            minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
+                            soccerWeights = soccerSettingsViewModel.weights
                         )
                         BottomNavTab.LEADERS -> LeadersTab(
                             selectedLeague = selectedLeague,
@@ -283,7 +289,8 @@ fun AppRoot() {
                             onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
                             favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet(),
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
-                            minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE
+                            minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
+                            soccerWeights = soccerSettingsViewModel.weights
                         )
                         BottomNavTab.HISTORY -> HistoryTab(
                             weights = settingsViewModel.weights,
@@ -301,7 +308,8 @@ fun AppRoot() {
                             favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet(),
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
                             minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
-                            showScoresByDefault = appSettingsViewModel.settings.historyShowScoresByDefault
+                            showScoresByDefault = appSettingsViewModel.settings.historyShowScoresByDefault,
+                            soccerWeights = soccerSettingsViewModel.weights
                         )
                         else -> {} // unreachable: SETTINGS/MY_TEAMS handled above
                     }
@@ -365,7 +373,8 @@ private fun GamesTab(
     onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit,
     favoritePlayerNames: Set<String>,
     minTierFilterEnabled: Boolean,
-    minTierFilter: Tier
+    minTierFilter: Tier,
+    soccerWeights: SoccerRubricWeights
 ) {
     val viewModel: GameListViewModel = viewModel()
 
@@ -417,7 +426,8 @@ private fun GamesTab(
             onToggleFavoriteTeam = onToggleFavoriteTeam,
             favoritePlayerNames = favoritePlayerNames,
             minTierFilterEnabled = minTierFilterEnabled,
-            minTierFilter = minTierFilter
+            minTierFilter = minTierFilter,
+            soccerWeights = soccerWeights
         )
     }
 }
@@ -439,7 +449,8 @@ private fun StarredTab(
     onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit,
     favoritePlayerNames: Set<String>,
     minTierFilterEnabled: Boolean,
-    minTierFilter: Tier
+    minTierFilter: Tier,
+    soccerWeights: SoccerRubricWeights
 ) {
     // Fires on first composition and again whenever the starred set changes
     // (a star added/removed anywhere in the app) - re-fetches live data for
@@ -473,7 +484,8 @@ private fun StarredTab(
         onToggleFavoriteTeam = onToggleFavoriteTeam,
         favoritePlayerNames = favoritePlayerNames,
         minTierFilterEnabled = minTierFilterEnabled,
-        minTierFilter = minTierFilter
+        minTierFilter = minTierFilter,
+        soccerWeights = soccerWeights
     )
 }
 
@@ -494,7 +506,8 @@ private fun HistoryTab(
     favoritePlayerNames: Set<String>,
     minTierFilterEnabled: Boolean,
     minTierFilter: Tier,
-    showScoresByDefault: Boolean
+    showScoresByDefault: Boolean,
+    soccerWeights: SoccerRubricWeights
 ) {
     val viewModel: HistoryViewModel = viewModel()
     // Both leagues have their own backfill now - always resets to "This
@@ -528,7 +541,8 @@ private fun HistoryTab(
         favoritePlayerNames = favoritePlayerNames,
         minTierFilterEnabled = minTierFilterEnabled,
         minTierFilter = minTierFilter,
-        showScoresByDefault = showScoresByDefault
+        showScoresByDefault = showScoresByDefault,
+        soccerWeights = soccerWeights
     )
 }
 

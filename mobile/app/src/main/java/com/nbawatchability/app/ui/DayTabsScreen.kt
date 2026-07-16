@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.DayGames
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.data.bumpFavoriteTeamGames
@@ -110,7 +111,8 @@ fun DayTabsScreen(
     onToggleFavoriteTeam: (Team) -> Unit = {},
     favoritePlayerNames: Set<String> = emptySet(),
     minTierFilterEnabled: Boolean = false,
-    minTierFilter: Tier = Tier.SKIPPABLE
+    minTierFilter: Tier = Tier.SKIPPABLE,
+    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -234,7 +236,8 @@ fun DayTabsScreen(
                             onToggleFavoriteTeam = onToggleFavoriteTeam,
                             favoritePlayerNames = favoritePlayerNames,
                             minTierFilterEnabled = minTierFilterEnabled,
-                            minTierFilter = minTierFilter
+                            minTierFilter = minTierFilter,
+                            soccerWeights = soccerWeights
                         )
                     }
                 }
@@ -349,7 +352,8 @@ private fun DayGamesList(
     onToggleFavoriteTeam: (Team) -> Unit = {},
     favoritePlayerNames: Set<String> = emptySet(),
     minTierFilterEnabled: Boolean = false,
-    minTierFilter: Tier = Tier.SKIPPABLE
+    minTierFilter: Tier = Tier.SKIPPABLE,
+    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT
 ) {
     if (games.isEmpty()) {
         Column(
@@ -383,7 +387,7 @@ private fun DayGamesList(
     }
 
     val orderedGames = games
-        .filterByMinTier(minTierFilterEnabled, minTierFilter, weights)
+        .filterByMinTier(minTierFilterEnabled, minTierFilter, weights, soccerWeights)
         .bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
     LazyColumn(
@@ -401,7 +405,8 @@ private fun DayGamesList(
                 onWatchHighlights = onWatchHighlights,
                 favoriteTeamNames = favoriteTeamNames,
                 onToggleFavoriteTeam = onToggleFavoriteTeam,
-                favoritePlayerNames = favoritePlayerNames
+                favoritePlayerNames = favoritePlayerNames,
+                soccerWeights = soccerWeights
             )
         }
     }

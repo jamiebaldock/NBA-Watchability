@@ -70,6 +70,17 @@ data class Game(
     @SerialName("st") val starPerformance: String? = null,
     @SerialName("sop") val standoutPerformers: List<StandoutPerformer>? = null,
     @SerialName("sk") val stakes: Int? = null,
+    // Soccer-only rubric-input facts - m/cb above are reused as-is (same
+    // concept as basketball's final margin/largest deficit overcome), these
+    // 8 have no basketball equivalent. Absent/null on every basketball Game.
+    @SerialName("tg") val totalGoals: Int? = null,
+    @SerialName("ldg") val lateDecisiveGoal: Boolean = false,
+    @SerialName("mgp") val maxGoalsByPlayer: Int? = null,
+    @SerialName("cst") val combinedShotsOnTarget: Int? = null,
+    @SerialName("rc") val anyRedCard: Boolean = false,
+    @SerialName("sv") val maxSavesByKeeper: Int? = null,
+    @SerialName("fkg") val anyFreeKickGoal: Boolean = false,
+    @SerialName("pm") val anyPenaltyMissed: Boolean = false,
     @SerialName("hook") val hook: String,
     @SerialName("pitch") val pitch: String? = null,
     @SerialName("score") val score: Int? = null,

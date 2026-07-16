@@ -51,6 +51,7 @@ import coil.compose.AsyncImage
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.GameStatus
 import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.data.StandoutPerformer
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.Tier
@@ -107,9 +108,10 @@ fun GameCard(
     onToggleFavoriteTeam: (Team) -> Unit = {},
     // Global favorites (not per-league), same identity match as
     // favoriteTeamNames - backs the standout-performance callout below.
-    favoritePlayerNames: Set<String> = emptySet()
+    favoritePlayerNames: Set<String> = emptySet(),
+    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT
 ) {
-    val tier = game.effectiveTier(weights)
+    val tier = game.effectiveTier(weights, soccerWeights)
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -156,7 +158,7 @@ fun GameCard(
                     if (tier != null) {
                         TierBadge(
                             tier = tier,
-                            numericScore = if (showNumericScore) game.effectiveScore(weights) else null
+                            numericScore = if (showNumericScore) game.effectiveScore(weights, soccerWeights) else null
                         )
                     } else {
                         Spacer(modifier = Modifier.size(0.dp))
@@ -209,6 +211,7 @@ fun GameCard(
                         game = game,
                         weights = weights,
                         spoilerFree = spoilerFree,
+                        soccerWeights = soccerWeights,
                         modifier = Modifier.padding(top = breakdownTopPadding)
                     )
                 }
