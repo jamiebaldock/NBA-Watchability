@@ -197,7 +197,11 @@ private fun BreakdownTab(game: Game, weights: RubricWeights, soccerWeights: Socc
             ) {
                 Text(text = entry.label, color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    text = String.format("%.0f pts", entry.points),
+                    // "X/Y pts" (points earned out of that dimension's own
+                    // weighted max), not a bare number - a bare "13 pts" read
+                    // as ambiguous with a real-world stat (e.g. the actual
+                    // final score margin) rather than a rating contribution.
+                    text = String.format("%.0f/%.0f pts", entry.points, entry.maxPoints),
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum")
                 )
