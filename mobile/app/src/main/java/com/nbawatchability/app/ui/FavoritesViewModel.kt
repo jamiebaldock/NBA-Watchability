@@ -55,12 +55,20 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
      * team logo across several different screens (Games, Starred, History,
      * Leaders) - a Toast needs no per-screen overlay wiring to show up
      * correctly regardless of which one triggered it.
+     *
+     * The cap is per-league (per James' request), not global - up to
+     * MAX_FAVORITE_TEAMS in NBA *and* MAX_FAVORITE_TEAMS in EPL *and* ...,
+     * counted by matching [team]'s own leagueGroup against every other
+     * currently-favorited team's, not the total list size.
      */
     fun toggleFavoriteTeam(team: Team) {
         val alreadyFavorited = isFavoriteTeam(team.name)
-        if (!alreadyFavorited && favoriteTeams.size >= MAX_FAVORITE_TEAMS) {
-            Toast.makeText(getApplication(), "Up to $MAX_FAVORITE_TEAMS favorite teams for now", Toast.LENGTH_SHORT).show()
-            return
+        if (!alreadyFavorited) {
+            val countInSameLeague = favoriteTeams.count { it.leagueGroup == team.leagueGroup }
+            if (countInSameLeague >= MAX_FAVORITE_TEAMS) {
+                Toast.makeText(getApplication(), "Up to $MAX_FAVORITE_TEAMS favorite teams per league for now", Toast.LENGTH_SHORT).show()
+                return
+            }
         }
         val updated = if (alreadyFavorited) favoriteTeams.filterNot { it.name == team.name } else favoriteTeams + team
         viewModelScope.launch { repository.setFavoriteTeams(updated) }

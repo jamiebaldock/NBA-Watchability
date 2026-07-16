@@ -178,12 +178,17 @@ fun GameCard(
                 }
 
                 Column(modifier = Modifier.padding(top = 8.dp)) {
+                    // leagueGroupOf(game) (not the screen's own selectedLeague
+                    // dropdown) - correct even in Starred's "all leagues"
+                    // mode, where a tile's actual league can differ from
+                    // whatever the dropdown happens to be sitting on.
+                    val gameLeagueGroup = leagueGroupOf(game).apiValue
                     TeamRow(
                         logoUrl = game.awayLogo,
                         name = game.away,
                         score = game.awayScore.takeIf { showScore },
                         isFavorite = game.away in favoriteTeamNames,
-                        onLongPress = { onToggleFavoriteTeam(Team(game.away, game.awayLogo)) }
+                        onLongPress = { onToggleFavoriteTeam(Team(name = game.away, logo = game.awayLogo, leagueGroup = gameLeagueGroup)) }
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     TeamRow(
@@ -191,7 +196,7 @@ fun GameCard(
                         name = game.home,
                         score = game.homeScore.takeIf { showScore },
                         isFavorite = game.home in favoriteTeamNames,
-                        onLongPress = { onToggleFavoriteTeam(Team(game.home, game.homeLogo)) }
+                        onLongPress = { onToggleFavoriteTeam(Team(name = game.home, logo = game.homeLogo, leagueGroup = gameLeagueGroup)) }
                     )
                 }
 

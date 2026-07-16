@@ -13,7 +13,15 @@ data class Team(
     // not for rendering an already-favorited team's name/logo/tint. Kept
     // last (with a default) so every existing positional Team(name, logo)
     // call site keeps compiling unchanged.
-    val id: String = ""
+    val id: String = "",
+    // LeagueGroup's own apiValue (e.g. "nba", "epl") - stored as a plain
+    // string rather than the LeagueGroup type itself (which isn't
+    // @Serializable), same reasoning as AppSettingsRepository's enum-as-
+    // string keys. Null on any Team favorited before this field existed;
+    // FavoritesViewModel's per-league cap check treats a null leagueGroup
+    // as its own bucket rather than crashing or silently merging it into
+    // a real league's count.
+    val leagueGroup: String? = null
 )
 
 @Serializable

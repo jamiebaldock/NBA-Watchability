@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.nbawatchability.app.data.FavoritePlayer
+import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextMuted
@@ -44,7 +45,14 @@ import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
  * FavoritePlayersScreen), not here, so there's only one place that owns
  * "the full list of every team/player in a league." Both sections stack in
  * one scrollable column rather than nested LazyColumns, since each list is
- * capped at 3 - never enough entries to need its own virtualized scroll.
+ * capped at 3 per league - never enough entries to need its own
+ * virtualized scroll even with every league maxed out.
+ *
+ * Favorite teams are grouped under a small league header (James' per-league
+ * cap makes this worth surfacing - "3 favorites" no longer means "3 total,"
+ * so which league each one belongs to is now genuinely useful context, not
+ * just decoration). A team favorited before this field existed (leagueGroup
+ * null) falls into its own "Other" bucket rather than being dropped.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,40 +82,28 @@ fun MyTeamsScreen(
 
             if (favoriteTeams.isEmpty()) {
                 Text(
-                    text = "No favorite teams yet - add up to $MAX_FAVORITE_TEAMS to see them marked across the app.",
+                    text = "No favorite teams yet - add up to $MAX_FAVORITE_TEAMS per league to see them marked across the app.",
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(modifier = Modifier.height(12.dp))
             } else {
-                favoriteTeams.forEach { team ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (team.logo != null) {
-                                AsyncImage(model = themeAwareLogoUrl(team.logo), contentDescription = null, modifier = Modifier.size(32.dp))
-                                Spacer(modifier = Modifier.width(12.dp))
-                            }
-                            Text(text = team.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
-                        }
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Remove ${team.name}",
-                            tint = TextMuted,
-                            modifier = Modifier.size(22.dp).clickable { onRemoveFavoriteTeam(team) }
-                        )
+                val teamsByLeague = favoriteTeams.groupBy { it.leagueGroup }
+                LeagueGroup.entries.forEach { league ->
+                    val teamsInLeague = teamsByLeague[league.apiValue].orEmpty()
+                    if (teamsInLeague.isNotEmpty()) {
+                        FavoriteTeamsLeagueGroup(league.displayName, teamsInLeague, onRemoveFavoriteTeam)
                     }
+                }
+                val unknownLeagueTeams = teamsByLeague[null].orEmpty()
+                if (unknownLeagueTeams.isNotEmpty()) {
+                    FavoriteTeamsLeagueGroup("Other", unknownLeagueTeams, onRemoveFavoriteTeam)
                 }
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
-            if (favoriteTeams.size < MAX_FAVORITE_TEAMS) {
-                Button(onClick = onAddTeamClick, modifier = Modifier.fillMaxWidth()) {
-                    Text("Add a favorite team")
-                }
+            Button(onClick = onAddTeamClick, modifier = Modifier.fillMaxWidth()) {
+                Text("Add a favorite team")
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -151,6 +147,37 @@ fun MyTeamsScreen(
                     Text("Add a favorite player")
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FavoriteTeamsLeagueGroup(leagueLabel: String, teams: List<Team>, onRemoveFavoriteTeam: (Team) -> Unit) {
+    Text(
+        text = leagueLabel,
+        color = TextSecondary,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+    )
+    teams.forEach { team ->
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (team.logo != null) {
+                    AsyncImage(model = themeAwareLogoUrl(team.logo), contentDescription = null, modifier = Modifier.size(32.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+                Text(text = team.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
+            }
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Remove ${team.name}",
+                tint = TextMuted,
+                modifier = Modifier.size(22.dp).clickable { onRemoveFavoriteTeam(team) }
+            )
         }
     }
 }

@@ -70,10 +70,14 @@ private enum class BrowsableLeague(val apiValue: String, val label: String) {
  * its own league picker (not tied to the app's shared league dropdown),
  * since a user browsing to add a favorite shouldn't need to first change
  * what the rest of the app is showing. Favorites are capped at
- * MAX_FAVORITE_TEAMS (enforced by FavoritesViewModel.toggleFavoriteTeam,
- * which surfaces a Toast if this screen's tap would exceed it) and global
- * across every league, so a team favorited under one league chip here still
- * shows favorited if you switch chips and come back.
+ * MAX_FAVORITE_TEAMS *per league* (enforced by FavoritesViewModel.
+ * toggleFavoriteTeam, which surfaces a Toast if this screen's tap would
+ * exceed it) - so up to MAX_FAVORITE_TEAMS in NBA and MAX_FAVORITE_TEAMS in
+ * EPL simultaneously, not MAX_FAVORITE_TEAMS total. The team passed to
+ * onToggleFavoriteTeam is tagged with [selectedLeague] right here (the
+ * backend's /teams response has no leagueGroup field of its own), since
+ * this chip is the only place that actually knows which league a team on
+ * this screen belongs to.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -184,7 +188,7 @@ fun FavoriteTeamsScreen(
                                 TeamRow(
                                     team = team,
                                     isFavorite = team.name in favoriteTeamNames,
-                                    onToggle = { onToggleFavoriteTeam(team) }
+                                    onToggle = { onToggleFavoriteTeam(team.copy(leagueGroup = selectedLeague.apiValue)) }
                                 )
                             }
                         }
