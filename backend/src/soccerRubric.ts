@@ -24,6 +24,18 @@ export interface SoccerRubricInputs {
   // Optional - not every data source has shot stats.
   combinedShotsOnTarget?: number;
   anyRedCard?: boolean;
+  // Most saves made by a single goalkeeper in the match - optional, not
+  // every data source has per-team save counts.
+  maxSavesByKeeper?: number;
+  // Any direct free-kick goal in the match (ESPN's keyEvents distinguishes
+  // this from open play).
+  anyFreeKickGoal?: boolean;
+  // Any penalty attempt that didn't go in - saved or missed off-target.
+  // Deliberately not tracking scored penalties as their own dimension: a
+  // converted penalty is the routine outcome (~85% of real attempts this
+  // season) and already counts fully via margin/totalGoals/comeback/star
+  // like any other goal - the miss is what's genuinely rare and dramatic.
+  anyPenaltyMissed?: boolean;
 }
 
 // Draws (27.4% of the 2025-26 EPL season) and 1-goal margins (37.6%) are the
@@ -82,6 +94,32 @@ export function redCardPoints(anyRedCard: boolean | undefined): number {
   return anyRedCard ? 5 : 0;
 }
 
+// Goalkeeper heroics - tiered like starPoints, since "a string of great
+// saves" is about one keeper's night, not combined saves across both
+// teams. Thresholds anchored to real rarity this season: 7-8 saves by one
+// keeper happens in 4.7% of matches, 9+ in just 1.3% - almost identical
+// rarity to the hat-trick anchor already worth 15 points above.
+export function savesPoints(maxSavesByKeeper: number | undefined): number {
+  const saves = maxSavesByKeeper ?? 0;
+  if (saves >= 9) return 15;
+  if (saves >= 7) return 5;
+  return 0;
+}
+
+// A direct free-kick goal happened in 4.5% of matches this season - rarer
+// than a red card, less rare than a hat-trick, scored between them.
+export function freeKickGoalPoints(anyFreeKickGoal: boolean | undefined): number {
+  return anyFreeKickGoal ? 10 : 0;
+}
+
+// A missed or saved penalty happened in 3.4% of matches this season -
+// real rarity close to free-kick goals, so the same weight. Deliberately
+// no separate points for a scored penalty - see SoccerRubricInputs's
+// anyPenaltyMissed comment for why.
+export function penaltyMissPoints(anyPenaltyMissed: boolean | undefined): number {
+  return anyPenaltyMissed ? 10 : 0;
+}
+
 export interface SoccerScoreBreakdown {
   margin: number;
   totalGoals: number;
@@ -90,6 +128,9 @@ export interface SoccerScoreBreakdown {
   star: number;
   chances: number;
   redCard: number;
+  saves: number;
+  freeKickGoal: number;
+  penaltyMiss: number;
   stakes: number;
   total: number;
 }
@@ -108,9 +149,26 @@ export function computeSoccerWatchabilityScore(
   const star = starPoints(inputs.maxGoalsByPlayer);
   const chances = chancesPoints(inputs.combinedShotsOnTarget);
   const redCard = redCardPoints(inputs.anyRedCard);
+  const saves = savesPoints(inputs.maxSavesByKeeper);
+  const freeKickGoal = freeKickGoalPoints(inputs.anyFreeKickGoal);
+  const penaltyMiss = penaltyMissPoints(inputs.anyPenaltyMissed);
   const stakesPts = stakesPoints(stakes);
 
-  const total = margin + totalGoals + comeback + lateDrama + star + chances + redCard + stakesPts;
+  const total =
+    margin + totalGoals + comeback + lateDrama + star + chances + redCard + saves + freeKickGoal + penaltyMiss + stakesPts;
 
-  return { margin, totalGoals, comeback, lateDrama, star, chances, redCard, stakes: stakesPts, total };
+  return {
+    margin,
+    totalGoals,
+    comeback,
+    lateDrama,
+    star,
+    chances,
+    redCard,
+    saves,
+    freeKickGoal,
+    penaltyMiss,
+    stakes: stakesPts,
+    total
+  };
 }

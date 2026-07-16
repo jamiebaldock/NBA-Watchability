@@ -6,9 +6,12 @@ import {
   chancesPoints,
   comebackPoints,
   computeSoccerWatchabilityScore,
+  freeKickGoalPoints,
   lateDramaPoints,
   marginPoints,
+  penaltyMissPoints,
   redCardPoints,
+  savesPoints,
   starPoints,
   totalGoalsPoints,
 } from "./soccerRubric";
@@ -44,6 +47,20 @@ assert.strictEqual(redCardPoints(undefined), 0);
 assert.strictEqual(redCardPoints(false), 0);
 assert.strictEqual(redCardPoints(true), 5);
 
+assert.strictEqual(savesPoints(undefined), 0);
+assert.strictEqual(savesPoints(6), 0);
+assert.strictEqual(savesPoints(7), 5);
+assert.strictEqual(savesPoints(8), 5);
+assert.strictEqual(savesPoints(9), 15);
+
+assert.strictEqual(freeKickGoalPoints(undefined), 0);
+assert.strictEqual(freeKickGoalPoints(false), 0);
+assert.strictEqual(freeKickGoalPoints(true), 10);
+
+assert.strictEqual(penaltyMissPoints(undefined), 0);
+assert.strictEqual(penaltyMissPoints(false), 0);
+assert.strictEqual(penaltyMissPoints(true), 10);
+
 // Crystal Palace 3-3 Bournemouth (Oct 18, 2025) - the season's top match:
 // draw (20) + 6 goals (20) + no comeback for the leveling side beyond a
 // 1-goal deficit at the very end (10) + decisive 90'+7' equalizer (15) +
@@ -75,6 +92,7 @@ interface Goal {
   minuteValue: number;
   scorer?: string;
   ownGoal?: boolean;
+  freeKick?: boolean;
 }
 interface Match {
   home: string;
@@ -86,6 +104,9 @@ interface Match {
   awayShotsOnTarget: number | null;
   homeRedCards: number | null;
   awayRedCards: number | null;
+  homeSaves: number | null;
+  awaySaves: number | null;
+  penaltyMissed: boolean;
 }
 
 const { matches } = JSON.parse(
@@ -148,16 +169,20 @@ for (const m of matches) {
       maxGoalsByPlayer: maxGoalsByPlayer(m),
       combinedShotsOnTarget: (m.homeShotsOnTarget ?? 0) + (m.awayShotsOnTarget ?? 0),
       anyRedCard: (m.homeRedCards ?? 0) + (m.awayRedCards ?? 0) > 0,
+      maxSavesByKeeper: Math.max(m.homeSaves ?? 0, m.awaySaves ?? 0),
+      anyFreeKickGoal: m.goals.some((g) => g.freeKick),
+      anyPenaltyMissed: m.penaltyMissed,
     },
     undefined // stakes excluded - matches the validated design-proposal simulation
   );
   tierCounts[tierForScore(score.total)]++;
 }
 
-// Matches the tier breakdown reported in the design proposal.
+// Matches the tier breakdown reported in the design proposal for the
+// saves/free-kick/penalty-miss expansion.
 assert.strictEqual(tierCounts.instant_classic, 2);
-assert.strictEqual(tierCounts.worth_your_time, 8);
-assert.strictEqual(tierCounts.solid, 59);
-assert.strictEqual(tierCounts.skippable, 311);
+assert.strictEqual(tierCounts.worth_your_time, 11);
+assert.strictEqual(tierCounts.solid, 69);
+assert.strictEqual(tierCounts.skippable, 298);
 
 console.log("soccerRubric.test.ts: all assertions passed");
