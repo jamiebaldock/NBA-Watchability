@@ -23,7 +23,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.Button
@@ -86,7 +85,6 @@ fun DayTabsScreen(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     weights: RubricWeights,
-    onSettingsClick: () -> Unit,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     enabledLeagues: Set<LeagueGroup>,
@@ -188,13 +186,6 @@ fun DayTabsScreen(
                             imageVector = Icons.Default.Tag,
                             contentDescription = "Show numeric score",
                             tint = if (showNumericScore) TierWorthYourTime else TextSecondary
-                        )
-                    }
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = TextSecondary
                         )
                     }
                 }

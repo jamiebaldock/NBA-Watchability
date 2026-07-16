@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChecklistRtl
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Info
@@ -21,7 +20,6 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -38,7 +36,7 @@ import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 
-/** Top-level settings screen (spec: settings gear, top app bar) - links to the rating-weights and About sub-pages. */
+/** Top-level settings screen - now a bottom-nav tab in its own right (the rightmost item, after News), not a drill-down from a gear icon - links to the rating-weights and About sub-pages. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -46,22 +44,13 @@ fun SettingsScreen(
     onToggleShowAllLeaguesInStarred: () -> Unit,
     onSelectedSportsClick: () -> Unit,
     onRubricWeightsClick: () -> Unit,
-    onAboutClick: () -> Unit,
-    onBack: () -> Unit
+    onAboutClick: () -> Unit
 ) {
     Scaffold(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { Text("Settings", color = TextPrimary) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                }
+                title = { Text("Settings", color = TextPrimary) }
             )
         }
     ) { padding ->

@@ -11,12 +11,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -74,8 +72,7 @@ fun StarredScreen(
     onLeagueSelected: (LeagueGroup) -> Unit,
     enabledLeagues: Set<LeagueGroup>,
     showAllLeagues: Boolean,
-    onToggleAllLeagues: () -> Unit,
-    onSettingsClick: () -> Unit
+    onToggleAllLeagues: () -> Unit
 ) {
     var sortOption by remember { mutableStateOf(SortOption.DATE_NEWEST_FIRST) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -115,13 +112,6 @@ fun StarredScreen(
                             imageVector = Icons.Default.Tag,
                             contentDescription = "Show numeric score",
                             tint = if (showNumericScore) TierWorthYourTime else TextSecondary
-                        )
-                    }
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = TextSecondary
                         )
                     }
                 }

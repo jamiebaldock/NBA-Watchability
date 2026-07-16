@@ -1,29 +1,34 @@
 package com.nbawatchability.app.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SportsBasketball
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -51,6 +56,9 @@ import com.nbawatchability.app.ui.theme.TierWorthYourTime
 private enum class BottomNavTab(val label: String, val icon: ImageVector) {
     GAMES("Games", Icons.Default.SportsBasketball),
     STARRED("Starred", Icons.Default.Star),
+    // Team-crest icon, distinct from Starred's star (favorite games) - this
+    // tab is for favorite teams/players, a separate concept.
+    MY_TEAMS("My Teams", Icons.Default.Shield),
     // Icon is a flame ("barn burner") even though the nav label stays
     // "History" - the in-screen title is the one that says "Past Barn
     // Burners" (HistoryScreen.kt).
@@ -58,26 +66,34 @@ private enum class BottomNavTab(val label: String, val icon: ImageVector) {
     // Standings + Stats merged into one swipeable tab (LeadersScreen.kt) -
     // "3 horizontal lines" reads as a list/menu, matching what's inside.
     LEADERS("Leaders", Icons.Default.Menu),
-    NEWS("News", Icons.AutoMirrored.Filled.Article)
+    NEWS("News", Icons.AutoMirrored.Filled.Article),
+    // Rightmost, after News - moved here from a per-screen top-bar gear icon
+    // so it's reachable from any tab with one tap rather than needing that
+    // icon re-added to every screen individually.
+    SETTINGS("Settings", Icons.Default.Settings)
 }
 
 /**
- * App-wide root: a persistent bottom navigation bar with 5 tabs. Every tab's
- * top bar shows the same tappable league selector so the league can be
- * switched from anywhere, not just Games - which leagues actually list
- * there is controlled by Settings' "Selected Sports" section
- * (AppSettingsViewModel.settings.enabledLeagues). Four of the six
- * LeagueGroup entries (EPL, La Liga, NBL, UFC) are placeholders with no
- * backend data at all yet - selecting one short-circuits every tab straight
- * to ComingSoonTab below rather than firing a network call the backend
- * doesn't recognize. "About" isn't a tab - it's a slot's worth of nav real
- * estate that Starred needed more, so it lives one level deeper, opened
- * from Settings instead.
+ * App-wide root: a persistent bottom navigation bar with 7 tabs, horizontally
+ * scrollable (ScrollableBottomNavBar below) rather than shrinking each item
+ * to fit - Material3's NavigationBar distributes equal width across however
+ * many items it holds, which would visibly cramp 7 tabs onto one screen
+ * width. My Teams and Settings are both global (not scoped to a league), so
+ * they're dispatched before the isSupported gate below and never show
+ * ComingSoonTab. Every other tab's top bar shows the same tappable league
+ * selector so the league can be switched from anywhere, not just Games -
+ * which leagues actually list there is controlled by Settings' "Selected
+ * Sports" section (AppSettingsViewModel.settings.enabledLeagues). Four of
+ * the six LeagueGroup entries (NBL, UFC, and others added since) are
+ * placeholders with no backend data at all yet - selecting one
+ * short-circuits every league-scoped tab straight to ComingSoonTab below
+ * rather than firing a network call the backend doesn't recognize. "About"
+ * isn't a tab - it's a slot's worth of nav real estate that Starred needed
+ * more, so it lives one level deeper, opened from Settings instead.
  */
 @Composable
 fun AppRoot() {
     var selectedTab by rememberSaveable { mutableStateOf(BottomNavTab.GAMES) }
-    var showSettings by rememberSaveable { mutableStateOf(false) }
     var showAbout by rememberSaveable { mutableStateOf(false) }
     var showRubricWeights by rememberSaveable { mutableStateOf(false) }
     var showSelectedSports by rememberSaveable { mutableStateOf(false) }
@@ -95,10 +111,9 @@ fun AppRoot() {
         return
     }
 
-    BackHandler(enabled = showSettings) { showSettings = false }
-    // Declared after showSettings's handler so they sit higher on the back
-    // stack - back from About/rating weights returns to Settings, not
-    // straight past it.
+    // Back from About/rating weights/Selected Sports returns to whatever tab
+    // was active underneath (the Settings tab, typically) rather than
+    // exiting the app.
     BackHandler(enabled = showAbout) { showAbout = false }
     BackHandler(enabled = showRubricWeights) { showRubricWeights = false }
     BackHandler(enabled = showSelectedSports) { showSelectedSports = false }
@@ -128,18 +143,6 @@ fun AppRoot() {
         return
     }
 
-    if (showSettings) {
-        SettingsScreen(
-            showAllLeaguesInStarred = appSettingsViewModel.settings.showAllLeaguesInStarred,
-            onToggleShowAllLeaguesInStarred = appSettingsViewModel::toggleShowAllLeaguesInStarred,
-            onSelectedSportsClick = { showSelectedSports = true },
-            onRubricWeightsClick = { showRubricWeights = true },
-            onAboutClick = { showAbout = true },
-            onBack = { showSettings = false }
-        )
-        return
-    }
-
     highlightsVideoId?.let { videoId ->
         HighlightsPlayerScreen(videoId = videoId, onBack = { highlightsVideoId = null })
         return
@@ -148,87 +151,118 @@ fun AppRoot() {
     Scaffold(
         containerColor = BackgroundBase,
         bottomBar = {
-            NavigationBar(containerColor = SurfaceCardElevated) {
-                BottomNavTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = tab == selectedTab,
-                        onClick = { selectedTab = tab },
-                        icon = { Icon(imageVector = tab.icon, contentDescription = tab.label) },
-                        label = { Text(tab.label) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = TierWorthYourTime,
-                            selectedTextColor = TierWorthYourTime,
-                            unselectedIconColor = TextSecondary,
-                            unselectedTextColor = TextSecondary,
-                            indicatorColor = SurfaceCardElevated
-                        )
-                    )
-                }
-            }
+            ScrollableBottomNavBar(selectedTab = selectedTab, onTabSelected = { selectedTab = it })
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             val selectedLeague = appSettingsViewModel.settings.selectedLeague
             val enabledLeagues = appSettingsViewModel.settings.enabledLeagues
 
-            if (!selectedLeague.isSupported) {
-                ComingSoonTab(
-                    selectedLeague = selectedLeague,
-                    onLeagueSelected = appSettingsViewModel::setSelectedLeague,
-                    enabledLeagues = enabledLeagues,
-                    onSettingsClick = { showSettings = true }
+            // Settings and My Teams are both global (not scoped to a
+            // league), so they're resolved before the isSupported gate below
+            // - neither should ever show ComingSoonTab just because the
+            // dropdown happens to be sitting on a placeholder league.
+            when (selectedTab) {
+                BottomNavTab.SETTINGS -> SettingsScreen(
+                    showAllLeaguesInStarred = appSettingsViewModel.settings.showAllLeaguesInStarred,
+                    onToggleShowAllLeaguesInStarred = appSettingsViewModel::toggleShowAllLeaguesInStarred,
+                    onSelectedSportsClick = { showSelectedSports = true },
+                    onRubricWeightsClick = { showRubricWeights = true },
+                    onAboutClick = { showAbout = true }
                 )
-            } else {
-                when (selectedTab) {
-                    BottomNavTab.GAMES -> GamesTab(
-                        weights = settingsViewModel.weights,
-                        onSettingsClick = { showSettings = true },
+                BottomNavTab.MY_TEAMS -> MyTeamsScreen()
+                else -> if (!selectedLeague.isSupported) {
+                    ComingSoonTab(
                         selectedLeague = selectedLeague,
                         onLeagueSelected = appSettingsViewModel::setSelectedLeague,
-                        enabledLeagues = enabledLeagues,
-                        showNumericScore = appSettingsViewModel.settings.showNumericScore,
-                        onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
-                        starredIds = starredGamesViewModel.starredIds,
-                        onToggleStar = starredGamesViewModel::toggleStar,
-                        onWatchHighlights = { videoId -> highlightsVideoId = videoId }
+                        enabledLeagues = enabledLeagues
                     )
-                    BottomNavTab.LEADERS -> LeadersTab(
-                        selectedLeague = selectedLeague,
-                        onLeagueSelected = appSettingsViewModel::setSelectedLeague,
-                        enabledLeagues = enabledLeagues,
-                        onSettingsClick = { showSettings = true }
-                    )
-                    BottomNavTab.NEWS -> NewsTab(
-                        selectedLeague = selectedLeague,
-                        onLeagueSelected = appSettingsViewModel::setSelectedLeague,
-                        enabledLeagues = enabledLeagues,
-                        onSettingsClick = { showSettings = true }
-                    )
-                    BottomNavTab.STARRED -> StarredTab(
-                        starredGamesViewModel = starredGamesViewModel,
-                        selectedLeague = selectedLeague,
-                        onLeagueSelected = appSettingsViewModel::setSelectedLeague,
-                        enabledLeagues = enabledLeagues,
-                        showNumericScore = appSettingsViewModel.settings.showNumericScore,
-                        onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
-                        showAllLeagues = appSettingsViewModel.settings.showAllLeaguesInStarred,
-                        onToggleAllLeagues = appSettingsViewModel::toggleShowAllLeaguesInStarred,
-                        weights = settingsViewModel.weights,
-                        onWatchHighlights = { videoId -> highlightsVideoId = videoId },
-                        onSettingsClick = { showSettings = true }
-                    )
-                    BottomNavTab.HISTORY -> HistoryTab(
-                        weights = settingsViewModel.weights,
-                        selectedLeague = selectedLeague,
-                        onLeagueSelected = appSettingsViewModel::setSelectedLeague,
-                        enabledLeagues = enabledLeagues,
-                        showNumericScore = appSettingsViewModel.settings.showNumericScore,
-                        onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
-                        starredIds = starredGamesViewModel.starredIds,
-                        onToggleStar = starredGamesViewModel::toggleStar,
-                        onWatchHighlights = { videoId -> highlightsVideoId = videoId },
-                        onSettingsClick = { showSettings = true }
-                    )
+                } else {
+                    when (selectedTab) {
+                        BottomNavTab.GAMES -> GamesTab(
+                            weights = settingsViewModel.weights,
+                            selectedLeague = selectedLeague,
+                            onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                            enabledLeagues = enabledLeagues,
+                            showNumericScore = appSettingsViewModel.settings.showNumericScore,
+                            onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
+                            starredIds = starredGamesViewModel.starredIds,
+                            onToggleStar = starredGamesViewModel::toggleStar,
+                            onWatchHighlights = { videoId -> highlightsVideoId = videoId }
+                        )
+                        BottomNavTab.LEADERS -> LeadersTab(
+                            selectedLeague = selectedLeague,
+                            onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                            enabledLeagues = enabledLeagues
+                        )
+                        BottomNavTab.NEWS -> NewsTab(
+                            selectedLeague = selectedLeague,
+                            onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                            enabledLeagues = enabledLeagues
+                        )
+                        BottomNavTab.STARRED -> StarredTab(
+                            starredGamesViewModel = starredGamesViewModel,
+                            selectedLeague = selectedLeague,
+                            onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                            enabledLeagues = enabledLeagues,
+                            showNumericScore = appSettingsViewModel.settings.showNumericScore,
+                            onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
+                            showAllLeagues = appSettingsViewModel.settings.showAllLeaguesInStarred,
+                            onToggleAllLeagues = appSettingsViewModel::toggleShowAllLeaguesInStarred,
+                            weights = settingsViewModel.weights,
+                            onWatchHighlights = { videoId -> highlightsVideoId = videoId }
+                        )
+                        BottomNavTab.HISTORY -> HistoryTab(
+                            weights = settingsViewModel.weights,
+                            selectedLeague = selectedLeague,
+                            onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                            enabledLeagues = enabledLeagues,
+                            showNumericScore = appSettingsViewModel.settings.showNumericScore,
+                            onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
+                            starredIds = starredGamesViewModel.starredIds,
+                            onToggleStar = starredGamesViewModel::toggleStar,
+                            onWatchHighlights = { videoId -> highlightsVideoId = videoId }
+                        )
+                        else -> {} // unreachable: SETTINGS/MY_TEAMS handled above
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Bottom nav, but horizontally scrollable rather than Material3's fixed
+ * NavigationBar (which distributes equal width across however many items it
+ * holds - 7 tabs at that would visibly cramp everything to fit one screen
+ * width). Each item keeps a fixed, comfortable width instead, so the row is
+ * simply wider than the screen and scrolls - same selected/unselected color
+ * treatment as the NavigationBarItem this replaces (no visible "pill"
+ * background behind the selected item, just an icon/label color change).
+ */
+@Composable
+private fun ScrollableBottomNavBar(selectedTab: BottomNavTab, onTabSelected: (BottomNavTab) -> Unit) {
+    Surface(color = SurfaceCardElevated) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BottomNavTab.entries.forEach { tab ->
+                val selected = tab == selectedTab
+                val tint = if (selected) TierWorthYourTime else TextSecondary
+                Column(
+                    modifier = Modifier
+                        .width(76.dp)
+                        .clickable { onTabSelected(tab) }
+                        .padding(vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(imageVector = tab.icon, contentDescription = tab.label, tint = tint)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = tab.label, color = tint, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 }
             }
         }
@@ -238,7 +272,6 @@ fun AppRoot() {
 @Composable
 private fun GamesTab(
     weights: RubricWeights,
-    onSettingsClick: () -> Unit,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     enabledLeagues: Set<LeagueGroup>,
@@ -277,7 +310,6 @@ private fun GamesTab(
             isRefreshing = viewModel.isRefreshing,
             onRefresh = viewModel::refresh,
             weights = weights,
-            onSettingsClick = onSettingsClick,
             selectedLeague = selectedLeague,
             onLeagueSelected = onLeagueSelected,
             enabledLeagues = enabledLeagues,
@@ -309,8 +341,7 @@ private fun StarredTab(
     showAllLeagues: Boolean,
     onToggleAllLeagues: () -> Unit,
     weights: RubricWeights,
-    onWatchHighlights: (String) -> Unit,
-    onSettingsClick: () -> Unit
+    onWatchHighlights: (String) -> Unit
 ) {
     // Fires on first composition and again whenever the starred set changes
     // (a star added/removed anywhere in the app) - re-fetches live data for
@@ -338,8 +369,7 @@ private fun StarredTab(
         onLeagueSelected = onLeagueSelected,
         enabledLeagues = enabledLeagues,
         showAllLeagues = showAllLeagues,
-        onToggleAllLeagues = onToggleAllLeagues,
-        onSettingsClick = onSettingsClick
+        onToggleAllLeagues = onToggleAllLeagues
     )
 }
 
@@ -353,8 +383,7 @@ private fun HistoryTab(
     onToggleNumericScore: () -> Unit,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
-    onWatchHighlights: (String) -> Unit,
-    onSettingsClick: () -> Unit
+    onWatchHighlights: (String) -> Unit
 ) {
     val viewModel: HistoryViewModel = viewModel()
     // Both leagues have their own backfill now - always resets to "This
@@ -381,8 +410,7 @@ private fun HistoryTab(
         onWatchHighlights = onWatchHighlights,
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
-        enabledLeagues = enabledLeagues,
-        onSettingsClick = onSettingsClick
+        enabledLeagues = enabledLeagues
     )
 }
 
@@ -390,8 +418,7 @@ private fun HistoryTab(
 private fun LeadersTab(
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
-    enabledLeagues: Set<LeagueGroup>,
-    onSettingsClick: () -> Unit
+    enabledLeagues: Set<LeagueGroup>
 ) {
     val standingsViewModel: StandingsViewModel = viewModel()
     val statsViewModel: StatsViewModel = viewModel()
@@ -406,8 +433,7 @@ private fun LeadersTab(
         onStatsRetry = statsViewModel::retry,
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
-        enabledLeagues = enabledLeagues,
-        onSettingsClick = onSettingsClick
+        enabledLeagues = enabledLeagues
     )
 }
 
@@ -415,8 +441,7 @@ private fun LeadersTab(
 private fun NewsTab(
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
-    enabledLeagues: Set<LeagueGroup>,
-    onSettingsClick: () -> Unit
+    enabledLeagues: Set<LeagueGroup>
 ) {
     val viewModel: NewsViewModel = viewModel()
     LaunchedEffect(selectedLeague) { viewModel.load(selectedLeague) }
@@ -425,45 +450,34 @@ private fun NewsTab(
         onRetry = viewModel::retry,
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
-        enabledLeagues = enabledLeagues,
-        onSettingsClick = onSettingsClick
+        enabledLeagues = enabledLeagues
     )
 }
 
 /**
  * Shown instead of any tab's real content when [selectedLeague] isn't
- * [LeagueGroup.isSupported] - one shared "coming soon" body for all 5 tabs
- * rather than special-casing each Screen file individually, since there's
- * no per-tab distinction to make anyway (no data exists for these
- * placeholder leagues in Games, Starred, History, Leaders, or News alike).
- * Keeps its own minimal top bar (league selector + settings gear only, no
- * tab-specific actions like sort/eye/numeric-score toggles, since none of
- * those mean anything with no data underneath) so switching back to a
- * supported league is always one tap away regardless of which bottom-nav
- * tab happens to be selected.
+ * [LeagueGroup.isSupported] - one shared "coming soon" body for the 5
+ * league-scoped tabs (Games, Starred, History, Leaders, News) rather than
+ * special-casing each Screen file individually, since there's no per-tab
+ * distinction to make anyway. My Teams and Settings are resolved before this
+ * gate even runs (see AppRoot's dispatch above), so they're never replaced
+ * by this. Keeps its own minimal top bar (league selector only - no gear
+ * icon anymore, since Settings is a persistent bottom-nav tab reachable
+ * regardless of which league is selected) so switching back to a supported
+ * league is always one tap away.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ComingSoonTab(
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
-    enabledLeagues: Set<LeagueGroup>,
-    onSettingsClick: () -> Unit
+    enabledLeagues: Set<LeagueGroup>
 ) {
     Scaffold(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
-                actions = {
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = TextSecondary
-                        )
-                    }
-                }
+                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) }
             )
         }
     ) { padding ->
