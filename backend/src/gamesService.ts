@@ -34,7 +34,12 @@ function hasReachedPreviewGate(tipoffUtc: string, now: Date = new Date()): boole
 // variants are within the "nba" group. gameStore rows are keyed by eventId
 // (globally unique across ESPN sports), so both groups safely share the same
 // store with no risk of collision.
-const LEAGUE_GROUPS: Record<LeagueGroup, readonly League[]> = {
+// Exported so seasonWindowService.ts can derive a group's full-season
+// browsing range from the same set of member leagues the live schedule
+// itself unions - NBA's group spans 4 separate ESPN "leagues" (the real
+// season plus 3 Summer League sites), and a season-window fetch scoped to
+// only one of them would miss whichever isn't currently in its own season.
+export const LEAGUE_GROUPS: Record<LeagueGroup, readonly League[]> = {
   nba: ["nba", "nba-summer-las-vegas", "nba-summer-utah", "nba-summer-sacramento"],
   wnba: ["wnba"],
 };
