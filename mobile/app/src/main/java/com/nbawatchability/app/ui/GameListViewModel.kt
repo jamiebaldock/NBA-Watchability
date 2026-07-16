@@ -34,9 +34,9 @@ private const val QUERY_BUFFER_DAYS = 2L
 // The backend's own abuse guard on /schedule (httpHandler.ts's
 // MAX_RANGE_DAYS) - a full-season fetch (seasonRange below) has to be split
 // into chunks no wider than this and merged, rather than requested in one
-// call. NBA's normal +/-9 day window already fits in a single chunk, so
-// this only ever actually splits anything for a league with a full season
-// range loaded (currently WNBA).
+// call. The fixed +/-DISPLAY_RANGE_DAYS fallback window already fits in a
+// single chunk, so this only ever actually splits anything for a league
+// with a full season range loaded.
 private const val MAX_FETCH_CHUNK_DAYS = 21L
 
 class GameListViewModel : ViewModel() {
@@ -68,15 +68,20 @@ class GameListViewModel : ViewModel() {
     // window is currently centered.
     private var windowCenter: LocalDate = today
 
-    // The real start-of-season through latest-known-date range for leagues
-    // that support full-season browsing (currently WNBA) - null falls back
-    // to the fixed +/-DISPLAY_RANGE_DAYS window above. Fetched once per
-    // load(), not re-queried on every jump (the backend itself caches it
+    // The real start-of-season through latest-known-date range, whenever the
+    // backend can derive one - null falls back to the fixed
+    // +/-DISPLAY_RANGE_DAYS window above. Fetched once per load() for every
+    // league (not gated to a specific one - this is meant to be the standard
+    // schedule-navigation pattern for any league's Games tab, current or
+    // future), not re-queried on every jump (the backend itself caches it
     // once a day, so there's little to gain from asking again more often
-    // within a session).
+    // within a session). NetworkGameRepository.seasonWindow already returns
+    // null (not a thrown error) whenever the backend can't derive a window
+    // yet, so calling this unconditionally is safe even for a league ESPN
+    // doesn't have enough schedule data for right now.
     private var seasonRange by mutableStateOf<Pair<LocalDate, LocalDate>?>(null)
 
-    /** Null for leagues without a full-season range loaded (e.g. NBA) - the calendar-picker button only shows when this is non-null. */
+    /** Null until a full-season range loads for the current league - the calendar-picker button only shows when this is non-null. */
     val fullSeasonRange: Pair<LocalDate, LocalDate>? get() = seasonRange
 
     /** Every date within the currently loaded window that actually has at least one game - backs the calendar picker's dot indicators. */
@@ -91,9 +96,7 @@ class GameListViewModel : ViewModel() {
         uiState = ScheduleUiState.Loading
         viewModelScope.launch {
             uiState = try {
-                if (leagueGroup == LeagueGroup.WNBA) {
-                    seasonRange = NetworkGameRepository.seasonWindow(BACKEND_BASE_URL, leagueGroup)
-                }
+                seasonRange = NetworkGameRepository.seasonWindow(BACKEND_BASE_URL, leagueGroup)
                 val days = fetchSchedule()
                 selectedDayIndex = days.indexOfFirst { it.date == today }.coerceAtLeast(0)
                 ScheduleUiState.Loaded(days)
