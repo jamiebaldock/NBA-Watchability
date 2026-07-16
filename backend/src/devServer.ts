@@ -14,6 +14,7 @@ import {
 import { startHighlightsPoller } from "./highlightsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
+import { getLagPercentiles } from "./gameStore";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
@@ -137,6 +138,19 @@ app.get("/news", async (req, res) => {
       console.error(err);
       res.status(500).json({ error: "internal error" });
     }
+  }
+});
+
+// Temporary read-only diagnostic - confirms the schema migrated cleanly and
+// the old contaminated lag samples are excluded post-deploy. Removed once
+// confirmed.
+app.get("/admin/lag-reset-check", (req, res) => {
+  try {
+    const leagueGroup = String(req.query.leagueGroup ?? "nba");
+    res.json(getLagPercentiles(leagueGroup, leagueGroup));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
   }
 });
 
