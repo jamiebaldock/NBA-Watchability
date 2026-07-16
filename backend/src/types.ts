@@ -59,12 +59,24 @@ export interface GameJson {
   fp: boolean;
   bz: boolean;
   st: StarPerformance;
+  // Every player (either team) whose individual line cleared the same
+  // per-league "good"-or-better bar rubric.ts's star-performance tier
+  // already uses (rather than just the single top scorer) - a favorited-
+  // player callout needs to check "did *this specific person* have a
+  // notable game", not just "who had the best game overall", and a blowout
+  // can have a standout performer on the losing side too.
+  sop?: StandoutPerformerJson[];
   sk?: number;
   hook: string;
   pitch?: string;
   score?: number;
   score_visible: boolean;
   yt?: string;
+}
+
+export interface StandoutPerformerJson {
+  name: string;
+  line: string;
 }
 
 export interface StandingsTeamJson {
@@ -125,8 +137,20 @@ export interface NewsResponseJson {
 // roster (name + logo), not anything derivable from game data alone (a
 // schedule only ever carries whichever two teams happened to play).
 export interface TeamJson {
+  // ESPN's own numeric team id - needed to query the /roster endpoint for
+  // this team. Absent only in theory (every real team ESPN returns has one).
+  id: string;
   name: string;
   logo?: string;
+}
+
+export interface PlayerJson {
+  id: string;
+  name: string;
+}
+
+export interface RosterResponseJson {
+  players: PlayerJson[];
 }
 
 export interface TeamsResponseJson {
@@ -148,6 +172,7 @@ export interface RubricInputs {
   decidedOnFinalPossession: boolean;
   buzzerBeater: boolean;
   starPerformance: StarPerformance;
+  standoutPerformers?: StandoutPerformerJson[];
 }
 
 export interface ScoredGame extends RubricInputs {

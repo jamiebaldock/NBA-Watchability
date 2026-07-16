@@ -6,6 +6,7 @@ import {
   getHistoryForRange,
   getNewsForLeagueGroup,
   getNextGameDateForLeagueGroup,
+  getRosterForTeam,
   getSchedule,
   getSeasonWindowForLeagueGroup,
   getStandingsForLeagueGroup,
@@ -145,6 +146,21 @@ app.get("/teams", async (req, res) => {
   try {
     const leagueGroup = String(req.query.leagueGroup ?? "nba");
     res.json(await getTeamsForLeagueGroup(leagueGroup));
+  } catch (err) {
+    if (err instanceof BadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
+});
+
+app.get("/roster", async (req, res) => {
+  try {
+    const leagueGroup = String(req.query.leagueGroup ?? "nba");
+    const team = String(req.query.team ?? "");
+    res.json(await getRosterForTeam(leagueGroup, team));
   } catch (err) {
     if (err instanceof BadRequestError) {
       res.status(400).json({ error: err.message });

@@ -1,5 +1,5 @@
 import { EspnBoxscoreTeamPlayers, EspnEvent, EspnPlay, EspnSummary, League } from "./espnClient";
-import { GameStatus, RubricInputs, StarPerformance } from "./types";
+import { GameStatus, RubricInputs, StandoutPerformerJson, StarPerformance } from "./types";
 
 /** ESPN clock is "mm:ss" above 1 minute, plain seconds ("4.0", "27.1") under it. */
 export function parseClockSeconds(display: string): number {
@@ -167,6 +167,46 @@ export function classifyStarPerformance(
 }
 
 /**
+ * Every player (on either team) whose own individual line clears the same
+ * per-league "good"-or-better bar as classifyStarPerformance's tier - not
+ * just the single top scorer, since a favorited-player callout needs to
+ * check a specific person's line, and a losing team can still have a
+ * standout performer on it. Same box-score scan as classifyStarPerformance
+ * (kept separate rather than merged into it, since most callers only need
+ * the tier and would otherwise pay for building a list they never use).
+ */
+export function findStandoutPerformers(
+  playersBoxscore: EspnBoxscoreTeamPlayers[] | undefined,
+  league: League
+): StandoutPerformerJson[] {
+  if (!playersBoxscore || playersBoxscore.length === 0) return [];
+
+  const { good } = starPointThresholds(league);
+  const performers: StandoutPerformerJson[] = [];
+
+  for (const team of playersBoxscore) {
+    for (const statBlock of team.statistics) {
+      const indices = STAT_CATEGORIES.map((cat) => statBlock.labels.indexOf(cat));
+      for (const athlete of statBlock.athletes) {
+        const values = indices.map((i) => (i >= 0 ? parseFloat(athlete.stats[i]) || 0 : 0));
+        const [pts, reb, ast] = values;
+        const doubleDigitCats = values.filter((v) => v >= 10).length;
+        const isTripleDouble = doubleDigitCats >= 3;
+
+        if (pts >= good || isTripleDouble) {
+          performers.push({
+            name: athlete.athlete.displayName,
+            line: isTripleDouble ? `${pts} PTS, ${reb} REB, ${ast} AST` : `${pts} PTS`
+          });
+        }
+      }
+    }
+  }
+
+  return performers;
+}
+
+/**
  * Which playoff round a post-season game belongs to, parsed from ESPN's own
  * notes headline text (e.g. "West 1st Round - Game 1", "East Semifinals -
  * Game 2", "East Finals - Game 1", "NBA Finals - Game 2", or WNBA's
@@ -297,6 +337,7 @@ export function mapEventToGame(event: EspnEvent, league: League, summary?: EspnS
       decidedOnFinalPossession: decidedOnFinalPossession(plays),
       buzzerBeater: isBuzzerBeater(plays),
       starPerformance: classifyStarPerformance(summary?.boxscore?.players, league),
+      standoutPerformers: findStandoutPerformers(summary?.boxscore?.players, league),
     };
   }
 

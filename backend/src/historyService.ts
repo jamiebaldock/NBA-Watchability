@@ -62,6 +62,7 @@ export async function getHistory(start: string, end: string, leagueGroup: League
     fp: Boolean(row.decidedOnFinalPossession),
     bz: Boolean(row.buzzerBeater),
     st: row.starPerformance,
+    sop: row.standoutPerformers,
     hook: `${row.away} at ${row.home}.`,
     score: row.score ?? undefined,
     score_visible: true,

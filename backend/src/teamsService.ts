@@ -15,6 +15,7 @@ async function getBasketballTeams(leagueGroup: "nba" | "wnba"): Promise<TeamJson
   const teams = await fetchTeams(leagueGroup);
   return teams
     .map((t): TeamJson => ({
+      id: t.id,
       name: t.displayName,
       // teamLogoUrl's static per-team maps are what every other tab's tile
       // already uses (e.g. the "scoreboard" NBA logo variant) - reused here
@@ -29,7 +30,7 @@ async function getSoccerTeams(leagueGroup: "epl" | "la-liga"): Promise<TeamJson[
   const league = SOCCER_LEAGUE_FOR_GROUP[leagueGroup];
   const teams = await fetchSoccerTeams(league);
   return teams
-    .map((t): TeamJson => ({ name: t.displayName, logo: t.logo }))
+    .map((t): TeamJson => ({ id: t.id, name: t.displayName, logo: t.logo }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

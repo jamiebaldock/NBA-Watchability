@@ -348,6 +348,7 @@ export async function getGamesForDate(date: string, leagueGroup: BasketballLeagu
         decidedOnFinalPossession: mapped.rubric.decidedOnFinalPossession,
         buzzerBeater: mapped.rubric.buzzerBeater,
         starPerformance: mapped.rubric.starPerformance,
+        standoutPerformers: mapped.rubric.standoutPerformers ?? [],
         score,
         tier: tierForScore(score),
       };
@@ -383,6 +384,7 @@ export async function getGamesForDate(date: string, leagueGroup: BasketballLeagu
       fp: Boolean(row.decidedOnFinalPossession),
       bz: Boolean(row.buzzerBeater),
       st: row.starPerformance,
+      sop: row.standoutPerformers,
       sk: row.stakes ?? undefined,
       hook: row.hook ?? fallbackHook(row.away, row.home),
       pitch: row.pitch ?? undefined,

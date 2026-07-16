@@ -73,6 +73,12 @@ function migrateFile(fileName: string, league: League, leagueGroup: LeagueGroup)
       decidedOnFinalPossession: g.decidedOnFinalPossession,
       buzzerBeater: g.buzzerBeater,
       starPerformance: g.starPerformance,
+      // The historical backfill predates player-name capture entirely (it
+      // only ever recorded classifyStarPerformance's tier, not who drove
+      // it) - a favorited-player callout simply won't retroactively appear
+      // on these older rows, same as every other backfill-vs-live gap
+      // already documented in this file.
+      standoutPerformers: [],
       score: g.score,
       tier: g.tier,
     };
@@ -137,7 +143,9 @@ function migrateSoccerFile(fileName: string, leagueGroup: SoccerLeagueGroup): nu
     // costs nothing and avoids a surprise if that changes later).
     setSoccerFinalRubric(
       g.eventId,
-      { awayScore: g.awayScore, homeScore: g.homeScore, score: g.score, tier: g.tier },
+      // Same gap as the basketball backfill above - this migration predates
+      // standout-scorer capture, so these rows just get an empty list.
+      { awayScore: g.awayScore, homeScore: g.homeScore, score: g.score, tier: g.tier, standoutPerformers: [] },
       null
     );
   }

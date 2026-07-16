@@ -94,20 +94,33 @@ export async function fetchSoccerSummary(eventId: string, league: SoccerLeague):
 // endpoints used everywhere else in this file, not this one) - kept as its
 // own local type rather than widening EspnSoccerTeam for every other caller.
 interface EspnSoccerTeamListEntry {
+  id: string;
   displayName: string;
   logos?: Array<{ href: string; rel: string[] }>;
 }
 
 /** The full real club list for [league] (20 for eng.1/esp.1) - backs the favorite-teams search/browse screen, same reasoning as espnClient.ts's fetchTeams. */
-export async function fetchSoccerTeams(league: SoccerLeague): Promise<Array<{ displayName: string; logo?: string }>> {
+export async function fetchSoccerTeams(league: SoccerLeague): Promise<Array<{ id: string; displayName: string; logo?: string }>> {
   const data = await getJson<{ sports: Array<{ leagues: Array<{ teams: Array<{ team: EspnSoccerTeamListEntry }> }> }> }>(
     `${basePath(league)}/teams?limit=100`
   );
   const teams = data.sports?.[0]?.leagues?.[0]?.teams ?? [];
   return teams.map((t) => ({
+    id: t.team.id,
     displayName: t.team.displayName,
     logo: t.team.logos?.find((l) => l.rel.includes("default"))?.href ?? t.team.logos?.[0]?.href
   }));
+}
+
+export interface EspnSoccerRosterAthlete {
+  id: string;
+  displayName: string;
+}
+
+/** A club's current player list - soccer analogue of espnClient.ts's fetchRoster. */
+export async function fetchSoccerRoster(teamId: string, league: SoccerLeague): Promise<EspnSoccerRosterAthlete[]> {
+  const data = await getJson<{ athletes: EspnSoccerRosterAthlete[] }>(`${basePath(league)}/teams/${teamId}/roster`);
+  return data.athletes ?? [];
 }
 
 /**

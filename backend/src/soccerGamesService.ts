@@ -94,6 +94,7 @@ function toSoccerGameJson(row: GameRow, competitionLabel: string, status: "upcom
     fp: false,
     bz: false,
     st: null,
+    sop: row.standoutPerformers,
     sk: row.stakes ?? undefined,
     hook: row.hook ?? fallbackHook(row.away, row.home),
     pitch: row.pitch ?? undefined,
@@ -161,7 +162,8 @@ export async function getSoccerGamesForDate(date: string, leagueGroup: SoccerLea
         awayScore: mapped.awayScore,
         homeScore: mapped.homeScore,
         score,
-        tier: tierForScore(score)
+        tier: tierForScore(score),
+        standoutPerformers: mapped.standoutPerformers
       });
       row = getGame(event.id)!;
     }
@@ -181,6 +183,7 @@ export async function getSoccerGamesForDate(date: string, leagueGroup: SoccerLea
       fp: false,
       bz: false,
       st: null,
+      sop: row.standoutPerformers,
       sk: row.stakes ?? undefined,
       hook: row.hook ?? fallbackHook(row.away, row.home),
       pitch: row.pitch ?? undefined,

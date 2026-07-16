@@ -10,7 +10,7 @@
 // - this is what makes it safe to trust here instead of a fresh guess.
 import { EspnSoccerBoxscoreTeam, EspnSoccerEvent, EspnSoccerKeyEvent, EspnSoccerSummary } from "./soccerEspnClient";
 import { SoccerRubricInputs } from "./soccerRubric";
-import { GameStatus } from "./types";
+import { GameStatus, StandoutPerformerJson } from "./types";
 
 export function mapSoccerEspnState(state: "pre" | "in" | "post"): GameStatus {
   if (state === "post") return "final";
@@ -98,6 +98,25 @@ function statValue(team: EspnSoccerBoxscoreTeam, name: string): number {
   return stat ? parseFloat(stat.displayValue) : 0;
 }
 
+/**
+ * Every scorer (either team) with 2+ goals - soccer's analogue of
+ * gameMapper.ts's findStandoutPerformers, using the same "star" threshold
+ * soccerRubric.ts's starPoints already scores a hat-trick/brace against,
+ * rather than a separate scale. A favorited-player callout needs a name to
+ * check against; own goals are never attributed to a "standout" since
+ * they're not something the beneficiary's forward actually did.
+ */
+function findStandoutScorers(goals: ParsedGoal[]): StandoutPerformerJson[] {
+  const counts: Record<string, number> = {};
+  for (const g of goals) {
+    if (g.ownGoal || !g.scorer) continue;
+    counts[g.scorer] = (counts[g.scorer] ?? 0) + 1;
+  }
+  return Object.entries(counts)
+    .filter(([, count]) => count >= 2)
+    .map(([name, count]) => ({ name, line: count >= 3 ? `Hat-trick (${count} goals)` : `${count} goals` }));
+}
+
 export interface MappedSoccerGame {
   away: string;
   home: string;
@@ -106,6 +125,7 @@ export interface MappedSoccerGame {
   awayLogo?: string;
   homeLogo?: string;
   rubricInputs: SoccerRubricInputs;
+  standoutPerformers: StandoutPerformerJson[];
 }
 
 /** Builds SoccerRubricInputs (soccerRubric.ts) straight from ESPN's raw event + summary - only meaningful once the match has actually gone final (goals/box-score stats are only complete then). */
@@ -135,6 +155,7 @@ export function mapSoccerEventToGame(event: EspnSoccerEvent, summary: EspnSoccer
     homeScore,
     awayLogo: away.team.logo,
     homeLogo: home.team.logo,
+    standoutPerformers: findStandoutScorers(goals),
     rubricInputs: {
       margin: Math.abs(homeScore - awayScore),
       totalGoals: homeScore + awayScore,

@@ -126,6 +126,17 @@ export async function fetchTeams(league: League): Promise<EspnTeam[]> {
   return (data.sports?.[0]?.leagues?.[0]?.teams ?? []).map((t) => t.team);
 }
 
+export interface EspnRosterAthlete {
+  id: string;
+  displayName: string;
+}
+
+/** A team's current player list - backs the favorite-players search/browse screen's league -> team -> player drill-down. */
+export async function fetchRoster(teamId: string, league: League): Promise<EspnRosterAthlete[]> {
+  const data = await getJson<{ athletes: EspnRosterAthlete[] }>(`${basePath(league)}/teams/${teamId}/roster`);
+  return data.athletes ?? [];
+}
+
 /**
  * Every date [league] has at least one scheduled game, for whichever season
  * ESPN currently considers "current" as of [dateYyyymmdd] (a season already

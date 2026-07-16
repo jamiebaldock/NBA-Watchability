@@ -23,7 +23,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { League } from "./espnClient";
 import { SoccerLeague } from "./soccerEspnClient";
-import { GameStatus, LeagueGroup, SPORT_FOR_LEAGUE_GROUP, StarPerformance } from "./types";
+import { GameStatus, LeagueGroup, SPORT_FOR_LEAGUE_GROUP, StandoutPerformerJson, StarPerformance } from "./types";
 
 // A game row's own "league" column is one specific ESPN league (basketball's
 // "nba"/"nba-summer-*"/"wnba", or soccer's "eng.1"/"esp.1") - broader than
@@ -121,6 +121,16 @@ ensureColumn("games", "yt_check_count", "INTEGER NOT NULL DEFAULT 0");
 // rows from before this column existed are enriched by the one-off
 // migrateStageLabels.ts script rather than left permanently null.
 ensureColumn("games", "season_stage_label", "TEXT");
+// JSON-encoded StandoutPerformerJson[] (types.ts) - every player on either
+// team whose individual line cleared the per-league "good"-or-better bar,
+// not just the single best - backs the favorite-player callout, which
+// needs to check a specific person's line against a game that might not
+// even be a highly-rated one overall. Set once at finalization for both
+// basketball (gameMapper.ts's findStandoutPerformers) and soccer
+// (soccerGameMapper.ts's findStandoutScorers); never populated by the
+// historical backfill scripts (predate this column), so older rows are
+// simply NULL/empty rather than retroactively enriched.
+ensureColumn("games", "standout_performers", "TEXT");
 
 function now(): string {
   return new Date().toISOString();
@@ -138,6 +148,7 @@ export interface FinalRubric {
   decidedOnFinalPossession: boolean;
   buzzerBeater: boolean;
   starPerformance: StarPerformance;
+  standoutPerformers: StandoutPerformerJson[];
   score: number;
   tier: string;
 }
@@ -166,6 +177,7 @@ export interface GameRow {
   decidedOnFinalPossession: number | null;
   buzzerBeater: number | null;
   starPerformance: StarPerformance;
+  standoutPerformers: StandoutPerformerJson[];
   score: number | null;
   tier: string | null;
   finalAt: string | null;
@@ -243,6 +255,7 @@ interface RawGameRow {
   decided_on_final_possession: number | null;
   buzzer_beater: number | null;
   star_performance: StarPerformance;
+  standout_performers: string | null;
   score: number | null;
   tier: string | null;
   final_at: string | null;
@@ -251,6 +264,11 @@ interface RawGameRow {
   yt_found_at: string | null;
   yt_check_count: number;
   season_stage_label: string | null;
+}
+
+function parseStandoutPerformers(raw: string | null): StandoutPerformerJson[] {
+  if (!raw) return [];
+  return JSON.parse(raw) as StandoutPerformerJson[];
 }
 
 function mapRow(raw: RawGameRow): GameRow {
@@ -278,6 +296,7 @@ function mapRow(raw: RawGameRow): GameRow {
     decidedOnFinalPossession: raw.decided_on_final_possession,
     buzzerBeater: raw.buzzer_beater,
     starPerformance: raw.star_performance,
+    standoutPerformers: parseStandoutPerformers(raw.standout_performers),
     score: raw.score,
     tier: raw.tier,
     finalAt: raw.final_at,
@@ -336,7 +355,8 @@ export function setFinalRubric(eventId: string, rubric: FinalRubric, finalAt: st
        largest_deficit_overcome=@largestDeficitOvercome, lead_changes=@leadChanges,
        overtime_periods=@overtimePeriods, close_in_final_two_min=@closeInFinalTwoMin,
        lead_change_in_final_min=@leadChangeInFinalMin, decided_on_final_possession=@decidedOnFinalPossession,
-       buzzer_beater=@buzzerBeater, star_performance=@starPerformance, score=@score, tier=@tier,
+       buzzer_beater=@buzzerBeater, star_performance=@starPerformance, standout_performers=@standoutPerformers,
+       score=@score, tier=@tier,
        updated_at=@updatedAt
      WHERE event_id=@eventId AND score IS NULL`
   ).run({
@@ -353,6 +373,7 @@ export function setFinalRubric(eventId: string, rubric: FinalRubric, finalAt: st
     decidedOnFinalPossession: rubric.decidedOnFinalPossession ? 1 : 0,
     buzzerBeater: rubric.buzzerBeater ? 1 : 0,
     starPerformance: rubric.starPerformance,
+    standoutPerformers: JSON.stringify(rubric.standoutPerformers),
     score: rubric.score,
     tier: rubric.tier,
     updatedAt: now(),
@@ -364,22 +385,24 @@ export interface SoccerFinalResult {
   homeScore: number;
   score: number;
   tier: string;
+  standoutPerformers: StandoutPerformerJson[];
 }
 
 /**
  * Soccer's equivalent of setFinalRubric - only touches the fields soccer
- * actually has (away/home score, the soccerRubric.ts total, and its tier).
- * Deliberately doesn't touch the basketball-shaped rubric columns (lead
- * changes, overtime periods, star performance, etc.) - those simply stay
- * NULL for a soccer row, which every reader already treats as "not
- * applicable"/"unknown" rather than a special case to guard against. Same
- * "never overwrite" WHERE-guard as setFinalRubric.
+ * actually has (away/home score, the soccerRubric.ts total, its tier, and
+ * standout scorers). Deliberately doesn't touch the basketball-shaped
+ * rubric columns (lead changes, overtime periods, star performance, etc.) -
+ * those simply stay NULL for a soccer row, which every reader already
+ * treats as "not applicable"/"unknown" rather than a special case to guard
+ * against. Same "never overwrite" WHERE-guard as setFinalRubric.
  */
 export function setSoccerFinalRubric(eventId: string, result: SoccerFinalResult, finalAt: string | null = now()): void {
   db.prepare(
     `UPDATE games SET
        status='final', final_at=@finalAt,
        away_score=@awayScore, home_score=@homeScore, score=@score, tier=@tier,
+       standout_performers=@standoutPerformers,
        updated_at=@updatedAt
      WHERE event_id=@eventId AND score IS NULL`
   ).run({
@@ -389,6 +412,7 @@ export function setSoccerFinalRubric(eventId: string, result: SoccerFinalResult,
     homeScore: result.homeScore,
     score: result.score,
     tier: result.tier,
+    standoutPerformers: JSON.stringify(result.standoutPerformers),
     updatedAt: now()
   });
 }

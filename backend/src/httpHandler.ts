@@ -5,10 +5,19 @@ import { getHistory, HistoryResult } from "./historyService";
 import { getNews } from "./newsService";
 import { getSeasonWindow, SeasonWindow } from "./seasonWindowService";
 import { getNextSoccerScheduledDate, getSoccerGamesForDate, isSoccerLeagueGroup } from "./soccerGamesService";
+import { getRoster } from "./rosterService";
 import { getStandings } from "./standingsService";
 import { getStats } from "./statsService";
 import { getTeams } from "./teamsService";
-import { GameJson, LeagueGroup, NewsResponseJson, StandingsResponseJson, StatsResponseJson, TeamsResponseJson } from "./types";
+import {
+  GameJson,
+  LeagueGroup,
+  NewsResponseJson,
+  RosterResponseJson,
+  StandingsResponseJson,
+  StatsResponseJson,
+  TeamsResponseJson
+} from "./types";
 
 export interface DaySchedule {
   date: string;
@@ -126,6 +135,11 @@ export async function getNewsForLeagueGroup(leagueGroupRaw = "nba"): Promise<New
 
 export async function getTeamsForLeagueGroup(leagueGroupRaw = "nba"): Promise<TeamsResponseJson> {
   return getTeams(parseLeagueGroup(leagueGroupRaw));
+}
+
+export async function getRosterForTeam(leagueGroupRaw: string, teamId: string): Promise<RosterResponseJson> {
+  if (!teamId) throw new BadRequestError("team is required");
+  return getRoster(parseLeagueGroup(leagueGroupRaw), teamId);
 }
 
 /**
