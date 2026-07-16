@@ -7,11 +7,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.nbawatchability.app.data.FavoritePlayer
 import com.nbawatchability.app.data.FavoritesRepository
 import com.nbawatchability.app.data.Team
 import kotlinx.coroutines.launch
 
 const val MAX_FAVORITE_TEAMS = 3
+const val MAX_FAVORITE_PLAYERS = 3
 
 class FavoritesViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -26,6 +28,9 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
     var isLoaded by mutableStateOf(false)
         private set
 
+    var favoritePlayers by mutableStateOf<List<FavoritePlayer>>(emptyList())
+        private set
+
     init {
         viewModelScope.launch {
             repository.favoriteTeams.collect {
@@ -33,9 +38,14 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
                 isLoaded = true
             }
         }
+        viewModelScope.launch {
+            repository.favoritePlayers.collect { favoritePlayers = it }
+        }
     }
 
     fun isFavoriteTeam(name: String): Boolean = favoriteTeams.any { it.name == name }
+
+    fun isFavoritePlayer(name: String): Boolean = favoritePlayers.any { it.name == name }
 
     /**
      * Adds [team] if not already favorited, removes it otherwise - the same
@@ -54,5 +64,16 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
         }
         val updated = if (alreadyFavorited) favoriteTeams.filterNot { it.name == team.name } else favoriteTeams + team
         viewModelScope.launch { repository.setFavoriteTeams(updated) }
+    }
+
+    /** Same toggle/cap shape as toggleFavoriteTeam above, for the player search/browse screen. */
+    fun toggleFavoritePlayer(player: FavoritePlayer) {
+        val alreadyFavorited = isFavoritePlayer(player.name)
+        if (!alreadyFavorited && favoritePlayers.size >= MAX_FAVORITE_PLAYERS) {
+            Toast.makeText(getApplication(), "Up to $MAX_FAVORITE_PLAYERS favorite players for now", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val updated = if (alreadyFavorited) favoritePlayers.filterNot { it.name == player.name } else favoritePlayers + player
+        viewModelScope.launch { repository.setFavoritePlayers(updated) }
     }
 }

@@ -77,7 +77,8 @@ fun StarredScreen(
     onToggleAllLeagues: () -> Unit,
     favoriteTeamNames: Set<String> = emptySet(),
     bumpFavoriteTeamGames: Boolean = false,
-    onToggleFavoriteTeam: (Team) -> Unit = {}
+    onToggleFavoriteTeam: (Team) -> Unit = {},
+    favoritePlayerNames: Set<String> = emptySet()
 ) {
     var sortOption by remember { mutableStateOf(SortOption.DATE_NEWEST_FIRST) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -184,7 +185,8 @@ fun StarredScreen(
                         onWatchHighlights = onWatchHighlights,
                         showDate = true,
                         favoriteTeamNames = favoriteTeamNames,
-                        onToggleFavoriteTeam = onToggleFavoriteTeam
+                        onToggleFavoriteTeam = onToggleFavoriteTeam,
+                        favoritePlayerNames = favoritePlayerNames
                     )
                 }
             }

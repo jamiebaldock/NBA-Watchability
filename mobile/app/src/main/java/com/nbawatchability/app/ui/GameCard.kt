@@ -51,6 +51,7 @@ import coil.compose.AsyncImage
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.GameStatus
 import com.nbawatchability.app.data.RubricWeights
+import com.nbawatchability.app.data.StandoutPerformer
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.data.effectiveScore
@@ -103,7 +104,10 @@ fun GameCard(
     // FavoritesViewModel (there are none left after this phase, but keeps
     // the parameter list backward-compatible) simply don't respond to a
     // long-press rather than crashing.
-    onToggleFavoriteTeam: (Team) -> Unit = {}
+    onToggleFavoriteTeam: (Team) -> Unit = {},
+    // Global favorites (not per-league), same identity match as
+    // favoriteTeamNames - backs the standout-performance callout below.
+    favoritePlayerNames: Set<String> = emptySet()
 ) {
     val tier = game.effectiveTier(weights)
 
@@ -180,6 +184,17 @@ fun GameCard(
                         isFavorite = game.home in favoriteTeamNames,
                         onLongPress = { onToggleFavoriteTeam(Team(game.home, game.homeLogo)) }
                     )
+                }
+
+                // Independent of tier/score - a favorited player's standout
+                // line surfaces here even on an otherwise Skippable game.
+                // Only meaningful once final (box-score stats aren't
+                // complete before then).
+                if (game.status == GameStatus.FINAL) {
+                    val favoritedStandouts = game.standoutPerformers.orEmpty().filter { it.name in favoritePlayerNames }
+                    if (favoritedStandouts.isNotEmpty()) {
+                        StandoutPerformerCallout(favoritedStandouts, modifier = Modifier.padding(top = 8.dp))
+                    }
                 }
 
                 // Once the game is final, the pregame preview area is fully
@@ -269,6 +284,35 @@ private fun StarButton(isStarred: Boolean, onClick: () -> Unit, modifier: Modifi
         tint = if (isStarred) TierInstantClassic else TextMuted,
         modifier = modifier.size(22.dp).clickable(onClick = onClick)
     )
+}
+
+/**
+ * One line per favorited player who had a standout game here - deliberately
+ * plain text (name + line), not a full card, since this can appear on any
+ * tile regardless of tier, including a Skippable one that otherwise has
+ * very little else drawing attention to it.
+ */
+@Composable
+private fun StandoutPerformerCallout(performers: List<StandoutPerformer>, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        performers.forEach { performer ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.Star,
+                    contentDescription = null,
+                    tint = FavoriteAccent,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "${performer.name}: ${performer.line}",
+                    color = FavoriteAccent,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
 }
 
 @Composable

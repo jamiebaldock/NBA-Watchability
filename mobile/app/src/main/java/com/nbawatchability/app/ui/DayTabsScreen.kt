@@ -105,7 +105,8 @@ fun DayTabsScreen(
     onJumpToDate: (LocalDate) -> Unit,
     favoriteTeamNames: Set<String> = emptySet(),
     bumpFavoriteTeamGames: Boolean = false,
-    onToggleFavoriteTeam: (Team) -> Unit = {}
+    onToggleFavoriteTeam: (Team) -> Unit = {},
+    favoritePlayerNames: Set<String> = emptySet()
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -226,7 +227,8 @@ fun DayTabsScreen(
                             onJumpToNextGame = onJumpToNextGame,
                             favoriteTeamNames = favoriteTeamNames,
                             bumpFavoriteTeamGames = bumpFavoriteTeamGames,
-                            onToggleFavoriteTeam = onToggleFavoriteTeam
+                            onToggleFavoriteTeam = onToggleFavoriteTeam,
+                            favoritePlayerNames = favoritePlayerNames
                         )
                     }
                 }
@@ -338,7 +340,8 @@ private fun DayGamesList(
     onJumpToNextGame: () -> Unit,
     favoriteTeamNames: Set<String> = emptySet(),
     bumpFavoriteTeamGames: Boolean = false,
-    onToggleFavoriteTeam: (Team) -> Unit = {}
+    onToggleFavoriteTeam: (Team) -> Unit = {},
+    favoritePlayerNames: Set<String> = emptySet()
 ) {
     if (games.isEmpty()) {
         Column(
@@ -387,7 +390,8 @@ private fun DayGamesList(
                 onToggleStar = { onToggleStar(game) },
                 onWatchHighlights = onWatchHighlights,
                 favoriteTeamNames = favoriteTeamNames,
-                onToggleFavoriteTeam = onToggleFavoriteTeam
+                onToggleFavoriteTeam = onToggleFavoriteTeam,
+                favoritePlayerNames = favoritePlayerNames
             )
         }
     }

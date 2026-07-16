@@ -98,6 +98,7 @@ fun AppRoot() {
     var showRubricWeights by rememberSaveable { mutableStateOf(false) }
     var showSelectedSports by rememberSaveable { mutableStateOf(false) }
     var showFavoriteTeams by rememberSaveable { mutableStateOf(false) }
+    var showFavoritePlayers by rememberSaveable { mutableStateOf(false) }
     var highlightsVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     val settingsViewModel: RubricSettingsViewModel = viewModel()
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
@@ -120,6 +121,7 @@ fun AppRoot() {
     BackHandler(enabled = showRubricWeights) { showRubricWeights = false }
     BackHandler(enabled = showSelectedSports) { showSelectedSports = false }
     BackHandler(enabled = showFavoriteTeams) { showFavoriteTeams = false }
+    BackHandler(enabled = showFavoritePlayers) { showFavoritePlayers = false }
     BackHandler(enabled = highlightsVideoId != null) { highlightsVideoId = null }
 
     if (showAbout) {
@@ -155,6 +157,15 @@ fun AppRoot() {
         return
     }
 
+    if (showFavoritePlayers) {
+        FavoritePlayersScreen(
+            favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet(),
+            onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
+            onBack = { showFavoritePlayers = false }
+        )
+        return
+    }
+
     highlightsVideoId?.let { videoId ->
         HighlightsPlayerScreen(videoId = videoId, onBack = { highlightsVideoId = null })
         return
@@ -182,13 +193,17 @@ fun AppRoot() {
                     onRubricWeightsClick = { showRubricWeights = true },
                     onAboutClick = { showAbout = true },
                     onFavoriteTeamsClick = { showFavoriteTeams = true },
+                    onFavoritePlayersClick = { showFavoritePlayers = true },
                     bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
                     onToggleBumpFavoriteTeamGames = appSettingsViewModel::toggleBumpFavoriteTeamGames
                 )
                 BottomNavTab.MY_TEAMS -> MyTeamsScreen(
                     favoriteTeams = favoritesViewModel.favoriteTeams,
-                    onRemoveFavorite = favoritesViewModel::toggleFavoriteTeam,
-                    onAddTeamClick = { showFavoriteTeams = true }
+                    onRemoveFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
+                    onAddTeamClick = { showFavoriteTeams = true },
+                    favoritePlayers = favoritesViewModel.favoritePlayers,
+                    onRemoveFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
+                    onAddPlayerClick = { showFavoritePlayers = true }
                 )
                 else -> if (!selectedLeague.isSupported) {
                     ComingSoonTab(
@@ -210,7 +225,8 @@ fun AppRoot() {
                             onWatchHighlights = { videoId -> highlightsVideoId = videoId },
                             favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
                             bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
-                            onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam
+                            onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
+                            favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet()
                         )
                         BottomNavTab.LEADERS -> LeadersTab(
                             selectedLeague = selectedLeague,
@@ -235,7 +251,8 @@ fun AppRoot() {
                             onWatchHighlights = { videoId -> highlightsVideoId = videoId },
                             favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
                             bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
-                            onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam
+                            onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
+                            favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet()
                         )
                         BottomNavTab.HISTORY -> HistoryTab(
                             weights = settingsViewModel.weights,
@@ -249,7 +266,8 @@ fun AppRoot() {
                             onWatchHighlights = { videoId -> highlightsVideoId = videoId },
                             favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
                             bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
-                            onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam
+                            onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
+                            favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet()
                         )
                         else -> {} // unreachable: SETTINGS/MY_TEAMS handled above
                     }
@@ -310,7 +328,8 @@ private fun GamesTab(
     onWatchHighlights: (String) -> Unit,
     favoriteTeamNames: Set<String>,
     bumpFavoriteTeamGames: Boolean,
-    onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit
+    onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit,
+    favoritePlayerNames: Set<String>
 ) {
     val viewModel: GameListViewModel = viewModel()
 
@@ -359,7 +378,8 @@ private fun GamesTab(
             onJumpToDate = viewModel::jumpToDate,
             favoriteTeamNames = favoriteTeamNames,
             bumpFavoriteTeamGames = bumpFavoriteTeamGames,
-            onToggleFavoriteTeam = onToggleFavoriteTeam
+            onToggleFavoriteTeam = onToggleFavoriteTeam,
+            favoritePlayerNames = favoritePlayerNames
         )
     }
 }
@@ -378,7 +398,8 @@ private fun StarredTab(
     onWatchHighlights: (String) -> Unit,
     favoriteTeamNames: Set<String>,
     bumpFavoriteTeamGames: Boolean,
-    onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit
+    onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit,
+    favoritePlayerNames: Set<String>
 ) {
     // Fires on first composition and again whenever the starred set changes
     // (a star added/removed anywhere in the app) - re-fetches live data for
@@ -409,7 +430,8 @@ private fun StarredTab(
         onToggleAllLeagues = onToggleAllLeagues,
         favoriteTeamNames = favoriteTeamNames,
         bumpFavoriteTeamGames = bumpFavoriteTeamGames,
-        onToggleFavoriteTeam = onToggleFavoriteTeam
+        onToggleFavoriteTeam = onToggleFavoriteTeam,
+        favoritePlayerNames = favoritePlayerNames
     )
 }
 
@@ -426,7 +448,8 @@ private fun HistoryTab(
     onWatchHighlights: (String) -> Unit,
     favoriteTeamNames: Set<String>,
     bumpFavoriteTeamGames: Boolean,
-    onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit
+    onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit,
+    favoritePlayerNames: Set<String>
 ) {
     val viewModel: HistoryViewModel = viewModel()
     // Both leagues have their own backfill now - always resets to "This
@@ -456,7 +479,8 @@ private fun HistoryTab(
         enabledLeagues = enabledLeagues,
         favoriteTeamNames = favoriteTeamNames,
         bumpFavoriteTeamGames = bumpFavoriteTeamGames,
-        onToggleFavoriteTeam = onToggleFavoriteTeam
+        onToggleFavoriteTeam = onToggleFavoriteTeam,
+        favoritePlayerNames = favoritePlayerNames
     )
 }
 

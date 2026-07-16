@@ -34,6 +34,10 @@ object NetworkLeagueContentRepository {
     suspend fun teams(baseUrl: String, leagueGroup: LeagueGroup): TeamsResponse =
         get("$baseUrl/teams?leagueGroup=${leagueGroup.apiValue}")
 
+    /** Real per-team player list - backs the favorite-players search/browse screen's team -> player drill-down. */
+    suspend fun roster(baseUrl: String, leagueGroup: LeagueGroup, teamId: String): RosterResponse =
+        get("$baseUrl/roster?leagueGroup=${leagueGroup.apiValue}&team=$teamId")
+
     private suspend inline fun <reified T> get(url: String): T =
         withContext(Dispatchers.IO) {
             val connection = URL(url).openConnection() as HttpURLConnection

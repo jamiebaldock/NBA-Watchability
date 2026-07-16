@@ -47,6 +47,7 @@ fun SettingsScreen(
     onRubricWeightsClick: () -> Unit,
     onAboutClick: () -> Unit,
     onFavoriteTeamsClick: () -> Unit,
+    onFavoritePlayersClick: () -> Unit,
     bumpFavoriteTeamGames: Boolean,
     onToggleBumpFavoriteTeamGames: () -> Unit
 ) {
@@ -113,6 +114,24 @@ fun SettingsScreen(
                     Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(text = "Favorite Teams", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                }
+                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+            }
+
+            HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onFavoritePlayersClick)
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = TextSecondary)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(text = "Favorite Players", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
                 }
                 Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
             }

@@ -135,7 +135,8 @@ fun HistoryScreen(
     enabledLeagues: Set<LeagueGroup>,
     favoriteTeamNames: Set<String> = emptySet(),
     bumpFavoriteTeamGames: Boolean = false,
-    onToggleFavoriteTeam: (Team) -> Unit = {}
+    onToggleFavoriteTeam: (Team) -> Unit = {},
+    favoritePlayerNames: Set<String> = emptySet()
 ) {
     // Plain remember (not rememberSaveable) - defaults to hidden every time
     // this composable enters composition, e.g. switching back to History
@@ -302,7 +303,8 @@ fun HistoryScreen(
                                     spoilerFree = true,
                                     showScore = showScore,
                                     favoriteTeamNames = favoriteTeamNames,
-                                    onToggleFavoriteTeam = onToggleFavoriteTeam
+                                    onToggleFavoriteTeam = onToggleFavoriteTeam,
+                                    favoritePlayerNames = favoritePlayerNames
                                 )
                             }
                         }

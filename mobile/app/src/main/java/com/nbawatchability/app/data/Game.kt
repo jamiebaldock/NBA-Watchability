@@ -16,6 +16,12 @@ enum class GameStatus {
     @SerialName("upcoming") UPCOMING
 }
 
+@Serializable
+data class StandoutPerformer(
+    val name: String,
+    val line: String
+)
+
 enum class Tier(val label: String, val emoji: String) {
     INSTANT_CLASSIC("INSTANT CLASSIC", "🔥"),
     WORTH_YOUR_TIME("WORTH YOUR TIME", "⭐"),
@@ -62,6 +68,7 @@ data class Game(
     @SerialName("fp") val decidedOnFinalPossession: Boolean = false,
     @SerialName("bz") val buzzerBeater: Boolean = false,
     @SerialName("st") val starPerformance: String? = null,
+    @SerialName("sop") val standoutPerformers: List<StandoutPerformer>? = null,
     @SerialName("sk") val stakes: Int? = null,
     @SerialName("hook") val hook: String,
     @SerialName("pitch") val pitch: String? = null,
