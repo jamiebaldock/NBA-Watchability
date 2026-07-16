@@ -21,7 +21,11 @@ data class SoccerRubricWeights(
     val redCard: Float = 1f,
     val saves: Float = 1f,
     val freeKickGoal: Float = 1f,
-    val penaltyMiss: Float = 1f
+    val penaltyMiss: Float = 1f,
+    // Knockout-tournament-only (World Cup) - a no-op multiplier for every
+    // EPL/La Liga game, which never has extra time or a shootout.
+    val extraTime: Float = 1f,
+    val shootout: Float = 1f
 ) {
     companion object {
         val DEFAULT = SoccerRubricWeights()

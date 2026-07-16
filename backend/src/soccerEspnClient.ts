@@ -8,7 +8,7 @@
 // "in"/"post") matches basketball's exactly, though, so gameMapper.ts's
 // mapEspnState is reused as-is rather than duplicated - see
 // soccerGameMapper.ts.
-export const SOCCER_LEAGUES = ["eng.1", "esp.1"] as const;
+export const SOCCER_LEAGUES = ["eng.1", "esp.1", "fifa.world"] as const;
 export type SoccerLeague = (typeof SOCCER_LEAGUES)[number];
 
 function basePath(league: SoccerLeague): string {
@@ -33,6 +33,12 @@ export interface EspnSoccerStatus {
   period: number;
   displayClock: string;
   type: {
+    // e.g. "STATUS_FULL_TIME" (regulation), "STATUS_FINAL_AET" (decided in
+    // extra time), "STATUS_FINAL_PEN" (decided by penalty shootout) -
+    // confirmed directly against real World Cup matches (2014 Germany-
+    // Algeria AET, 2022 Argentina-France PEN final). Used to derive
+    // wentToExtraTime/decidedByShootout in soccerGameMapper.ts.
+    name?: string;
     state: "pre" | "in" | "post";
     completed: boolean;
   };
@@ -143,10 +149,56 @@ export async function fetchSoccerScoreboardRange(
   return data.events ?? [];
 }
 
-/** Mirrors espnClient.ts's fetchCalendarDates - backs the season-window/calendar-picker derivation for soccer groups. */
+interface EspnTournamentStageEntry {
+  startDate: string;
+  endDate: string;
+}
+
+interface EspnTournamentCalendarEntry {
+  startDate: string;
+  endDate: string;
+  entries?: EspnTournamentStageEntry[];
+}
+
+/**
+ * Mirrors espnClient.ts's fetchCalendarDates - backs the season-window/
+ * calendar-picker derivation for soccer groups. A domestic league's
+ * `calendar` is a flat list of real per-matchday date strings, but a
+ * tournament's (fifa.world) is shaped completely differently - one
+ * stage-summary object per named stage (Group/Round of 32/.../Final,
+ * each with its own startDate/endDate), not a per-game list - confirmed
+ * directly against ESPN's real response for each, not assumed. Calling
+ * `.slice` on a tournament's calendar entries as if they were date strings
+ * throws at runtime, which would 500 the /season-window endpoint the
+ * mobile app calls unconditionally on every Games-tab load - branch on the
+ * actual shape rather than assuming every soccer leagueGroup looks like
+ * eng.1/esp.1.
+ */
 export async function fetchSoccerCalendarDates(dateYyyymmdd: string, league: SoccerLeague): Promise<string[]> {
-  const data = await getJson<{ leagues?: Array<{ calendar?: string[] }> }>(
+  const data = await getJson<{ leagues?: Array<{ calendar?: Array<string | EspnTournamentCalendarEntry> }> }>(
     `${basePath(league)}/scoreboard?dates=${dateYyyymmdd}`
   );
-  return (data.leagues?.[0]?.calendar ?? []).map((d) => d.slice(0, 10));
+  const calendar = data.leagues?.[0]?.calendar ?? [];
+  if (calendar.length === 0) return [];
+
+  if (typeof calendar[0] === "string") {
+    return (calendar as string[]).map((d) => d.slice(0, 10));
+  }
+
+  // Tournament shape: union every named stage's own [startDate, endDate]
+  // range into individual days - coarser than a real matchday list (a rest
+  // day within a stage's range gets included too, with no actual fixture),
+  // but correct and simple, and cheap for a several-week tournament window.
+  const dates = new Set<string>();
+  for (const stage of calendar as EspnTournamentCalendarEntry[]) {
+    for (const entry of stage.entries ?? []) {
+      let day = new Date(entry.startDate.slice(0, 10));
+      const end = new Date(entry.endDate.slice(0, 10));
+      while (day <= end) {
+        dates.add(day.toISOString().slice(0, 10));
+        day = new Date(day.getTime() + 24 * 60 * 60 * 1000);
+      }
+    }
+  }
+  return [...dates].sort();
 }

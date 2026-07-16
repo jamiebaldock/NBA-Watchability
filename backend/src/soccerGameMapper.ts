@@ -46,6 +46,23 @@ export function parseGoals(keyEvents: EspnSoccerKeyEvent[]): ParsedGoal[] {
 }
 
 const LATE_THRESHOLD_SECONDS = 85 * 60;
+// Extra time adds two 15-minute halves (105'/120' marks) - a "late" goal in
+// an extra-time match means the last ~5 minutes of the full 120, not the
+// last 5 of the original 90, which by then is ancient history.
+const LATE_THRESHOLD_SECONDS_AET = 115 * 60;
+
+// ESPN's status.type.name for a match decided in extra time or by penalty
+// shootout - confirmed directly against real matches (2014 Germany-Algeria
+// Round of 16 = STATUS_FINAL_AET, 2022 Argentina-France final =
+// STATUS_FINAL_PEN). Regulation full time is STATUS_FULL_TIME/
+// STATUS_FINAL, neither of which matches here.
+export function wentToExtraTime(statusTypeName: string | undefined): boolean {
+  return statusTypeName === "STATUS_FINAL_AET" || statusTypeName === "STATUS_FINAL_PEN";
+}
+
+export function decidedByShootout(statusTypeName: string | undefined): boolean {
+  return statusTypeName === "STATUS_FINAL_PEN";
+}
 
 /** How far below the eventual winner (or, in a draw, either side) ever fell, at its worst point. */
 function largestDeficitOvercome(goals: ParsedGoal[], homeTeam: string, homeScore: number, awayScore: number): number {
@@ -65,8 +82,15 @@ function largestDeficitOvercome(goals: ParsedGoal[], homeTeam: string, homeScore
   return Math.max(maxDeficitForHome, maxDeficitForAway);
 }
 
-/** Did a goal at/after the 85th minute (including stoppage) change the score state (new lead or new tie)? */
-function lateGoalChangedResult(goals: ParsedGoal[], homeTeam: string): boolean {
+/**
+ * Did a goal in the last ~5 minutes of the match change the score state (new
+ * lead or new tie)? [lateThresholdSeconds] is 85' for a 90-minute match or
+ * 115' for one that reached extra time - a stoppage-time-90 goal in a match
+ * that then played 30 more minutes isn't "late" by the time the match
+ * actually ended, and a genuinely late 116' extra-time goal deserves credit
+ * the fixed 85' threshold would otherwise miss entirely.
+ */
+function lateGoalChangedResult(goals: ParsedGoal[], homeTeam: string, lateThresholdSeconds: number): boolean {
   const sorted = [...goals].sort((a, b) => a.minuteValueSeconds - b.minuteValueSeconds);
   let home = 0;
   let away = 0;
@@ -76,7 +100,7 @@ function lateGoalChangedResult(goals: ParsedGoal[], homeTeam: string): boolean {
     if (g.team === homeTeam) home++;
     else away++;
     const state = home === away ? "tie" : home > away ? "home" : "away";
-    if (g.minuteValueSeconds >= LATE_THRESHOLD_SECONDS && prevState !== null && state !== prevState) changed = true;
+    if (g.minuteValueSeconds >= lateThresholdSeconds && prevState !== null && state !== prevState) changed = true;
     prevState = state;
   }
   return changed;
@@ -154,6 +178,10 @@ export function mapSoccerEventToGame(event: EspnSoccerEvent, summary: EspnSoccer
   const anyPenaltyMissed = penaltyEvents.some((e) => e.type.type !== "penalty---scored");
   const anyFreeKickGoal = goals.some((g) => g.freeKick);
 
+  const statusTypeName = competition.status.type.name;
+  const et = wentToExtraTime(statusTypeName);
+  const lateThreshold = et ? LATE_THRESHOLD_SECONDS_AET : LATE_THRESHOLD_SECONDS;
+
   return {
     away: away.team.displayName,
     home: home.team.displayName,
@@ -166,8 +194,10 @@ export function mapSoccerEventToGame(event: EspnSoccerEvent, summary: EspnSoccer
       margin: Math.abs(homeScore - awayScore),
       totalGoals: homeScore + awayScore,
       largestDeficitOvercome: largestDeficitOvercome(goals, home.team.displayName, homeScore, awayScore),
-      lateDecisiveGoal: lateGoalChangedResult(goals, home.team.displayName),
+      lateDecisiveGoal: lateGoalChangedResult(goals, home.team.displayName, lateThreshold),
       maxGoalsByPlayer: maxGoalsByPlayer(goals),
+      wentToExtraTime: et,
+      decidedByShootout: decidedByShootout(statusTypeName),
       combinedShotsOnTarget,
       anyRedCard,
       maxSavesByKeeper,

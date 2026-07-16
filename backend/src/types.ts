@@ -9,10 +9,14 @@ export type StarPerformance = "historic" | "great" | "good" | null;
 // toggle + top-left dropdown). Distinct from espnClient.ts's League - a
 // LeagueGroup determines which underlying ESPN leagues get unioned together
 // for a request (gamesService.ts's LEAGUE_GROUPS), never both at once. "epl"/
-// "la-liga" are soccer, routed to an entirely separate ESPN client/mapper/
-// rubric (soccerEspnClient.ts/soccerGameMapper.ts/soccerRubric.ts) - see
-// SPORT_FOR_LEAGUE_GROUP below for the dispatch point.
-export type LeagueGroup = "nba" | "wnba" | "epl" | "la-liga";
+// "la-liga"/"fifa-world" are soccer, routed to an entirely separate ESPN
+// client/mapper/rubric (soccerEspnClient.ts/soccerGameMapper.ts/
+// soccerRubric.ts) - see SPORT_FOR_LEAGUE_GROUP below for the dispatch
+// point. "fifa-world" (the FIFA World Cup) is Games-tab-only by design
+// (James's call) - no standings/stats route exists for any soccer
+// leagueGroup yet, and History is deliberately not wired up for this one
+// given the tournament's ~2-day remaining shelf life when it was added.
+export type LeagueGroup = "nba" | "wnba" | "epl" | "la-liga" | "fifa-world";
 
 export type Sport = "basketball" | "soccer";
 
@@ -28,7 +32,8 @@ export const SPORT_FOR_LEAGUE_GROUP: Record<LeagueGroup, Sport> = {
   nba: "basketball",
   wnba: "basketball",
   epl: "soccer",
-  "la-liga": "soccer"
+  "la-liga": "soccer",
+  "fifa-world": "soccer"
 };
 
 export interface GameJson {
@@ -91,6 +96,11 @@ export interface GameJson {
   sv?: number;
   fkg?: boolean;
   pm?: boolean;
+  // Knockout-tournament-only (World Cup) - absent for every EPL/La Liga
+  // game, which never has extra time or a shootout. See soccerRubric.ts's
+  // extraTimePoints/shootoutPoints.
+  et?: boolean;
+  pk?: boolean;
 }
 
 export interface StandoutPerformerJson {

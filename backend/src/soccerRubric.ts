@@ -36,6 +36,15 @@ export interface SoccerRubricInputs {
   // season) and already counts fully via margin/totalGoals/comeback/star
   // like any other goal - the miss is what's genuinely rare and dramatic.
   anyPenaltyMissed?: boolean;
+  // Knockout-tournament-only (World Cup) - undefined/false for every
+  // domestic EPL/La Liga match, which never has extra time or a shootout.
+  // Mirrors basketball's overtimePoints bonus: reaching extra time is its
+  // own tension signal regardless of how the match is then decided; a
+  // shootout is the rarer, more dramatic sub-case where even 30 more
+  // minutes couldn't separate the teams. See extraTimePoints/shootoutPoints
+  // below for the point values.
+  wentToExtraTime?: boolean;
+  decidedByShootout?: boolean;
 }
 
 // Draws (27.4% of the 2025-26 EPL season) and 1-goal margins (37.6%) are the
@@ -120,6 +129,21 @@ export function penaltyMissPoints(anyPenaltyMissed: boolean | undefined): number
   return anyPenaltyMissed ? 10 : 0;
 }
 
+// Knockout-only, mirroring basketball's overtimePoints (rubric.ts) - a
+// separate, smaller bonus for reaching extra time at all, on top of a
+// larger one for the rarer case of still being level after it. Combined
+// max (30) deliberately matches comebackPoints' top bracket - a shootout is
+// one of the sport's most dramatic possible endings, but shouldn't alone
+// guarantee a top tier score regardless of how the preceding 120 minutes
+// played out.
+export function extraTimePoints(wentToExtraTime: boolean | undefined): number {
+  return wentToExtraTime ? 10 : 0;
+}
+
+export function shootoutPoints(decidedByShootout: boolean | undefined): number {
+  return decidedByShootout ? 20 : 0;
+}
+
 export interface SoccerScoreBreakdown {
   margin: number;
   totalGoals: number;
@@ -131,6 +155,8 @@ export interface SoccerScoreBreakdown {
   saves: number;
   freeKickGoal: number;
   penaltyMiss: number;
+  extraTime: number;
+  shootout: number;
   stakes: number;
   total: number;
 }
@@ -152,10 +178,24 @@ export function computeSoccerWatchabilityScore(
   const saves = savesPoints(inputs.maxSavesByKeeper);
   const freeKickGoal = freeKickGoalPoints(inputs.anyFreeKickGoal);
   const penaltyMiss = penaltyMissPoints(inputs.anyPenaltyMissed);
+  const extraTime = extraTimePoints(inputs.wentToExtraTime);
+  const shootout = shootoutPoints(inputs.decidedByShootout);
   const stakesPts = stakesPoints(stakes);
 
   const total =
-    margin + totalGoals + comeback + lateDrama + star + chances + redCard + saves + freeKickGoal + penaltyMiss + stakesPts;
+    margin +
+    totalGoals +
+    comeback +
+    lateDrama +
+    star +
+    chances +
+    redCard +
+    saves +
+    freeKickGoal +
+    penaltyMiss +
+    extraTime +
+    shootout +
+    stakesPts;
 
   return {
     margin,
@@ -168,6 +208,8 @@ export function computeSoccerWatchabilityScore(
     saves,
     freeKickGoal,
     penaltyMiss,
+    extraTime,
+    shootout,
     stakes: stakesPts,
     total
   };

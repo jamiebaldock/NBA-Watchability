@@ -42,6 +42,19 @@ enum class LeagueGroup(
     // crashes) rather than needing their own isSupported flag.
     EPL("epl", "English Premier League", "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/23.png", shortDisplayName = "EPL"),
     LA_LIGA("la-liga", "La Liga", "https://a.espncdn.com/i/leaguelogos/soccer/500/15.png"),
+    // Games-tab-only (James's explicit call) - live current-schedule tiles
+    // with the tournament rubric only, no Standings/Stats/History route for
+    // this leagueGroup. Default crest's black "26" numerals and "FIFA"
+    // wordmark are illegible here - "-dark" drops the numerals and keeps
+    // the gold trophy fully visible (its own color already reads fine
+    // against dark surfaces); the wordmark stays black and small, same
+    // tradeoff as Primeira Liga's "-dark" variant elsewhere in this enum.
+    FIFA_WORLD_CUP(
+        "fifa-world",
+        "FIFA World Cup",
+        "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/4.png",
+        shortDisplayName = "World Cup"
+    ),
     NBL("nbl", "NBL", "https://a.espncdn.com/i/teamlogos/leagues/500/nbl.png", isSupported = false),
     UFC("ufc", "UFC", "https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png", isSupported = false),
     // Same dark-crest-on-dark-background problem as EPL - ESPN's default

@@ -95,6 +95,10 @@ data class Game(
     @SerialName("sv") val maxSavesByKeeper: Int? = null,
     @SerialName("fkg") val anyFreeKickGoal: Boolean = false,
     @SerialName("pm") val anyPenaltyMissed: Boolean = false,
+    // Knockout-tournament-only (World Cup) - absent/false on every EPL/La
+    // Liga game, which never has extra time or a shootout.
+    @SerialName("et") val wentToExtraTime: Boolean = false,
+    @SerialName("pk") val decidedByShootout: Boolean = false,
     @SerialName("hook") val hook: String,
     @SerialName("pitch") val pitch: String? = null,
     @SerialName("score") val score: Int? = null,

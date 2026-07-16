@@ -41,7 +41,8 @@ function parseLeagueGroup(raw: string): LeagueGroup {
   if (raw === "wnba") return "wnba";
   if (raw === "epl") return "epl";
   if (raw === "la-liga") return "la-liga";
-  throw new BadRequestError('leagueGroup must be one of "nba", "wnba", "epl", "la-liga"');
+  if (raw === "fifa-world") return "fifa-world";
+  throw new BadRequestError('leagueGroup must be one of "nba", "wnba", "epl", "la-liga", "fifa-world"');
 }
 
 /** Dispatches to the basketball or soccer live-schedule pipeline (types.ts's SPORT_FOR_LEAGUE_GROUP) - the one choke point where a request's leagueGroup decides which sport's data layer actually runs. */

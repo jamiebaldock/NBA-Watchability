@@ -176,6 +176,13 @@ private object SoccerRubric {
 
     fun penaltyMissPoints(anyPenaltyMissed: Boolean): Int = if (anyPenaltyMissed) 10 else 0
 
+    // Knockout-only (World Cup), mirroring basketball's overtimePoints - a
+    // separate, smaller bonus for reaching extra time at all, on top of a
+    // larger one for the rarer case of still being level after it.
+    fun extraTimePoints(wentToExtraTime: Boolean): Int = if (wentToExtraTime) 10 else 0
+
+    fun shootoutPoints(decidedByShootout: Boolean): Int = if (decidedByShootout) 20 else 0
+
     fun stakesPoints(stakes: Int?): Int = (stakes ?: 0).coerceIn(0, 10)
 
     fun computeScore(game: Game, weights: RubricWeights, soccerWeights: SoccerRubricWeights): Int {
@@ -189,11 +196,13 @@ private object SoccerRubric {
         val saves = savesPoints(game.maxSavesByKeeper) * soccerWeights.saves
         val freeKickGoal = freeKickGoalPoints(game.anyFreeKickGoal) * soccerWeights.freeKickGoal
         val penaltyMiss = penaltyMissPoints(game.anyPenaltyMissed) * soccerWeights.penaltyMiss
+        val extraTime = extraTimePoints(game.wentToExtraTime) * soccerWeights.extraTime
+        val shootout = shootoutPoints(game.decidedByShootout) * soccerWeights.shootout
         // Stakes deliberately uses the shared RubricWeights.stakes, not a
         // soccer-only weight - see SoccerRubricWeights's doc comment.
         val stakes = stakesPoints(game.stakes) * weights.stakes
 
-        return (margin + totalGoals + comeback + lateDrama + star + chances + redCard + saves + freeKickGoal + penaltyMiss + stakes)
+        return (margin + totalGoals + comeback + lateDrama + star + chances + redCard + saves + freeKickGoal + penaltyMiss + extraTime + shootout + stakes)
             .roundToInt()
     }
 }
@@ -250,6 +259,11 @@ fun Game.rubricBreakdown(weights: RubricWeights, soccerWeights: SoccerRubricWeig
             RubricBreakdownEntry("Goalkeeper saves", SoccerRubric.savesPoints(maxSavesByKeeper) * soccerWeights.saves, 15f * soccerWeights.saves),
             RubricBreakdownEntry("Free-kick goal", SoccerRubric.freeKickGoalPoints(anyFreeKickGoal) * soccerWeights.freeKickGoal, 10f * soccerWeights.freeKickGoal),
             RubricBreakdownEntry("Penalty miss", SoccerRubric.penaltyMissPoints(anyPenaltyMissed) * soccerWeights.penaltyMiss, 10f * soccerWeights.penaltyMiss),
+            // Knockout-only (World Cup) - always 0/max for every EPL/La Liga
+            // game, same as basketball's Buzzer-beater row always showing
+            // even on a game with none.
+            RubricBreakdownEntry("Extra time", SoccerRubric.extraTimePoints(wentToExtraTime) * soccerWeights.extraTime, 10f * soccerWeights.extraTime),
+            RubricBreakdownEntry("Penalty shootout", SoccerRubric.shootoutPoints(decidedByShootout) * soccerWeights.shootout, 20f * soccerWeights.shootout),
             RubricBreakdownEntry("Stakes", SoccerRubric.stakesPoints(stakes) * weights.stakes, 10f * weights.stakes)
         )
     } else {

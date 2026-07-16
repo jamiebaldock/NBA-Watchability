@@ -135,6 +135,8 @@ fun RubricWeightsScreen(
                 WeightSlider("Goalkeeper saves", soccerWeights.saves) { onSoccerWeightChange(SoccerRubricCategory.SAVES, it) }
                 WeightSlider("Free-kick goal", soccerWeights.freeKickGoal) { onSoccerWeightChange(SoccerRubricCategory.FREE_KICK_GOAL, it) }
                 WeightSlider("Penalty miss", soccerWeights.penaltyMiss) { onSoccerWeightChange(SoccerRubricCategory.PENALTY_MISS, it) }
+                WeightSlider("Extra time", soccerWeights.extraTime) { onSoccerWeightChange(SoccerRubricCategory.EXTRA_TIME, it) }
+                WeightSlider("Penalty shootout", soccerWeights.shootout) { onSoccerWeightChange(SoccerRubricCategory.SHOOTOUT, it) }
             }
 
             // Shared across both sports (RubricWeights.stakes, not

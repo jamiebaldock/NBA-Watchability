@@ -1,9 +1,17 @@
 // Soccer's equivalent of gamesService.ts's live-schedule pipeline - kept as
 // a separate file/dispatch target (see types.ts's SPORT_FOR_LEAGUE_GROUP)
 // rather than branching inside gamesService.ts itself, since soccer's ESPN
-// shape, rubric, and season structure (no playoffs, no Play-In, a single
-// round-robin table) don't overlap enough with basketball's to share real
+// shape and rubric don't overlap enough with basketball's to share real
 // logic beyond the generic gameStore setters and the LLM preview call.
+// Domestic leagues (EPL/La Liga) are a flat round-robin table; "fifa-world"
+// (the FIFA World Cup) is a group-stage-then-knockout-bracket tournament
+// instead - that difference doesn't actually matter to this file, since
+// getSoccerGamesForDate just asks ESPN "what's scheduled on date X" and
+// scores whatever comes back, day by day, with no notion of season/bracket
+// structure baked in. It only surfaces in the two places a tournament
+// genuinely differs from a league: the competitionLabel (a named knockout
+// stage like "Semifinals", not a flat "Regular Season") and the stakes
+// prompt (win-or-go-home elimination, not a mid-table fixture).
 //
 // No highlights search yet (no soccer YouTube channel configured). History
 // itself is served from the durable store (historyService.ts) rather than
@@ -12,7 +20,9 @@
 // backfill, so if this file never wrote that label, any soccer game that
 // goes final from today onward would fall back to historyService.ts's
 // plain-season-year label instead of the nicer "EPL - Regular Season" the
-// backfilled rows get.
+// backfilled rows get. ("fifa-world" has no backfill/History route at all -
+// Games-tab-only, James's explicit call given the tournament's ~2-day
+// remaining shelf life when this was added - so this doesn't matter for it.)
 import { toEspnDate } from "./espnClient";
 import {
   GameRow,
@@ -23,31 +33,35 @@ import {
   updateStatus,
   upsertBaseEntry
 } from "./gameStore";
-import { mapSoccerEspnState, mapSoccerEventToGame } from "./soccerGameMapper";
+import { decidedByShootout, mapSoccerEspnState, mapSoccerEventToGame, wentToExtraTime } from "./soccerGameMapper";
 import { fetchSoccerCalendarDates, fetchSoccerScoreboard, fetchSoccerSummary, SoccerLeague } from "./soccerEspnClient";
 import { generateHookAndStakes } from "./llm";
 import { tierForScore } from "./rubric";
 import { computeSoccerWatchabilityScore } from "./soccerRubric";
 import { GameJson } from "./types";
 
-export type SoccerLeagueGroup = "epl" | "la-liga";
+export type SoccerLeagueGroup = "epl" | "la-liga" | "fifa-world";
 
 export const SOCCER_LEAGUE_FOR_GROUP: Record<SoccerLeagueGroup, SoccerLeague> = {
   epl: "eng.1",
-  "la-liga": "esp.1"
+  "la-liga": "esp.1",
+  "fifa-world": "fifa.world"
 };
 
 // Exported for reuse by historyService.ts, which needs the same display
 // name to build a competition label for any backfilled row that predates
 // the season_stage_label column (mirrors gamesService.ts's own fallback
-// path for basketball rows).
+// path for basketball rows). historyService.ts never actually sees a
+// "fifa-world" row today (no backfill for this leagueGroup), but the entry
+// is kept here anyway so this map stays total over SoccerLeagueGroup.
 export const LEAGUE_DISPLAY_NAME: Record<SoccerLeagueGroup, string> = {
   epl: "EPL",
-  "la-liga": "La Liga"
+  "la-liga": "La Liga",
+  "fifa-world": "FIFA World Cup"
 };
 
 export function isSoccerLeagueGroup(leagueGroup: string): leagueGroup is SoccerLeagueGroup {
-  return leagueGroup === "epl" || leagueGroup === "la-liga";
+  return leagueGroup === "epl" || leagueGroup === "la-liga" || leagueGroup === "fifa-world";
 }
 
 // Same 24h-before-tipoff gate as gamesService.ts's basketball pipeline -
@@ -63,14 +77,63 @@ function fallbackHook(away: string, home: string): string {
   return `${away} at ${home}.`;
 }
 
-async function ensureSoccerPregamePreview(row: GameRow, leagueGroup: SoccerLeagueGroup): Promise<void> {
+// ESPN's per-event season.slug for fifa-world - NOT the scoreboard
+// response's top-level leagues[0].season.type.name, which was confirmed
+// directly against real data to lag exactly at the tournament's last two
+// stages (it still reads "Semifinals" on the 3rd-Place Match and Final's
+// own dates). Each event's own slug is accurate for every stage checked
+// (group-stage/round-of-32/round-of-16/quarterfinals/semifinals/
+// 3rd-place-match/final).
+const WORLD_CUP_STAGE_LABEL: Record<string, string> = {
+  "group-stage": "Group Stage",
+  "round-of-32": "Round of 32",
+  "round-of-16": "Round of 16",
+  quarterfinals: "Quarterfinals",
+  semifinals: "Semifinals",
+  "3rd-place-match": "3rd-Place Match",
+  final: "Final"
+};
+
+function worldCupStageLabel(slug: string | undefined): string | undefined {
+  if (!slug) return undefined;
+  return WORLD_CUP_STAGE_LABEL[slug] ?? slug.split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+}
+
+// Only fifa-world has genuinely elimination-or-not stakes worth flagging
+// explicitly - a domestic league fixture's stakes (relegation battle, title
+// race) are already conveyed well enough by team names/form alone, which
+// generateHookAndStakes already sees. A World Cup knockout match is a
+// fundamentally different kind of high-stakes (lose and the tournament is
+// over for you) than a group-stage game where both sides may have already
+// secured/lost advancement - worth telling the LLM apart rather than
+// leaving it to guess from team names alone.
+function tournamentStakesNote(leagueGroup: SoccerLeagueGroup, stageLabel: string | undefined): string | undefined {
+  if (leagueGroup !== "fifa-world" || !stageLabel) return undefined;
+  return stageLabel === "Group Stage"
+    ? "FIFA World Cup group stage - group standing and advancement are on the line"
+    : `FIFA World Cup ${stageLabel} - single-elimination knockout match, loser is out of the tournament`;
+}
+
+// EPL/La Liga's competition label has always been a flat "- Regular
+// Season" suffix (accurate for a round-robin table with no named stages).
+// fifa-world instead uses the per-event stage label - a knockout match
+// tagged "Regular Season" would read as simply wrong, not just
+// uninformative the way it would for a league.
+function competitionLabelFor(leagueGroup: SoccerLeagueGroup, stageLabel: string | undefined): string {
+  const displayName = LEAGUE_DISPLAY_NAME[leagueGroup];
+  if (leagueGroup === "fifa-world") return stageLabel ? `${displayName} - ${stageLabel}` : displayName;
+  return `${displayName} - Regular Season`;
+}
+
+async function ensureSoccerPregamePreview(row: GameRow, leagueGroup: SoccerLeagueGroup, stageLabel?: string): Promise<void> {
   if (row.hook !== null) return; // already generated
   if (!hasReachedPreviewGate(row.tipoffUtc)) return; // not time yet
 
   const { hook, stakes, pitch } = await generateHookAndStakes({
     away: row.away,
     home: row.home,
-    league: LEAGUE_DISPLAY_NAME[leagueGroup]
+    league: LEAGUE_DISPLAY_NAME[leagueGroup],
+    notes: tournamentStakesNote(leagueGroup, stageLabel)
   });
 
   setPreview(row.eventId, hook, pitch, stakes);
@@ -113,7 +176,6 @@ export async function getSoccerGamesForDate(date: string, leagueGroup: SoccerLea
   const league = SOCCER_LEAGUE_FOR_GROUP[leagueGroup];
   const espnDate = toEspnDate(new Date(`${date}T12:00:00Z`));
   const events = await fetchSoccerScoreboard(espnDate, league);
-  const competitionLabel = `${LEAGUE_DISPLAY_NAME[leagueGroup]} - Regular Season`;
 
   const results: GameJson[] = [];
 
@@ -122,6 +184,13 @@ export async function getSoccerGamesForDate(date: string, leagueGroup: SoccerLea
     const away = competition.competitors.find((c) => c.homeAway === "away")!;
     const home = competition.competitors.find((c) => c.homeAway === "home")!;
     const status = mapSoccerEspnState(competition.status.type.state);
+    // Computed per-event, not once per date - a knockout tournament can (and
+    // for the World Cup's 3rd-Place Match/Final, does) have a date whose
+    // real stage differs from the scoreboard's own top-level "current
+    // phase" pointer. Irrelevant for domestic leagues (every event on a
+    // date shares the same flat "Regular Season" label either way).
+    const stageLabel = leagueGroup === "fifa-world" ? worldCupStageLabel(event.season?.slug) : undefined;
+    const competitionLabel = competitionLabelFor(leagueGroup, stageLabel);
 
     upsertBaseEntry({
       eventId: event.id,
@@ -140,7 +209,7 @@ export async function getSoccerGamesForDate(date: string, leagueGroup: SoccerLea
     let row = getGame(event.id)!;
 
     if (status !== "final") {
-      await ensureSoccerPregamePreview(row, leagueGroup);
+      await ensureSoccerPregamePreview(row, leagueGroup, stageLabel);
       row = getGame(event.id)!;
     }
 
@@ -174,7 +243,9 @@ export async function getSoccerGamesForDate(date: string, leagueGroup: SoccerLea
         anyRedCard: mapped.rubricInputs.anyRedCard,
         maxSavesByKeeper: mapped.rubricInputs.maxSavesByKeeper,
         anyFreeKickGoal: mapped.rubricInputs.anyFreeKickGoal,
-        anyPenaltyMissed: mapped.rubricInputs.anyPenaltyMissed
+        anyPenaltyMissed: mapped.rubricInputs.anyPenaltyMissed,
+        wentToExtraTime: mapped.rubricInputs.wentToExtraTime,
+        decidedByShootout: mapped.rubricInputs.decidedByShootout
       });
       row = getGame(event.id)!;
     }
@@ -206,6 +277,8 @@ export async function getSoccerGamesForDate(date: string, leagueGroup: SoccerLea
       sv: row.maxSavesByKeeper ?? undefined,
       fkg: Boolean(row.anyFreeKickGoal),
       pm: Boolean(row.anyPenaltyMissed),
+      et: Boolean(row.wentToExtraTime),
+      pk: Boolean(row.decidedByShootout),
       sk: row.stakes ?? undefined,
       hook: row.hook ?? fallbackHook(row.away, row.home),
       pitch: row.pitch ?? undefined,

@@ -21,7 +21,11 @@ enum class SoccerRubricCategory(val key: Preferences.Key<Float>) {
     RED_CARD(floatPreferencesKey("red_card_weight")),
     SAVES(floatPreferencesKey("saves_weight")),
     FREE_KICK_GOAL(floatPreferencesKey("free_kick_goal_weight")),
-    PENALTY_MISS(floatPreferencesKey("penalty_miss_weight"))
+    PENALTY_MISS(floatPreferencesKey("penalty_miss_weight")),
+    // Knockout-tournament-only (World Cup) - a no-op weight for every
+    // EPL/La Liga game.
+    EXTRA_TIME(floatPreferencesKey("extra_time_weight")),
+    SHOOTOUT(floatPreferencesKey("shootout_weight"))
 }
 
 /** Soccer's sibling to RubricSettingsRepository - a separate DataStore file, not shared keys, so the two sports' weight sets never collide. */
@@ -38,7 +42,9 @@ class SoccerRubricSettingsRepository(private val context: Context) {
             redCard = prefs[SoccerRubricCategory.RED_CARD.key] ?: 1f,
             saves = prefs[SoccerRubricCategory.SAVES.key] ?: 1f,
             freeKickGoal = prefs[SoccerRubricCategory.FREE_KICK_GOAL.key] ?: 1f,
-            penaltyMiss = prefs[SoccerRubricCategory.PENALTY_MISS.key] ?: 1f
+            penaltyMiss = prefs[SoccerRubricCategory.PENALTY_MISS.key] ?: 1f,
+            extraTime = prefs[SoccerRubricCategory.EXTRA_TIME.key] ?: 1f,
+            shootout = prefs[SoccerRubricCategory.SHOOTOUT.key] ?: 1f
         )
     }
 

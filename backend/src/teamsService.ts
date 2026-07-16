@@ -40,15 +40,16 @@ export async function getTeams(leagueGroup: LeagueGroup): Promise<TeamsResponseJ
   if (cached) return cached;
 
   let teams: TeamJson[];
-  if (isSoccerLeagueGroup(leagueGroup)) {
+  if (isSoccerLeagueGroup(leagueGroup) && leagueGroup !== "fifa-world") {
     teams = await getSoccerTeams(leagueGroup);
   } else if (leagueGroup === "nba" || leagueGroup === "wnba") {
     teams = await getBasketballTeams(leagueGroup);
   } else {
-    // Every other LeagueGroup (NBL, UFC, and the rest of the placeholder
-    // batch) has no real backend route at all yet - an empty list here is
-    // the same "nothing to show, not an error" behavior every other tab
-    // gives these leagues.
+    // Every other LeagueGroup (NBL, UFC, the rest of the placeholder batch,
+    // and "fifa-world" - Games-tab-only by design, James's call) has no
+    // favorite-teams route built for it yet - an empty list here is the
+    // same "nothing to show, not an error" behavior every other tab gives
+    // these leagues.
     teams = [];
   }
 

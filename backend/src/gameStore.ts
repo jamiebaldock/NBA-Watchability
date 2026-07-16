@@ -147,6 +147,12 @@ ensureColumn("games", "any_red_card", "INTEGER");
 ensureColumn("games", "max_saves_by_keeper", "INTEGER");
 ensureColumn("games", "any_free_kick_goal", "INTEGER");
 ensureColumn("games", "any_penalty_missed", "INTEGER");
+// Knockout-tournament-only facts (World Cup) - NULL for every domestic
+// EPL/La Liga row, same "not applicable" convention as the basketball-only
+// columns are for a soccer row. See soccerRubric.ts's extraTimePoints/
+// shootoutPoints for the rubric bonus these back.
+ensureColumn("games", "went_to_extra_time", "INTEGER");
+ensureColumn("games", "decided_by_shootout", "INTEGER");
 
 function now(): string {
   return new Date().toISOString();
@@ -210,6 +216,8 @@ export interface GameRow {
   maxSavesByKeeper: number | null;
   anyFreeKickGoal: number | null;
   anyPenaltyMissed: number | null;
+  wentToExtraTime: number | null;
+  decidedByShootout: number | null;
 }
 
 /** Creates the row if this eventId has never been seen before; a no-op otherwise - never touches an existing row's already-collected fields. */
@@ -296,6 +304,8 @@ interface RawGameRow {
   max_saves_by_keeper: number | null;
   any_free_kick_goal: number | null;
   any_penalty_missed: number | null;
+  went_to_extra_time: number | null;
+  decided_by_shootout: number | null;
 }
 
 function parseStandoutPerformers(raw: string | null): StandoutPerformerJson[] {
@@ -345,6 +355,8 @@ function mapRow(raw: RawGameRow): GameRow {
     maxSavesByKeeper: raw.max_saves_by_keeper,
     anyFreeKickGoal: raw.any_free_kick_goal,
     anyPenaltyMissed: raw.any_penalty_missed,
+    wentToExtraTime: raw.went_to_extra_time,
+    decidedByShootout: raw.decided_by_shootout,
   };
 }
 
@@ -489,6 +501,10 @@ export interface SoccerFinalResult {
   maxSavesByKeeper?: number;
   anyFreeKickGoal?: boolean;
   anyPenaltyMissed?: boolean;
+  // Knockout-tournament-only (World Cup) - undefined for a domestic
+  // EPL/La Liga row, same as the 5 fields above are for basketball.
+  wentToExtraTime?: boolean;
+  decidedByShootout?: boolean;
 }
 
 /**
@@ -512,6 +528,7 @@ export function setSoccerFinalRubric(eventId: string, result: SoccerFinalResult,
        total_goals=@totalGoals, late_decisive_goal=@lateDecisiveGoal, max_goals_by_player=@maxGoalsByPlayer,
        combined_shots_on_target=@combinedShotsOnTarget, any_red_card=@anyRedCard,
        max_saves_by_keeper=@maxSavesByKeeper, any_free_kick_goal=@anyFreeKickGoal, any_penalty_missed=@anyPenaltyMissed,
+       went_to_extra_time=@wentToExtraTime, decided_by_shootout=@decidedByShootout,
        updated_at=@updatedAt
      WHERE event_id=@eventId AND score IS NULL`
   ).run({
@@ -532,6 +549,8 @@ export function setSoccerFinalRubric(eventId: string, result: SoccerFinalResult,
     maxSavesByKeeper: result.maxSavesByKeeper ?? null,
     anyFreeKickGoal: result.anyFreeKickGoal === undefined ? null : result.anyFreeKickGoal ? 1 : 0,
     anyPenaltyMissed: result.anyPenaltyMissed === undefined ? null : result.anyPenaltyMissed ? 1 : 0,
+    wentToExtraTime: result.wentToExtraTime === undefined ? null : result.wentToExtraTime ? 1 : 0,
+    decidedByShootout: result.decidedByShootout === undefined ? null : result.decidedByShootout ? 1 : 0,
     updatedAt: now()
   });
 }
