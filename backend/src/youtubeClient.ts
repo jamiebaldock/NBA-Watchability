@@ -35,7 +35,7 @@ const MAX_HIGHLIGHTS_SECONDS = 20 * 60;
 
 interface YoutubeSearchItem {
   id?: { videoId?: string };
-  snippet?: { title?: string };
+  snippet?: { title?: string; publishedAt?: string };
 }
 
 interface YoutubeSearchResponse {
@@ -54,6 +54,12 @@ interface YoutubeVideosResponse {
 export interface HighlightsMatch {
   videoId: string;
   title: string;
+  // The video's own upload timestamp (search.list's snippet.publishedAt) -
+  // real, independent ground truth for upload lag, unlike yt_found_at
+  // (which only ever reflects when *our own* check schedule happened to
+  // look, not when the video actually went up). See gameStore.ts's
+  // getLagPercentiles for why this matters.
+  publishedAt: string | null;
 }
 
 function getApiKey(): string | undefined {
@@ -199,7 +205,7 @@ export async function searchHighlightsVideo(
       upperTitle.includes(awayNickname.toUpperCase()) &&
       upperTitle.includes(homeNickname.toUpperCase());
 
-    if (isMatch) textMatches.push({ videoId, title });
+    if (isMatch) textMatches.push({ videoId, title, publishedAt: item.snippet?.publishedAt ?? null });
   }
 
   if (textMatches.length === 0) return null;

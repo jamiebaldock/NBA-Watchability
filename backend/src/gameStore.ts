@@ -89,15 +89,23 @@ function ensureColumn(table: string, column: string, definition: string): void {
   }
 }
 
-// final_at/yt_found_at are the two anchors the self-tuning highlights
+// final_at/yt_published_at are the two anchors the self-tuning highlights
 // schedule (below) learns from: the real-world gap between them, for every
 // game a match was ever found for, is what "upload lag" actually means per
-// league - not a guessed constant. yt_check_count runs 0 -> 1 -> 2: the
-// first check fires at the league's learned p50 delay, a second (final)
-// check 30 minutes later if the first missed, then permanently done - not
-// an open-ended retry ladder.
+// league - not a guessed constant. yt_published_at (the matched video's own
+// YouTube upload timestamp, from search.list's snippet.publishedAt) is real
+// ground truth independent of our own check timing - unlike yt_found_at
+// (when *we* happened to look and notice), which is what the lag used to be
+// measured from and turned out to be contaminated by our own scheduling
+// (see getLagPercentiles). yt_found_at is still recorded and still used to
+// pace the (fixed, non-learned) first/second check spacing below, just no
+// longer trusted as a measurement of true upload lag. yt_check_count runs
+// 0 -> 1 -> 2: the first check fires a fixed short delay after the game
+// goes final, a second (final) check 30 minutes later if the first missed,
+// then permanently done - not an open-ended retry ladder.
 ensureColumn("games", "final_at", "TEXT");
 ensureColumn("games", "yt_found_at", "TEXT");
+ensureColumn("games", "yt_published_at", "TEXT");
 ensureColumn("games", "yt_check_count", "INTEGER NOT NULL DEFAULT 0");
 // "{LEAGUE} - {stage}" (e.g. "NBA - Playoffs: Conference Semifinals") from
 // gameMapper.ts's deriveCompetitionLabel - captured once per game (any
@@ -345,23 +353,22 @@ export function setFinalRubric(eventId: string, rubric: FinalRubric, finalAt: st
 }
 
 /**
- * Highlights video found via a real search - set once, permanent. Also
- * records yt_found_at, the raw data point getLagPercentiles learns from.
- * Manual/seeded matches (highlightsSeed.ts) must go through
- * setHighlightsFromSeed instead - a human pasting a known-good link seconds
- * after the game's row is created isn't a real observation of upload lag,
- * and folding it in here would badly skew the learned schedule toward
- * "videos appear almost instantly," causing genuine future searches to
- * check too early and waste quota.
+ * Highlights video found via a real search - set once, permanent. Records
+ * yt_found_at (when *we* noticed - still used to pace check spacing) and
+ * yt_published_at (the video's own real upload timestamp, real ground
+ * truth - what getLagPercentiles now actually learns from). Manual/seeded
+ * matches (highlightsSeed.ts) must go through setHighlightsFromSeed instead
+ * - a human pasting a known-good link seconds after the game's row is
+ * created isn't a real observation of upload lag, and folding it in here
+ * would badly skew the learned schedule toward "videos appear almost
+ * instantly," causing genuine future searches to check too early and waste
+ * quota.
  */
-export function setHighlights(eventId: string, videoId: string): void {
+export function setHighlights(eventId: string, videoId: string, publishedAt: string | null): void {
   const ts = now();
-  db.prepare(`UPDATE games SET yt_video_id=?, yt_found_at=?, updated_at=? WHERE event_id=? AND yt_video_id IS NULL`).run(
-    videoId,
-    ts,
-    ts,
-    eventId
-  );
+  db.prepare(
+    `UPDATE games SET yt_video_id=?, yt_found_at=?, yt_published_at=?, updated_at=? WHERE event_id=? AND yt_video_id IS NULL`
+  ).run(videoId, ts, publishedAt, ts, eventId);
 }
 
 /** Manually-confirmed video (highlightsSeed.ts) - sets yt_video_id only, deliberately not yt_found_at (see setHighlights). */
@@ -401,28 +408,58 @@ export interface LagPercentiles {
 const DEFAULT_P50_MS = 45 * 60 * 1000;
 const MIN_LAG_SAMPLES = 5;
 
+// Sanity bounds on (final_at - tipoff_utc): a real game's whistle-to-whistle
+// length rarely exceeds ~3 hours even with overtime, and final_at should
+// land at or shortly after that (our own detection can lag the real buzzer
+// somewhat, since it's demand-driven - see setFinalRubric). A gap outside
+// this window means final_at almost certainly isn't a real per-game
+// timestamp at all - it's a batch/redeploy artifact (a wide date-range
+// fetch, a store migration, etc. touching a long-since-finished game for
+// the first time and stamping "final now"). Confirmed directly this
+// session: the WNBA full-season calendar-picker deploy and the SQLite
+// store migration each produced dozens of games with final_at stamped
+// within the same single minute, spanning real games from days to weeks
+// apart - exactly the pattern this guard exists to exclude. A sample
+// failing this check says nothing trustworthy about upload lag and must
+// never enter the learned schedule.
+const MIN_PLAUSIBLE_FINAL_GAP_MS = 60 * 60 * 1000; // 1h - shorter than any real game
+const MAX_PLAUSIBLE_FINAL_GAP_MS = 6 * 60 * 60 * 1000; // 6h - generous margin for detection lag
+
 function percentileOf(sortedMs: number[], p: number): number {
   const idx = Math.min(sortedMs.length - 1, Math.floor(p * sortedMs.length));
   return sortedMs[idx];
 }
 
+// Anchored to yt_published_at (the matched video's own real YouTube upload
+// timestamp), not yt_found_at (when our own check schedule happened to
+// look) - see the yt_published_at column comment above for why the latter
+// was found to be untrustworthy. Also requires final_at to pass the
+// plausibility guard above before a row counts as a sample at all.
 function observedLagsMs(whereClause: string, param: string): number[] {
   const rows = db
-    .prepare(`SELECT final_at, yt_found_at FROM games WHERE ${whereClause} AND final_at IS NOT NULL AND yt_found_at IS NOT NULL`)
-    .all(param) as { final_at: string; yt_found_at: string }[];
-  return rows.map((r) => new Date(r.yt_found_at).getTime() - new Date(r.final_at).getTime()).sort((a, b) => a - b);
+    .prepare(
+      `SELECT tipoff_utc, final_at, yt_published_at FROM games
+       WHERE ${whereClause} AND final_at IS NOT NULL AND yt_published_at IS NOT NULL`
+    )
+    .all(param) as { tipoff_utc: string; final_at: string; yt_published_at: string }[];
+  return rows
+    .filter((r) => {
+      const finalGapMs = new Date(r.final_at).getTime() - new Date(r.tipoff_utc).getTime();
+      return finalGapMs >= MIN_PLAUSIBLE_FINAL_GAP_MS && finalGapMs <= MAX_PLAUSIBLE_FINAL_GAP_MS;
+    })
+    .map((r) => new Date(r.yt_published_at).getTime() - new Date(r.final_at).getTime())
+    .sort((a, b) => a - b);
 }
 
 /**
  * Real, learned median upload lag for [league], falling back to
  * [leagueGroup]-wide data if that specific league doesn't have enough
- * samples yet, and to a hardcoded default if neither does. This is what
- * lets the single highlights check land around each league's actual
- * observed delay instead of a guessed constant applied everywhere - and
- * scale to new leagues for free, since each one just starts on the default
- * and learns its own profile as it accumulates real matches. Only p50 is
- * tracked - the check is single-shot (isDueForHighlightsCheck), so there's
- * no retry ladder left to pace with p75/p90.
+ * samples yet, and to a hardcoded default if neither does. Informational
+ * only as of the fixed-delay rewrite (gamesService.ts's
+ * YT_FIRST_CHECK_DELAY_MS) - no longer gates when the first check fires,
+ * since doing so was found to be self-reinforcing (a check that never
+ * looks before its own current estimate can never learn a shorter one).
+ * Kept for observability/reporting on real upload behavior per league.
  */
 export function getLagPercentiles(league: string, leagueGroup: string): LagPercentiles {
   let lags = observedLagsMs("league = ?", league);
@@ -460,8 +497,7 @@ const RECENT_GAMES_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
  * filter/decide scheduling in JS (matching the rest of the codebase's
  * style) rather than encode retry-interval math in SQL date functions. The
  * caller (gamesService.ts's isDueForHighlightsCheck) decides whether each
- * row is actually due for a check, against getLagPercentiles' learned
- * per-league schedule.
+ * row is actually due for its (fixed-delay) first or second check.
  */
 export function getFinalGamesMissingHighlights(): GameRow[] {
   const cutoffTime = Date.now() - RECENT_GAMES_WINDOW_MS;

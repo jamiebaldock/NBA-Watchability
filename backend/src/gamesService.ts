@@ -6,7 +6,6 @@ import {
   canSpendSearchQuota,
   getFinalGamesMissingHighlights,
   getGame,
-  getLagPercentiles,
   markHighlightsChecked,
   recordSearchQuotaSpend,
   setFinalRubric,
@@ -100,6 +99,18 @@ async function ensurePregamePreview(row: GameRow, league: League, event: EspnEve
 // same moment.
 const YT_MIN_CHECK_SPACING_MS = 5 * 60 * 1000;
 
+// Gap before the first check, counted from final_at/tipoff. Deliberately a
+// short fixed constant, not the league's learned p50 - gating check 0
+// behind a *learned* delay was tried and reverted: since the system never
+// looks before its own current p50 estimate, it can mechanically never
+// discover a shorter true delay than whatever it already believes (any
+// match found by check 0 is found at-or-after p50 by construction, which
+// only ever reinforces or raises the estimate, never lowers it). A fixed,
+// modest floor breaks that circularity - it costs an occasional wasted
+// search on a near-certain miss, but that's the price of being able to
+// observe reality instead of just confirming a prior belief.
+const YT_FIRST_CHECK_DELAY_MS = 15 * 60 * 1000;
+
 // Gap before the second (and final) attempt, counted from the first
 // check's own timestamp - not from the league's learned delay, since the
 // first check may itself have fired late (30-min poller granularity).
@@ -115,17 +126,16 @@ let loggedMissingApiKey = false;
 
 /**
  * Whether [row] is due for its next (first or second) highlights check.
- * Check 0 waits until the league's learned p50 upload lag has passed since
- * the game went final. If that misses, check 1 fires a flat 30 minutes
- * later - late enough that a video posted just after the first look has a
- * real chance of being up, without turning into an open-ended retry
- * schedule. After 2 checks, permanently stops regardless of outcome.
- * Historical/backfill games never reach this at all (gameStore's
- * recent-only scope). A league with no history yet uses a sane bootstrap
- * default and gradually switches over to its own real p50 as matches get
- * found (see gameStore.ts's getLagPercentiles) - a match found on the
- * second attempt still feeds that learning (gameStore.setHighlights records
- * yt_found_at regardless of which attempt found it).
+ * Check 0 waits a short fixed delay (YT_FIRST_CHECK_DELAY_MS) since the game
+ * went final - not the league's learned p50 (see that constant's comment
+ * for why). If that misses, check 1 fires a flat 30 minutes later - late
+ * enough that a video posted just after the first look has a real chance of
+ * being up, without turning into an open-ended retry schedule. After 2
+ * checks, permanently stops regardless of outcome. Historical/backfill
+ * games never reach this at all (gameStore's recent-only scope). A match
+ * found on either attempt feeds gameStore's learned-lag tracking via its
+ * own yt_published_at (the video's real upload time), not via when this
+ * check happened to fire.
  */
 function isDueForHighlightsCheck(row: GameRow, now: number): boolean {
   if (row.ytVideoId) return false;
@@ -135,8 +145,7 @@ function isDueForHighlightsCheck(row: GameRow, now: number): boolean {
   if (row.ytCheckCount === 0) {
     const anchor = row.finalAt ?? row.tipoffUtc;
     const sinceFinalMs = now - new Date(anchor).getTime();
-    const { p50Ms } = getLagPercentiles(row.league, row.leagueGroup);
-    return sinceFinalMs >= p50Ms;
+    return sinceFinalMs >= YT_FIRST_CHECK_DELAY_MS;
   }
 
   // Second attempt: row.ytLastCheckedAt is always set once ytCheckCount > 0
@@ -167,7 +176,7 @@ async function checkGameHighlights(row: GameRow): Promise<void> {
   const match = await searchHighlightsVideo(highlightsLeague, row.away, row.home, row.tipoffUtc);
   markHighlightsChecked(row.eventId, new Date().toISOString());
   if (match) {
-    setHighlights(row.eventId, match.videoId);
+    setHighlights(row.eventId, match.videoId, match.publishedAt);
     console.log(`checkGameHighlights: matched "${match.title}" (${match.videoId})`);
   } else {
     console.log(`checkGameHighlights: no match for ${row.away} @ ${row.home} (${row.eventId})`);
