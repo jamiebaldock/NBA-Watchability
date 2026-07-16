@@ -584,6 +584,15 @@ export function seasonLabelForTipoff(
   return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
 }
 
+// The nominal start date a seasonLabelForTipoff-style label itself begins
+// on - the inverse of that function's own math (WNBA: Jan 1 of the label's
+// year; NBA: Oct 1 of the label's start year).
+function seasonStartDateForLabel(label: string, leagueGroup: LeagueGroup): string {
+  if (leagueGroup === "wnba") return `${label}-01-01T00:00:00.000Z`;
+  const startYear = label.slice(0, 4);
+  return `${startYear}-10-01T00:00:00.000Z`;
+}
+
 /**
  * Distinct season labels present in the backfill/live data for
  * [leagueGroup], newest first - backs the History tab's per-season filter
@@ -593,14 +602,43 @@ export function seasonLabelForTipoff(
  * preseason games are deliberately excluded, since those belong to the
  * "This season" (current in-progress period) bucket the client computes
  * separately, not to a named season block.
+ *
+ * The newest label is dropped entirely when it'd be redundant with "This
+ * season": that only happens when the label represents a season that
+ * genuinely started *after* the most recent Finals (i.e. real games for it
+ * already exist) AND nothing real happened in the gap between Finals-end
+ * and that season's own nominal start - e.g. WNBA's Finals conclude in
+ * October, the next WNBA season doesn't have real games until the
+ * following May, so right now "This season" (Finals+1 onward) and the
+ * newest named year both cover the exact same games. This is a live check
+ * against real data, not a hardcoded per-league rule, so it stops applying
+ * on its own the moment something real (a Commissioner's Cup final,
+ * preseason, etc.) actually lands in that gap - and it never triggers for
+ * NBA today, since NBA's newest label ("2025-26") started *before* its own
+ * Finals ended, not after.
  */
 export function getSeasonLabels(leagueGroup: LeagueGroup): string[] {
   const rows = db.prepare(`SELECT tipoff_utc FROM games WHERE league = ?`).all(leagueGroup) as {
     tipoff_utc: string;
   }[];
   const finalsEnd = getMostRecentFinalsEnd(leagueGroup);
-  const labels = new Set(rows.map((r) => seasonLabelForTipoff(r.tipoff_utc, leagueGroup, finalsEnd)));
-  return Array.from(labels).sort().reverse();
+  const labels = Array.from(new Set(rows.map((r) => seasonLabelForTipoff(r.tipoff_utc, leagueGroup, finalsEnd))))
+    .sort()
+    .reverse();
+
+  if (labels.length > 0 && finalsEnd) {
+    const newestStartTime = new Date(seasonStartDateForLabel(labels[0], leagueGroup)).getTime();
+    const finalsEndTime = new Date(finalsEnd).getTime();
+    if (newestStartTime > finalsEndTime) {
+      const hasRealGapGames = rows.some((r) => {
+        const t = new Date(r.tipoff_utc).getTime();
+        return t > finalsEndTime && t < newestStartTime;
+      });
+      if (!hasRealGapGames) labels.shift();
+    }
+  }
+
+  return labels;
 }
 
 // Conservative margin under YouTube's real 100/day search.list cap - not a
