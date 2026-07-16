@@ -88,6 +88,26 @@ export async function fetchSoccerSummary(eventId: string, league: SoccerLeague):
   return getJson<EspnSoccerSummary>(`${basePath(league)}/summary?event=${eventId}`);
 }
 
+/**
+ * Wide date-range scoreboard query - backfill-only (the live schedule path
+ * only ever wants a single day, via fetchSoccerScoreboard above). Confirmed
+ * directly against ESPN: unlike a single-day query, a multi-month range
+ * needs an explicit &limit or it silently truncates to 100 events well
+ * short of a full ~380-match season; limit=500 comfortably covers one
+ * season for either eng.1 or esp.1 in a single request.
+ */
+export async function fetchSoccerScoreboardRange(
+  startYyyymmdd: string,
+  endYyyymmdd: string,
+  league: SoccerLeague,
+  limit = 500
+): Promise<EspnSoccerEvent[]> {
+  const data = await getJson<{ events?: EspnSoccerEvent[] }>(
+    `${basePath(league)}/scoreboard?dates=${startYyyymmdd}-${endYyyymmdd}&limit=${limit}`
+  );
+  return data.events ?? [];
+}
+
 /** Mirrors espnClient.ts's fetchCalendarDates - backs the season-window/calendar-picker derivation for soccer groups. */
 export async function fetchSoccerCalendarDates(dateYyyymmdd: string, league: SoccerLeague): Promise<string[]> {
   const data = await getJson<{ leagues?: Array<{ calendar?: string[] }> }>(

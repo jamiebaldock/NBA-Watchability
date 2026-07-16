@@ -1,5 +1,5 @@
 import { dateStringsBetween } from "./dateRange";
-import { earliestGameDate, getMostRecentFinalsEnd } from "./gameStore";
+import { currentSoccerSeasonStartDate, earliestGameDate, getMostRecentFinalsEnd } from "./gameStore";
 import { getGamesForDate, getNextScheduledDate } from "./gamesService";
 import { getHistory, HistoryResult } from "./historyService";
 import { getNews } from "./newsService";
@@ -90,9 +90,18 @@ export interface CurrentSeasonStartResult {
  * part of the season that already ended). Falls back to Jan 1 of the
  * current year if no Finals game is on record yet - shouldn't happen
  * against a populated store, but degrades gracefully rather than erroring.
+ *
+ * Soccer has no Finals/playoff stage at all, so this whole Finals-anchored
+ * rule doesn't apply - dispatched to currentSoccerSeasonStartDate's own
+ * Aug-1 convention before any of it runs, rather than falling through to
+ * the Jan-1 fallback (which would be wrong for a sport whose season
+ * genuinely crosses a calendar-year boundary starting mid-year).
  */
 export function getCurrentSeasonStartForLeagueGroup(leagueGroupRaw = "nba"): CurrentSeasonStartResult {
   const leagueGroup = parseLeagueGroup(leagueGroupRaw);
+  if (isSoccerLeagueGroup(leagueGroup)) {
+    return { date: currentSoccerSeasonStartDate(leagueGroup) };
+  }
   const finalsEnd = getMostRecentFinalsEnd(leagueGroup);
   if (!finalsEnd) {
     return { date: `${new Date().getUTCFullYear()}-01-01` };

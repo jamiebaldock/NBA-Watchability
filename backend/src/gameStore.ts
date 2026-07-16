@@ -641,6 +641,61 @@ function upcomingSeasonLabel(finalsEndTipoff: string, leagueGroup: LeagueGroup):
   return `${finalsYear}-${String((finalsYear + 1) % 100).padStart(2, "0")}`;
 }
 
+// Soccer has no Finals/playoff stage to anchor a season boundary on (a
+// domestic league season just ends when the last matchday is played, no
+// separate bracket) - so unlike basketball's Finals-based rule below, this
+// is a plain calendar-month cutoff, good enough since neither league's real
+// fixtures ever land in the Jun-Jul off-season gap this straddles. Both
+// eng.1 and esp.1 share the same Aug-May convention (confirmed against real
+// ESPN data - e.g. esp.1's own season.slug reads "2024-25-laliga" for an
+// August 2024 kickoff), so one function covers both leagueGroups.
+const SOCCER_SEASON_START_MONTH = 7; // August, 0-indexed
+
+function soccerSeasonStartYear(date: Date): number {
+  const year = date.getUTCFullYear();
+  return date.getUTCMonth() >= SOCCER_SEASON_START_MONTH ? year : year - 1;
+}
+
+function soccerSeasonLabelForTipoff(tipoffUtc: string): string {
+  const startYear = soccerSeasonStartYear(new Date(tipoffUtc));
+  return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+}
+
+/**
+ * The latest already-final match on record for [leagueGroup] - soccer's
+ * analogue of getMostRecentFinalsEnd. A domestic league has no Finals/
+ * playoff stage, but its literal last matchday plays the exact same role:
+ * the real-world marker of "the previous season is over."
+ */
+function getMostRecentSoccerGameEnd(leagueGroup: LeagueGroup): string | undefined {
+  const row = db.prepare(`SELECT MAX(tipoff_utc) as end FROM games WHERE league_group = ? AND score IS NOT NULL`).get(
+    leagueGroup
+  ) as { end: string | null };
+  return row.end ?? undefined;
+}
+
+/**
+ * The day after the most recently completed match - soccer's equivalent of
+ * getMostRecentFinalsEnd-anchored "This season", backing /current-season-start
+ * for EPL/La Liga. Deliberately NOT "Aug 1 of soccerSeasonStartYear(now)" -
+ * that plain calendar rule is correct for labeling a single game's own
+ * season (soccerSeasonLabelForTipoff above), but wrong here: during the
+ * Jun-Jul off-season gap, it would point "This season" backward at the
+ * season that just finished (re-showing months of already-seen games)
+ * instead of forward at the empty gap before the next one kicks off - the
+ * same distinction basketball's Finals-anchored rule exists to make for
+ * Summer League/preseason. Falls back to a plain Aug-1 guess only if the
+ * store has no final soccer game for this leagueGroup yet (shouldn't
+ * happen against a populated store).
+ */
+export function currentSoccerSeasonStartDate(leagueGroup: LeagueGroup, now: Date = new Date()): string {
+  const lastGameEnd = getMostRecentSoccerGameEnd(leagueGroup);
+  if (!lastGameEnd) return `${soccerSeasonStartYear(now)}-08-01`;
+  const dayAfter = new Date(lastGameEnd);
+  dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+  return dayAfter.toISOString().slice(0, 10);
+}
+
 // NBA's "ends in" convention (a season runs Oct 1 - Sep 30, labeled by its
 // start year - e.g. a 2024-10-22 tipoff and a 2025-04-15 tipoff both label
 // "2024-25") doesn't apply to WNBA, which never spans a year boundary - a
@@ -654,12 +709,15 @@ function upcomingSeasonLabel(finalsEndTipoff: string, leagueGroup: LeagueGroup):
 // label instead of the one that just ended). [finalsEnd] can be passed in
 // by callers that already know it (e.g. looping over many rows) to avoid
 // re-querying it on every call; callers that don't have it yet get a
-// fresh lookup.
+// fresh lookup. Soccer leagueGroups are dispatched to their own
+// Finals-free convention above before any of this basketball-specific
+// logic runs.
 export function seasonLabelForTipoff(
   tipoffUtc: string,
   leagueGroup: LeagueGroup,
   finalsEnd: string | undefined = getMostRecentFinalsEnd(leagueGroup)
 ): string {
+  if (SPORT_FOR_LEAGUE_GROUP[leagueGroup] === "soccer") return soccerSeasonLabelForTipoff(tipoffUtc);
   if (finalsEnd && tipoffUtc > finalsEnd) {
     return upcomingSeasonLabel(finalsEnd, leagueGroup);
   }
@@ -672,10 +730,12 @@ export function seasonLabelForTipoff(
 
 // The nominal start date a seasonLabelForTipoff-style label itself begins
 // on - the inverse of that function's own math (WNBA: Jan 1 of the label's
-// year; NBA: Oct 1 of the label's start year).
+// year; NBA: Oct 1 of the label's start year; soccer: Aug 1 of the label's
+// start year, no Finals-boundary concept to worry about).
 function seasonStartDateForLabel(label: string, leagueGroup: LeagueGroup): string {
   if (leagueGroup === "wnba") return `${label}-01-01T00:00:00.000Z`;
   const startYear = label.slice(0, 4);
+  if (SPORT_FOR_LEAGUE_GROUP[leagueGroup] === "soccer") return `${startYear}-08-01T00:00:00.000Z`;
   return `${startYear}-10-01T00:00:00.000Z`;
 }
 
@@ -683,11 +743,14 @@ function seasonStartDateForLabel(label: string, leagueGroup: LeagueGroup): strin
  * Distinct season labels present in the backfill/live data for
  * [leagueGroup], newest first - backs the History tab's per-season filter
  * chips, so a newly-backfilled season shows up automatically with no code
- * change. Only real season/playoff games count toward a season label
- * (league='nba' or 'wnba', matching [leagueGroup]) - NBA Summer League and
- * preseason games are deliberately excluded, since those belong to the
- * "This season" (current in-progress period) bucket the client computes
- * separately, not to a named season block.
+ * change. Scoped by league_group (not the narrower "league" column, which
+ * for NBA holds "nba"/"nba-summer-las-vegas"/etc separately, and for soccer
+ * holds "eng.1"/"esp.1" rather than the leagueGroup string itself) - NBA
+ * Summer League rows are additionally excluded by league name, since those
+ * belong to the "This season" (current in-progress period) bucket the
+ * client computes separately, not to a named season block. No equivalent
+ * exclusion exists (or is needed) for soccer - eng.1/esp.1 never mix in a
+ * non-season competition under the same league_group.
  *
  * The newest label is dropped entirely when it'd be redundant with "This
  * season": that only happens when the label represents a season that
@@ -704,7 +767,9 @@ function seasonStartDateForLabel(label: string, leagueGroup: LeagueGroup): strin
  * Finals ended, not after.
  */
 export function getSeasonLabels(leagueGroup: LeagueGroup): string[] {
-  const rows = db.prepare(`SELECT tipoff_utc FROM games WHERE league = ?`).all(leagueGroup) as {
+  const rows = db
+    .prepare(`SELECT tipoff_utc FROM games WHERE league_group = ? AND league NOT LIKE 'nba-summer-%'`)
+    .all(leagueGroup) as {
     tipoff_utc: string;
   }[];
   const finalsEnd = getMostRecentFinalsEnd(leagueGroup);
@@ -712,7 +777,26 @@ export function getSeasonLabels(leagueGroup: LeagueGroup): string[] {
     .sort()
     .reverse();
 
-  if (labels.length > 0 && finalsEnd) {
+  if (labels.length === 0) return labels;
+
+  // Soccer has no Finals to anchor the same dedup rule on, but its version
+  // is actually simpler: there's no "gap" to check for real games in at
+  // all, since a soccer leagueGroup's "This season" is just [Aug 1, today].
+  // The newest label is redundant with that exactly when its own nominal
+  // start hasn't arrived yet - e.g. right now, both eng.1 and esp.1 only
+  // have a couple of real-but-still-upcoming 2026-27 fixtures on record
+  // (touched while verifying the Games tab), which would otherwise leak in
+  // as a selectable-but-permanently-empty "2026-27" chip alongside "This
+  // season". Once that season's nominal start date actually arrives, this
+  // stops dropping it on its own - no different from how NBA's equivalent
+  // check already stops firing once real games land in its own gap.
+  if (SPORT_FOR_LEAGUE_GROUP[leagueGroup] === "soccer") {
+    const newestStartTime = new Date(seasonStartDateForLabel(labels[0], leagueGroup)).getTime();
+    if (newestStartTime > Date.now()) labels.shift();
+    return labels;
+  }
+
+  if (finalsEnd) {
     const newestStartTime = new Date(seasonStartDateForLabel(labels[0], leagueGroup)).getTime();
     const finalsEndTime = new Date(finalsEnd).getTime();
     if (newestStartTime > finalsEndTime) {

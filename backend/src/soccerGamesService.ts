@@ -5,14 +5,20 @@
 // round-robin table) don't overlap enough with basketball's to share real
 // logic beyond the generic gameStore setters and the LLM preview call.
 //
-// Games/Starred-tab equivalent only for now - no highlights search (no
-// soccer YouTube channel configured), and History is deliberately out of
-// scope (product decision - EPL/La Liga get a working Games tab first).
+// No highlights search yet (no soccer YouTube channel configured). History
+// itself is served from the durable store (historyService.ts) rather than
+// this file, but every row still needs its season_stage_label persisted
+// here - a live game reaches "final" through this pipeline, not the
+// backfill, so if this file never wrote that label, any soccer game that
+// goes final from today onward would fall back to historyService.ts's
+// plain-season-year label instead of the nicer "EPL - Regular Season" the
+// backfilled rows get.
 import { toEspnDate } from "./espnClient";
 import {
   GameRow,
   getGame,
   setPreview,
+  setSeasonStageLabel,
   setSoccerFinalRubric,
   updateStatus,
   upsertBaseEntry
@@ -31,7 +37,11 @@ export const SOCCER_LEAGUE_FOR_GROUP: Record<SoccerLeagueGroup, SoccerLeague> = 
   "la-liga": "esp.1"
 };
 
-const LEAGUE_DISPLAY_NAME: Record<SoccerLeagueGroup, string> = {
+// Exported for reuse by historyService.ts, which needs the same display
+// name to build a competition label for any backfilled row that predates
+// the season_stage_label column (mirrors gamesService.ts's own fallback
+// path for basketball rows).
+export const LEAGUE_DISPLAY_NAME: Record<SoccerLeagueGroup, string> = {
   epl: "EPL",
   "la-liga": "La Liga"
 };
@@ -123,6 +133,7 @@ export async function getSoccerGamesForDate(date: string, leagueGroup: SoccerLea
       status
     });
     updateStatus(event.id, status);
+    setSeasonStageLabel(event.id, competitionLabel);
 
     let row = getGame(event.id)!;
 
