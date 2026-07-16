@@ -88,6 +88,28 @@ export async function fetchSoccerSummary(eventId: string, league: SoccerLeague):
   return getJson<EspnSoccerSummary>(`${basePath(league)}/summary?event=${eventId}`);
 }
 
+// The teams-list endpoint's own team shape carries a `logos` array (each
+// entry tagged "default"/"dark"/etc.) rather than the single `logo` string
+// field EspnSoccerTeam models (that shape matches the scoreboard/summary
+// endpoints used everywhere else in this file, not this one) - kept as its
+// own local type rather than widening EspnSoccerTeam for every other caller.
+interface EspnSoccerTeamListEntry {
+  displayName: string;
+  logos?: Array<{ href: string; rel: string[] }>;
+}
+
+/** The full real club list for [league] (20 for eng.1/esp.1) - backs the favorite-teams search/browse screen, same reasoning as espnClient.ts's fetchTeams. */
+export async function fetchSoccerTeams(league: SoccerLeague): Promise<Array<{ displayName: string; logo?: string }>> {
+  const data = await getJson<{ sports: Array<{ leagues: Array<{ teams: Array<{ team: EspnSoccerTeamListEntry }> }> }> }>(
+    `${basePath(league)}/teams?limit=100`
+  );
+  const teams = data.sports?.[0]?.leagues?.[0]?.teams ?? [];
+  return teams.map((t) => ({
+    displayName: t.team.displayName,
+    logo: t.team.logos?.find((l) => l.rel.includes("default"))?.href ?? t.team.logos?.[0]?.href
+  }));
+}
+
 /**
  * Wide date-range scoreboard query - backfill-only (the live schedule path
  * only ever wants a single day, via fetchSoccerScoreboard above). Confirmed

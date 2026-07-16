@@ -7,7 +7,8 @@ import { getSeasonWindow, SeasonWindow } from "./seasonWindowService";
 import { getNextSoccerScheduledDate, getSoccerGamesForDate, isSoccerLeagueGroup } from "./soccerGamesService";
 import { getStandings } from "./standingsService";
 import { getStats } from "./statsService";
-import { GameJson, LeagueGroup, NewsResponseJson, StandingsResponseJson, StatsResponseJson } from "./types";
+import { getTeams } from "./teamsService";
+import { GameJson, LeagueGroup, NewsResponseJson, StandingsResponseJson, StatsResponseJson, TeamsResponseJson } from "./types";
 
 export interface DaySchedule {
   date: string;
@@ -121,6 +122,10 @@ export async function getStatsForLeagueGroup(leagueGroupRaw = "nba"): Promise<St
 
 export async function getNewsForLeagueGroup(leagueGroupRaw = "nba"): Promise<NewsResponseJson> {
   return getNews(parseLeagueGroup(leagueGroupRaw));
+}
+
+export async function getTeamsForLeagueGroup(leagueGroupRaw = "nba"): Promise<TeamsResponseJson> {
+  return getTeams(parseLeagueGroup(leagueGroupRaw));
 }
 
 /**

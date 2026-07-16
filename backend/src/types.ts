@@ -121,6 +121,18 @@ export interface NewsResponseJson {
   articles: NewsArticleJson[];
 }
 
+// Backs the favorite-teams search/browse screen - the real per-league team
+// roster (name + logo), not anything derivable from game data alone (a
+// schedule only ever carries whichever two teams happened to play).
+export interface TeamJson {
+  name: string;
+  logo?: string;
+}
+
+export interface TeamsResponseJson {
+  teams: TeamJson[];
+}
+
 // Raw rubric inputs derived from play-by-play + box score, before the LLM
 // fields (hook/stakes) and before the score_visible gating rule are applied.
 export interface RubricInputs {

@@ -118,6 +118,14 @@ export async function fetchSummary(eventId: string, league: League): Promise<Esp
   return getJson<EspnSummary>(`${basePath(league)}/summary?event=${eventId}`);
 }
 
+/** The full real team roster for [league] (30 for NBA, etc.) - backs the favorite-teams search/browse screen, which has no other source for "every team's real name" (game data only ever carries whichever two teams happened to play). */
+export async function fetchTeams(league: League): Promise<EspnTeam[]> {
+  const data = await getJson<{ sports: Array<{ leagues: Array<{ teams: Array<{ team: EspnTeam }> }> }> }>(
+    `${basePath(league)}/teams?limit=100`
+  );
+  return (data.sports?.[0]?.leagues?.[0]?.teams ?? []).map((t) => t.team);
+}
+
 /**
  * Every date [league] has at least one scheduled game, for whichever season
  * ESPN currently considers "current" as of [dateYyyymmdd] (a season already

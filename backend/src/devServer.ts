@@ -10,6 +10,7 @@ import {
   getSeasonWindowForLeagueGroup,
   getStandingsForLeagueGroup,
   getStatsForLeagueGroup,
+  getTeamsForLeagueGroup,
 } from "./httpHandler";
 import { startHighlightsPoller } from "./highlightsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
@@ -130,6 +131,20 @@ app.get("/news", async (req, res) => {
   try {
     const leagueGroup = String(req.query.leagueGroup ?? "nba");
     res.json(await getNewsForLeagueGroup(leagueGroup));
+  } catch (err) {
+    if (err instanceof BadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
+});
+
+app.get("/teams", async (req, res) => {
+  try {
+    const leagueGroup = String(req.query.leagueGroup ?? "nba");
+    res.json(await getTeamsForLeagueGroup(leagueGroup));
   } catch (err) {
     if (err instanceof BadRequestError) {
       res.status(400).json({ error: err.message });
