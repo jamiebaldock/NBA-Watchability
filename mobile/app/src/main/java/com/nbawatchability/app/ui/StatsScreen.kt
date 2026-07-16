@@ -42,6 +42,7 @@ import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
+import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 
 // No Scaffold/TopAppBar of its own - this is one page of the merged
 // Leaders tab (LeadersScreen.kt), which provides a single shared app bar
@@ -151,7 +152,7 @@ private fun StatLeaderRow(rank: Int, leader: StatLeader, abbr: String) {
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.width(24.dp)
         )
-        AsyncImage(model = leader.teamLogo, contentDescription = null, modifier = Modifier.size(24.dp))
+        AsyncImage(model = themeAwareLogoUrl(leader.teamLogo), contentDescription = null, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(text = leader.name, color = TextPrimary, style = MaterialTheme.typography.bodyMedium)

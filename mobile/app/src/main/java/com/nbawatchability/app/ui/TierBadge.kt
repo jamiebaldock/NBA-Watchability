@@ -18,6 +18,7 @@ import com.nbawatchability.app.ui.theme.TierSkippable
 import com.nbawatchability.app.ui.theme.TierSolid
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 
+@Composable
 fun Tier.color(): Color = when (this) {
     Tier.INSTANT_CLASSIC -> TierInstantClassic
     Tier.WORTH_YOUR_TIME -> TierWorthYourTime

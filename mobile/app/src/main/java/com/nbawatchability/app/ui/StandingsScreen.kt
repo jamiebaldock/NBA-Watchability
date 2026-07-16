@@ -32,6 +32,7 @@ import com.nbawatchability.app.ui.theme.SurfaceCardElevated
 import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
+import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 
 // No Scaffold/TopAppBar of its own - this is one page of the merged
 // Leaders tab (LeadersScreen.kt), which provides a single shared app bar
@@ -133,7 +134,7 @@ private fun StandingsRow(rank: Int, team: StandingsTeam) {
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.width(28.dp)
         )
-        AsyncImage(model = team.logo, contentDescription = null, modifier = Modifier.size(24.dp))
+        AsyncImage(model = themeAwareLogoUrl(team.logo), contentDescription = null, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(text = team.name, color = TextPrimary, style = MaterialTheme.typography.bodyMedium)

@@ -71,6 +71,10 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch { repository.setWifiOnlyHighlights(!settings.wifiOnlyHighlights) }
     }
 
+    fun toggleLightTheme() {
+        viewModelScope.launch { repository.setLightTheme(!settings.lightTheme) }
+    }
+
     /**
      * Flips [league] in the dropdown's visible set. Two safety rules the
      * Settings toggle UI can't enforce on its own: never let the set go

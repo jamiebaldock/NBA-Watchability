@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.ui.theme.TextPrimary
+import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 
 /**
  * A tab's top-bar title: a tappable league logo + name - shared by every
@@ -44,7 +45,7 @@ fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGr
             modifier = Modifier.clickable { expanded = true }
         ) {
             AsyncImage(
-                model = selectedLeague.logoUrl,
+                model = themeAwareLogoUrl(selectedLeague.logoUrl),
                 contentDescription = null,
                 modifier = Modifier.size(28.dp)
             )
@@ -67,7 +68,7 @@ fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGr
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             AsyncImage(
-                                model = league.logoUrl,
+                                model = themeAwareLogoUrl(league.logoUrl),
                                 contentDescription = null,
                                 modifier = Modifier.size(28.dp)
                             )

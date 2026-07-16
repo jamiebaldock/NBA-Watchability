@@ -227,7 +227,9 @@ fun AppRoot() {
                     minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
                     onMinTierFilterChange = { appSettingsViewModel.setMinTierFilter(it.name) },
                     wifiOnlyHighlights = appSettingsViewModel.settings.wifiOnlyHighlights,
-                    onToggleWifiOnlyHighlights = appSettingsViewModel::toggleWifiOnlyHighlights
+                    onToggleWifiOnlyHighlights = appSettingsViewModel::toggleWifiOnlyHighlights,
+                    lightTheme = appSettingsViewModel.settings.lightTheme,
+                    onToggleLightTheme = appSettingsViewModel::toggleLightTheme
                 )
                 BottomNavTab.MY_TEAMS -> MyTeamsScreen(
                     favoriteTeams = favoritesViewModel.favoriteTeams,

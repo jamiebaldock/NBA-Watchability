@@ -28,6 +28,7 @@ private val MIN_TIER_FILTER_ENABLED_KEY = booleanPreferencesKey("min_tier_filter
 // package (Game.kt), so no cross-layer dependency issue here.
 private val MIN_TIER_FILTER_KEY = stringPreferencesKey("min_tier_filter")
 private val WIFI_ONLY_HIGHLIGHTS_KEY = booleanPreferencesKey("wifi_only_highlights")
+private val LIGHT_THEME_KEY = booleanPreferencesKey("light_theme")
 
 // Every league ships enabled by default, including the four not-yet-built
 // placeholders - Settings' "Selected Sports" section is what a user reaches
@@ -59,7 +60,12 @@ data class AppSettings(
     // Default (false) never restricts highlights playback. Turning this on
     // requires an active Wi-Fi connection before HighlightsPlayerScreen
     // starts loading the video, prompting instead if only cellular is available.
-    val wifiOnlyHighlights: Boolean = false
+    val wifiOnlyHighlights: Boolean = false,
+    // Default (false) keeps the app's original always-dark chrome. See
+    // ui/theme/Theme.kt/Color.kt for how this reaches every screen, and
+    // ui/theme/ThemeAwareLogo.kt for why some team/league logos need their
+    // own per-theme URL swap on top of the chrome itself.
+    val lightTheme: Boolean = false
 )
 
 /** Persists the last-selected league, which leagues show in the dropdown, and Games-tab display prefs (numeric score) - on-device only, so they survive an app restart. */
@@ -77,7 +83,8 @@ class AppSettingsRepository(private val context: Context) {
             historyShowScoresByDefault = prefs[HISTORY_SHOW_SCORES_BY_DEFAULT_KEY] ?: false,
             minTierFilterEnabled = prefs[MIN_TIER_FILTER_ENABLED_KEY] ?: false,
             minTierFilter = prefs[MIN_TIER_FILTER_KEY] ?: "SKIPPABLE",
-            wifiOnlyHighlights = prefs[WIFI_ONLY_HIGHLIGHTS_KEY] ?: false
+            wifiOnlyHighlights = prefs[WIFI_ONLY_HIGHLIGHTS_KEY] ?: false,
+            lightTheme = prefs[LIGHT_THEME_KEY] ?: false
         )
     }
 
@@ -119,5 +126,9 @@ class AppSettingsRepository(private val context: Context) {
 
     suspend fun setWifiOnlyHighlights(value: Boolean) {
         context.appSettingsDataStore.edit { it[WIFI_ONLY_HIGHLIGHTS_KEY] = value }
+    }
+
+    suspend fun setLightTheme(value: Boolean) {
+        context.appSettingsDataStore.edit { it[LIGHT_THEME_KEY] = value }
     }
 }

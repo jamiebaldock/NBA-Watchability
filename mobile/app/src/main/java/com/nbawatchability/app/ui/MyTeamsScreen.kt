@@ -35,6 +35,7 @@ import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
+import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 
 /**
  * Shows the user's current favorite teams and players (view/manage - remove
@@ -87,7 +88,7 @@ fun MyTeamsScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (team.logo != null) {
-                                AsyncImage(model = team.logo, contentDescription = null, modifier = Modifier.size(32.dp))
+                                AsyncImage(model = themeAwareLogoUrl(team.logo), contentDescription = null, modifier = Modifier.size(32.dp))
                                 Spacer(modifier = Modifier.width(12.dp))
                             }
                             Text(text = team.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)

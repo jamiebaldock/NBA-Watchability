@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -74,7 +75,9 @@ fun SettingsScreen(
     minTierFilter: Tier,
     onMinTierFilterChange: (Tier) -> Unit,
     wifiOnlyHighlights: Boolean,
-    onToggleWifiOnlyHighlights: () -> Unit
+    onToggleWifiOnlyHighlights: () -> Unit,
+    lightTheme: Boolean,
+    onToggleLightTheme: () -> Unit
 ) {
     Scaffold(
         containerColor = BackgroundBase,
@@ -281,6 +284,27 @@ fun SettingsScreen(
                 Switch(
                     checked = wifiOnlyHighlights,
                     onCheckedChange = { onToggleWifiOnlyHighlights() },
+                    colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime)
+                )
+            }
+
+            HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.LightMode, contentDescription = null, tint = TextSecondary)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(text = "Light theme", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                }
+                Switch(
+                    checked = lightTheme,
+                    onCheckedChange = { onToggleLightTheme() },
                     colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime)
                 )
             }

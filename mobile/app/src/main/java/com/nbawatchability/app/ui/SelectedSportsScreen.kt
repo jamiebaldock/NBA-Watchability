@@ -34,6 +34,7 @@ import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
+import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 
 /**
  * Controls which leagues actually list in every tab's league dropdown
@@ -88,7 +89,7 @@ fun SelectedSportsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        AsyncImage(model = league.logoUrl, contentDescription = null, modifier = Modifier.size(22.dp))
+                        AsyncImage(model = themeAwareLogoUrl(league.logoUrl), contentDescription = null, modifier = Modifier.size(22.dp))
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(text = league.displayName, color = TextPrimary, style = MaterialTheme.typography.bodySmall)
                     }

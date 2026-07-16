@@ -65,6 +65,7 @@ import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierInstantClassic
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
+import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -389,7 +390,7 @@ private fun TeamRow(
     ) {
         if (logoUrl != null) {
             AsyncImage(
-                model = logoUrl,
+                model = themeAwareLogoUrl(logoUrl),
                 contentDescription = null,
                 modifier = Modifier.size(LOGO_SIZE)
             )

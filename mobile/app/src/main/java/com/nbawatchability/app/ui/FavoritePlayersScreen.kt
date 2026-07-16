@@ -55,6 +55,7 @@ import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierInstantClassic
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
+import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 
 // Same 4-league scope as FavoriteTeamsScreen - /roster only has real data
 // wherever /teams does, since both hit the same ESPN teams-list endpoint
@@ -262,7 +263,7 @@ private fun PickableTeamRow(team: Team, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (team.logo != null) {
-            AsyncImage(model = team.logo, contentDescription = null, modifier = Modifier.size(28.dp))
+            AsyncImage(model = themeAwareLogoUrl(team.logo), contentDescription = null, modifier = Modifier.size(28.dp))
             Spacer(modifier = Modifier.width(12.dp))
         }
         Text(text = team.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
