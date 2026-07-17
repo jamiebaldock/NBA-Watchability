@@ -202,7 +202,7 @@ fun FavoritePlayersScreen(
                                         isFavorite = player.name in favoritePlayerNames,
                                         onToggle = {
                                             onToggleFavoritePlayer(
-                                                FavoritePlayer(name = player.name, team = team.name, leagueGroup = selectedLeague.apiValue)
+                                                FavoritePlayer(name = player.name, team = team.name, leagueGroup = selectedLeague.apiValue, headshot = player.headshot)
                                             )
                                         }
                                     )

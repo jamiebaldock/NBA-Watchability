@@ -33,7 +33,10 @@ data class TeamsResponse(
 @Serializable
 data class Player(
     val id: String,
-    val name: String
+    val name: String,
+    // Real ESPN headshot photo URL - only ever present for NBA/WNBA (EPL/La
+    // Liga rosters have no equivalent field, confirmed absent server-side).
+    val headshot: String? = null
 )
 
 @Serializable
@@ -56,5 +59,11 @@ data class FavoritePlayer(
     // FavoritesViewModel's per-league cap check treats a null leagueGroup as
     // its own bucket rather than crashing or silently merging it into a real
     // league's count.
-    val leagueGroup: String? = null
+    val leagueGroup: String? = null,
+    // Snapshotted from Player.headshot at favorite-time, same reasoning as
+    // Team.logo - avoids a network round-trip just to render the Favorites
+    // tab's Players page. Null for EPL/La Liga players, and for anyone
+    // favorited via the standout-performance callout (GameCard.kt), which
+    // has no roster headshot data available at that point.
+    val headshot: String? = null
 )

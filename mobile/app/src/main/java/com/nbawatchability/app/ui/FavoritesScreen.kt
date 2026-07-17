@@ -1,5 +1,6 @@
 package com.nbawatchability.app.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -44,8 +46,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.nbawatchability.app.data.FavoritePlayer
 import com.nbawatchability.app.data.Game
@@ -435,9 +440,13 @@ private fun FavoritePlayersLeagueGroup(leagueLabel: String, players: List<Favori
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column {
-                Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
-                Text(text = player.team, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                PlayerAvatar(name = player.name, headshotUrl = player.headshot)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
+                    Text(text = player.team, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                }
             }
             Icon(
                 imageVector = Icons.Default.Close,
@@ -445,6 +454,31 @@ private fun FavoritePlayersLeagueGroup(leagueLabel: String, players: List<Favori
                 tint = TextMuted,
                 modifier = Modifier.size(22.dp).clickable { onRemoveFavoritePlayer(player) }
             )
+        }
+    }
+}
+
+/**
+ * A real headshot photo when [headshotUrl] is present (NBA/WNBA only); a
+ * tinted initials circle otherwise (EPL/La Liga, or any player favorited
+ * before this field existed) - never a broken-image icon.
+ */
+@Composable
+private fun PlayerAvatar(name: String, headshotUrl: String?) {
+    if (headshotUrl != null) {
+        AsyncImage(
+            model = headshotUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.size(36.dp).clip(CircleShape)
+        )
+    } else {
+        val initials = name.split(" ").mapNotNull { it.firstOrNull()?.uppercase() }.take(2).joinToString("")
+        Box(
+            modifier = Modifier.size(36.dp).clip(CircleShape).background(TierWorthYourTime.copy(alpha = 0.25f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = initials, color = TierWorthYourTime, style = MaterialTheme.typography.labelMedium, fontSize = 13.sp)
         }
     }
 }
