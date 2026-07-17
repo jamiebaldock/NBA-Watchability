@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Tag
@@ -163,6 +165,30 @@ fun HistoryScreen(
     var sortOption by rememberSaveable { mutableStateOf(SortOption.RATING_HIGHEST_FIRST) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
 
+    // Same settledPage/selectedPreset two-way sync as DayTabsScreen's day
+    // pager - settledPage (not currentPage) drives the push-to-caller side
+    // so an in-flight programmatic jump (e.g. tapping a non-adjacent chip)
+    // doesn't re-trigger onPresetSelected for every transient page it
+    // crosses, only the one it actually lands on. Unlike DayTabsScreen (or
+    // Leaders/Favorites' pagers), each preset's games aren't pre-fetched -
+    // History only ever holds one preset's data at a time (a fresh
+    // /api/history call per switch), so every page in this pager renders
+    // the same current [uiState] rather than its own distinct slice; the
+    // pager here is purely the swipe-gesture/tab-sync layer over that
+    // existing single-fetch-per-preset flow, not a new prefetch-everything
+    // mechanism.
+    val pagerState = rememberPagerState(initialPage = presets.indexOf(selectedPreset).coerceAtLeast(0)) { presets.size }
+    LaunchedEffect(pagerState.settledPage, presets) {
+        val target = presets.getOrNull(pagerState.settledPage)
+        if (target != null && target != selectedPreset) onPresetSelected(target)
+    }
+    LaunchedEffect(selectedPreset, presets) {
+        val targetIndex = presets.indexOf(selectedPreset)
+        if (targetIndex >= 0 && pagerState.currentPage != targetIndex) {
+            pagerState.animateScrollToPage(targetIndex)
+        }
+    }
+
     Scaffold(
         containerColor = BackgroundBase,
         topBar = {
@@ -222,6 +248,10 @@ fun HistoryScreen(
                 }
             }
 
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) {
             when (uiState) {
                 is HistoryUiState.Loading -> Column(
                     modifier = Modifier.fillMaxSize(),
@@ -328,6 +358,7 @@ fun HistoryScreen(
                         }
                     }
                 }
+            }
             }
         }
         ActionLabelOverlay(
