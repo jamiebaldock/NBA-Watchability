@@ -68,22 +68,23 @@ import com.nbawatchability.app.ui.theme.TierWorthYourTime
 import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 import kotlinx.coroutines.launch
 
-private val FAVORITES_PAGE_TITLES = listOf("Games", "Teams", "Players")
+private val FAVORITES_PAGE_TITLES = listOf("Upcoming Games", "Past Games", "Teams", "Players")
 
 /**
- * The Favorites tab (formerly "My Teams") - 3 swipeable pages behind a
+ * The Favorites tab (formerly "My Teams") - 4 swipeable pages behind a
  * shared "Favorites" app bar, same TabRow-synced HorizontalPager pattern as
- * LeadersScreen.kt's Standings/Stats pair: games from any favorited team
- * across every league at once, then the existing favorite-teams and
- * favorite-players management lists (view/manage only - adding still
- * happens on their own dedicated Settings sub-screens, so there's one place
- * that owns "every team/player in a league").
+ * LeadersScreen.kt's Standings/Stats pair: favorited teams' upcoming games,
+ * their past games, then the existing favorite-teams and favorite-players
+ * management lists (view/manage only - adding still happens on their own
+ * dedicated Settings sub-screens, so there's one place that owns "every
+ * team/player in a league").
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoritesScreen(
     favoriteGamesUiState: FavoriteGamesUiState,
     onFavoriteGamesRetry: () -> Unit,
+    selectedLeague: LeagueGroup,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
     weights: RubricWeights,
@@ -105,6 +106,12 @@ fun FavoritesScreen(
     val scope = rememberCoroutineScope()
     val favoriteTeamNames = favoriteTeams.map { it.name }.toSet()
     val favoritePlayerNames = favoritePlayers.map { it.name }.toSet()
+    // Shared between the Upcoming and Past pages rather than duplicated per
+    // page - James's call, since it's one scope decision ("my teams
+    // everywhere" vs "my teams in the league I'm currently looking at"), not
+    // two independent ones. Defaults on (every league) to match this tab's
+    // behavior before this toggle existed.
+    var showAllLeagues by remember { mutableStateOf(true) }
 
     Scaffold(
         containerColor = BackgroundBase,
@@ -140,6 +147,11 @@ fun FavoritesScreen(
                 0 -> FavoriteGamesPage(
                     uiState = favoriteGamesUiState,
                     onRetry = onFavoriteGamesRetry,
+                    onlyPast = false,
+                    selectedLeague = selectedLeague,
+                    favoriteTeams = favoriteTeams,
+                    showAllLeagues = showAllLeagues,
+                    onToggleShowAllLeagues = { showAllLeagues = it },
                     showNumericScore = showNumericScore,
                     onToggleNumericScore = onToggleNumericScore,
                     weights = weights,
@@ -153,7 +165,28 @@ fun FavoritesScreen(
                     favoritePlayerNames = favoritePlayerNames,
                     onToggleFavoritePlayer = onToggleFavoritePlayer
                 )
-                1 -> FavoriteTeamsPage(favoriteTeams, onRemoveFavoriteTeam, onAddTeamClick)
+                1 -> FavoriteGamesPage(
+                    uiState = favoriteGamesUiState,
+                    onRetry = onFavoriteGamesRetry,
+                    onlyPast = true,
+                    selectedLeague = selectedLeague,
+                    favoriteTeams = favoriteTeams,
+                    showAllLeagues = showAllLeagues,
+                    onToggleShowAllLeagues = { showAllLeagues = it },
+                    showNumericScore = showNumericScore,
+                    onToggleNumericScore = onToggleNumericScore,
+                    weights = weights,
+                    soccerWeights = soccerWeights,
+                    starredIds = starredIds,
+                    onToggleStar = onToggleStar,
+                    onWatchHighlights = onWatchHighlights,
+                    onGameClick = onGameClick,
+                    favoriteTeamNames = favoriteTeamNames,
+                    onToggleFavoriteTeam = onToggleFavoriteTeam,
+                    favoritePlayerNames = favoritePlayerNames,
+                    onToggleFavoritePlayer = onToggleFavoritePlayer
+                )
+                2 -> FavoriteTeamsPage(favoriteTeams, onRemoveFavoriteTeam, onAddTeamClick)
                 else -> FavoritePlayersPage(favoritePlayers, onRemoveFavoritePlayer, onAddPlayerClick)
             }
         }
@@ -162,17 +195,26 @@ fun FavoritesScreen(
 
 /**
  * Every game involving a favorited team, any league, merged into one flat
- * list - defaults to upcoming (+ live) only, since that's the more useful
- * everyday view ("what's coming up for my teams"); the toggle reveals
- * already-finished games too. Sort reuses the exact same SortMenuButton/
- * SortOption control (and rating-sort's same unscored-games-fall-back-to-
- * newest-first treatment) already validated on Starred/History, not a new
- * option set invented for this page.
+ * list - filtered down to just [onlyPast]'s half (upcoming+live, or
+ * finished), since Upcoming Games and Past Games are separate pages rather
+ * than one list with a reveal toggle. [showAllLeagues] scopes this further:
+ * off restricts to favorited teams whose own leagueGroup matches
+ * [selectedLeague] (the app's shared league dropdown), entirely client-side
+ * against the already-fetched merged list - no refetch on toggle, since the
+ * data for every league is already in memory. Sort reuses the exact same
+ * SortMenuButton/SortOption control (and rating-sort's same
+ * unscored-games-fall-back-to-newest-first treatment) already validated on
+ * Starred/History, not a new option set invented for this page.
  */
 @Composable
 private fun FavoriteGamesPage(
     uiState: FavoriteGamesUiState,
     onRetry: () -> Unit,
+    onlyPast: Boolean,
+    selectedLeague: LeagueGroup,
+    favoriteTeams: List<Team>,
+    showAllLeagues: Boolean,
+    onToggleShowAllLeagues: (Boolean) -> Unit,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
     weights: RubricWeights,
@@ -186,8 +228,7 @@ private fun FavoriteGamesPage(
     favoritePlayerNames: Set<String>,
     onToggleFavoritePlayer: (FavoritePlayer) -> Unit
 ) {
-    var sortOption by remember { mutableStateOf(SortOption.DATE_OLDEST_FIRST) }
-    var showPastGames by remember { mutableStateOf(false) }
+    var sortOption by remember { mutableStateOf(if (onlyPast) SortOption.DATE_NEWEST_FIRST else SortOption.DATE_OLDEST_FIRST) }
 
     when (uiState) {
         is FavoriteGamesUiState.Loading -> LoadingBox()
@@ -200,10 +241,10 @@ private fun FavoriteGamesPage(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "Show past games", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                        Text(text = "Show all leagues", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
                         Switch(
-                            checked = showPastGames,
-                            onCheckedChange = { showPastGames = it },
+                            checked = showAllLeagues,
+                            onCheckedChange = onToggleShowAllLeagues,
                             colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime),
                             modifier = Modifier.padding(start = 8.dp)
                         )
@@ -211,14 +252,27 @@ private fun FavoriteGamesPage(
                     SortMenuButton(selected = sortOption, onSelected = { sortOption = it })
                 }
 
-                val visibleGames = if (showPastGames) uiState.games else uiState.games.filter { it.status != GameStatus.FINAL }
+                val namesInSelectedLeague = remember(favoriteTeams, selectedLeague) {
+                    favoriteTeams.filter { it.leagueGroup == selectedLeague.apiValue }.map { it.name }.toSet()
+                }
+                val scopedGames = if (showAllLeagues) {
+                    uiState.games
+                } else {
+                    uiState.games.filter { it.away in namesInSelectedLeague || it.home in namesInSelectedLeague }
+                }
+                val visibleGames = scopedGames.filter { (it.status == GameStatus.FINAL) == onlyPast }
 
                 if (visibleGames.isEmpty()) {
                     EmptyBox(
-                        if (uiState.games.isEmpty()) {
-                            "No games yet for your favorited teams - add a favorite team to see their games here."
-                        } else {
-                            "No upcoming games right now - turn on \"Show past games\" to see finished ones."
+                        when {
+                            uiState.games.isEmpty() ->
+                                "No games yet for your favorited teams - add a favorite team to see their games here."
+                            scopedGames.isEmpty() ->
+                                "No games for your favorited teams in ${selectedLeague.shortDisplayName} right now - turn on \"Show all leagues\" to see the rest."
+                            onlyPast ->
+                                "No past games yet - check the Upcoming Games page to see what's next."
+                            else ->
+                                "No upcoming games right now - check the Past Games page to see finished ones."
                         }
                     )
                     return@Column
@@ -241,7 +295,7 @@ private fun FavoriteGamesPage(
                 }
 
                 val listState = rememberLazyListState()
-                LaunchedEffect(sortOption, showPastGames) { listState.animateScrollToTopAdaptively() }
+                LaunchedEffect(sortOption, showAllLeagues) { listState.animateScrollToTopAdaptively() }
 
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),

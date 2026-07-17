@@ -255,6 +255,7 @@ fun AppRoot() {
                 )
                 BottomNavTab.FAVORITES -> FavoritesTab(
                     favoritesViewModel = favoritesViewModel,
+                    selectedLeague = selectedLeague,
                     showNumericScore = appSettingsViewModel.settings.showNumericScore,
                     onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
                     weights = settingsViewModel.weights,
@@ -596,6 +597,7 @@ private fun HistoryTab(
 @Composable
 private fun FavoritesTab(
     favoritesViewModel: FavoritesViewModel,
+    selectedLeague: LeagueGroup,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
     weights: RubricWeights,
@@ -618,6 +620,7 @@ private fun FavoritesTab(
     FavoritesScreen(
         favoriteGamesUiState = favoriteGamesViewModel.uiState,
         onFavoriteGamesRetry = { favoriteGamesViewModel.retry(favoritesViewModel.favoriteTeams) },
+        selectedLeague = selectedLeague,
         showNumericScore = showNumericScore,
         onToggleNumericScore = onToggleNumericScore,
         weights = weights,
