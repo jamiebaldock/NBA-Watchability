@@ -89,6 +89,7 @@ fun FavoritePlayersScreen(
 
     val teamsViewModel: TeamsViewModel = viewModel()
     val rosterViewModel: RosterViewModel = viewModel()
+    val leagueRostersViewModel: LeagueRostersViewModel = viewModel()
 
     LaunchedEffect(selectedLeague) {
         teamsViewModel.load(LeagueGroup.entries.first { it.apiValue == selectedLeague.apiValue })
@@ -96,6 +97,16 @@ fun FavoritePlayersScreen(
     LaunchedEffect(selectedTeam) {
         selectedTeam?.let { team ->
             rosterViewModel.load(LeagueGroup.entries.first { it.apiValue == selectedLeague.apiValue }, team.id)
+        }
+    }
+    // Prefetches every team's roster for the selected league as soon as the
+    // team list itself is loaded, so a player-name search has something to
+    // match against right away instead of only kicking off on first
+    // keystroke (which would show a spinner mid-typing).
+    val teamsState = teamsViewModel.uiState
+    LaunchedEffect(selectedLeague, teamsState) {
+        if (teamsState is TeamsUiState.Loaded) {
+            leagueRostersViewModel.load(LeagueGroup.entries.first { it.apiValue == selectedLeague.apiValue }, teamsState.data.teams)
         }
     }
 
@@ -135,7 +146,7 @@ fun FavoritePlayersScreen(
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("Search teams") },
+                    placeholder = { Text("Search teams or players") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -150,18 +161,49 @@ fun FavoritePlayersScreen(
                     is TeamsUiState.Loading -> LoadingBox()
                     is TeamsUiState.Error -> ErrorBox(state.message, teamsViewModel::retry)
                     is TeamsUiState.Loaded -> {
-                        val filtered = remember(state.data, query) {
+                        val filteredTeams = remember(state.data, query) {
                             state.data.teams.filter { it.name.contains(query, ignoreCase = true) }
                         }
-                        if (filtered.isEmpty()) {
+                        // Only searched once there's a query - with no query
+                        // typed yet, the plain team list below is exactly
+                        // today's browse-by-team behavior.
+                        val filteredPlayers = remember(leagueRostersViewModel.uiState, query) {
+                            if (query.isBlank()) {
+                                emptyList()
+                            } else {
+                                (leagueRostersViewModel.uiState as? LeagueRostersUiState.Loaded)?.playersByTeam
+                                    ?.filter { (_, player) -> player.name.contains(query, ignoreCase = true) }
+                                    .orEmpty()
+                            }
+                        }
+                        if (filteredTeams.isEmpty() && filteredPlayers.isEmpty() && query.isNotBlank()) {
+                            EmptyBox("No teams or players match \"$query\".")
+                        } else if (filteredTeams.isEmpty() && query.isBlank()) {
                             EmptyBox("No teams match \"$query\".")
                         } else {
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                             ) {
-                                items(filtered, key = { it.name }) { t ->
+                                items(filteredTeams, key = { "team-${it.name}" }) { t ->
                                     PickableTeamRow(team = t, onClick = { selectedTeam = t; query = "" })
+                                }
+                                items(filteredPlayers, key = { (t, p) -> "player-${t.name}-${p.id}" }) { (playerTeam, player) ->
+                                    PlayerSearchResultRow(
+                                        player = player,
+                                        teamName = playerTeam.name,
+                                        isFavorite = player.name in favoritePlayerNames,
+                                        onToggle = {
+                                            onToggleFavoritePlayer(
+                                                FavoritePlayer(
+                                                    name = player.name,
+                                                    team = playerTeam.name,
+                                                    leagueGroup = selectedLeague.apiValue,
+                                                    headshot = player.headshot
+                                                )
+                                            )
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -282,6 +324,32 @@ private fun PlayerRow(player: Player, isFavorite: Boolean, onToggle: () -> Unit)
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Icon(
+            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+            contentDescription = if (isFavorite) "Remove favorite" else "Add favorite",
+            tint = if (isFavorite) TierInstantClassic else TextMuted,
+            modifier = Modifier.size(26.dp).clickable(onClick = onToggle)
+        )
+    }
+}
+
+/**
+ * Same shape as PlayerRow, but for a player matched by name search across
+ * every team in the league (rather than one already-picked team) - carries
+ * a team-name subtitle so it's clear which team a same-named result belongs
+ * to, the same way FavoritePlayersLeagueGroup's already-favorited rows do.
+ */
+@Composable
+private fun PlayerSearchResultRow(player: Player, teamName: String, isFavorite: Boolean, onToggle: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
+            Text(text = teamName, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+        }
         Icon(
             imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
             contentDescription = if (isFavorite) "Remove favorite" else "Add favorite",
