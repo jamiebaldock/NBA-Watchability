@@ -1,12 +1,9 @@
 package com.nbawatchability.app.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
@@ -23,18 +20,15 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,12 +38,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.DayGames
 import com.nbawatchability.app.data.LeagueGroup
@@ -58,11 +49,10 @@ import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.data.bumpFavoriteTeamGames
+import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.data.filterByMinTier
 import com.nbawatchability.app.ui.theme.BackgroundBase
-import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
-import com.nbawatchability.app.ui.theme.TierWorthYourTime
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -119,6 +109,11 @@ fun DayTabsScreen(
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
     var actionLabel by remember { mutableStateOf<String?>(null) }
     var showCalendar by remember { mutableStateOf(false) }
+    // One shared sort preference across every day, not a per-day setting -
+    // matches the shared action-icon row above it (one control, not one per
+    // page). Defaults to oldest-first (i.e. tipoff order), the natural
+    // reading order for a single day's slate.
+    var sortOption by remember { mutableStateOf(SortOption.DATE_OLDEST_FIRST) }
 
     // settledPage (not currentPage) drives the push-up-to-ViewModel side of
     // this sync deliberately - currentPage changes on every intermediate
@@ -151,8 +146,8 @@ fun DayTabsScreen(
     Scaffold(
         containerColor = BackgroundBase,
         topBar = {
-            TopAppBar(
-                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
+            AppTopBar(
+                leading = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
                 actions = {
                     // Only shown for leagues with a full-season range loaded
                     // (currently WNBA) - a calendar has nothing useful to
@@ -189,61 +184,59 @@ fun DayTabsScreen(
                             }
                         }
                     }
-                    IconToggleButton(
+                    SortMenuButton(
+                        selected = sortOption,
+                        onSelected = { sortOption = it }
+                    )
+                    NumericScoreToggleButton(
                         checked = showNumericScore,
                         onCheckedChange = {
                             onToggleNumericScore()
                             actionLabel = if (it) "Showing numeric score" else "Hiding numeric score"
                         }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Tag,
-                            contentDescription = "Show numeric score",
-                            tint = if (showNumericScore) TierWorthYourTime else TextSecondary
-                        )
-                    }
+                    )
+                },
+                secondary = {
+                    CenteringDayTabRow(
+                        days = days,
+                        today = today,
+                        selectedDayIndex = selectedDayIndex,
+                        onDaySelected = onDaySelected
+                    )
                 }
             )
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                CenteringDayTabRow(
-                    days = days,
-                    today = today,
-                    selectedDayIndex = selectedDayIndex,
-                    onDaySelected = onDaySelected
-                )
-
-                PullToRefreshBox(
-                    isRefreshing = isRefreshing,
-                    onRefresh = onRefresh,
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                HorizontalPager(
+                    state = pagerState,
                     modifier = Modifier.fillMaxSize()
-                ) {
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize()
-                    ) { page ->
-                        DayGamesList(
-                            games = days[page].games,
-                            showNumericScore = showNumericScore,
-                            weights = weights,
-                            starredIds = starredIds,
-                            onToggleStar = onToggleStar,
-                            onWatchHighlights = onWatchHighlights,
-                            isJumpingToNextGame = isJumpingToNextGame,
-                            onJumpToNextGame = onJumpToNextGame,
-                            favoriteTeamNames = favoriteTeamNames,
-                            bumpFavoriteTeamGames = bumpFavoriteTeamGames,
-                            onToggleFavoriteTeam = onToggleFavoriteTeam,
-                            favoritePlayerNames = favoritePlayerNames,
-                            onToggleFavoritePlayer = onToggleFavoritePlayer,
-                            minTierFilterEnabled = minTierFilterEnabled,
-                            minTierFilter = minTierFilter,
-                            soccerWeights = soccerWeights,
-                            onGameClick = onGameClick
-                        )
-                    }
+                ) { page ->
+                    DayGamesList(
+                        games = days[page].games,
+                        sortOption = sortOption,
+                        showNumericScore = showNumericScore,
+                        weights = weights,
+                        starredIds = starredIds,
+                        onToggleStar = onToggleStar,
+                        onWatchHighlights = onWatchHighlights,
+                        isJumpingToNextGame = isJumpingToNextGame,
+                        onJumpToNextGame = onJumpToNextGame,
+                        favoriteTeamNames = favoriteTeamNames,
+                        bumpFavoriteTeamGames = bumpFavoriteTeamGames,
+                        onToggleFavoriteTeam = onToggleFavoriteTeam,
+                        favoritePlayerNames = favoritePlayerNames,
+                        onToggleFavoritePlayer = onToggleFavoritePlayer,
+                        minTierFilterEnabled = minTierFilterEnabled,
+                        minTierFilter = minTierFilter,
+                        soccerWeights = soccerWeights,
+                        onGameClick = onGameClick
+                    )
                 }
             }
             ActionLabelOverlay(
@@ -271,16 +264,18 @@ fun DayTabsScreen(
 
 /**
  * Material3's ScrollableTabRow only scrolls the selected tab into view (edge
- * aligned), not centered — replaced with a manually-scrolled LazyRow. Each
- * tab is sized to exactly a third of the viewport (rather than sizing to
- * its own text content), so at rest exactly 3 tabs are ever visible with
- * none peeking in cut off at either edge - scrolling so (selectedDayIndex -
- * 1) becomes the first visible item then reproduces the same "selected tab
+ * aligned), not centered — replaced with a manually-scrolled LazyRow of
+ * [NavChip]s (the same pill visual every other tab's secondary row uses).
+ * Each chip is sized to exactly a third of the viewport (rather than sizing
+ * to its own text content), so at rest exactly 3 are ever visible with none
+ * peeking in cut off at either edge - scrolling so (selectedDayIndex - 1)
+ * becomes the first visible item then reproduces the same "selected chip
  * centered, one neighbor on each side" layout (clamped to the ends of the
- * list, where fewer than one full tab's worth of neighbors exist). Lazy
- * (not a plain Row) since a full WNBA season is ~140 tabs - only NBA's
- * narrow window is small enough that a non-lazy Row would've been fine,
- * but there's no reason to maintain two versions of this.
+ * list, where fewer than one full chip's worth of neighbors exist). Lazy
+ * (not a plain Row, unlike [NavChipRow]) since a full WNBA season is ~140
+ * days - only NBA's narrow window is small enough that a non-lazy Row
+ * would've been fine, but there's no reason to maintain two versions of
+ * this centering/sizing behavior just to also use [NavChipRow]'s plain Row.
  */
 @Composable
 private fun CenteringDayTabRow(
@@ -304,46 +299,30 @@ private fun CenteringDayTabRow(
         modifier = Modifier
             .fillMaxWidth()
             .onSizeChanged { viewportWidth = it.width }
+            .padding(vertical = 8.dp)
     ) {
         itemsIndexed(days, key = { _, day -> day.date.toString() }) { index, day ->
-            val selected = index == selectedDayIndex
-            Column(
+            NavChip(
+                label = dayTabLabel(day.date, today),
+                selected = index == selectedDayIndex,
+                onClick = { onDaySelected(index) },
                 modifier = Modifier
                     .width(with(density) { tabWidthPx.toDp() })
-                    .clickable { onDaySelected(index) }
-                    .padding(vertical = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = dayTabLabel(day.date, today),
-                    color = if (selected) TextPrimary else TextSecondary,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-                Box(
-                    modifier = Modifier
-                        .padding(top = 6.dp)
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .background(if (selected) TierWorthYourTime else Color.Transparent)
-                )
-            }
+                    .padding(horizontal = 4.dp)
+            )
         }
     }
 }
 
 // No best-first sort option here (unlike Starred/History) - every game on
-// this tab is already the same single day, so reordering by score doesn't
-// do anything a viewer couldn't already see at a glance across ~a handful
-// of tiles; it's only meaningful once games from different dates mix in
-// one list.
+// this tab is already the same single day - most days have only a handful
+// of games, but a busy slate (a full WNBA night, or NBA's opening day) can
+// have enough that a best-first ordering is genuinely useful, same as
+// Starred/History/Favorites' identical 4-option sort.
 @Composable
 private fun DayGamesList(
     games: List<com.nbawatchability.app.data.Game>,
+    sortOption: SortOption,
     showNumericScore: Boolean,
     weights: RubricWeights,
     starredIds: Set<String>,
@@ -392,12 +371,32 @@ private fun DayGamesList(
         return
     }
 
-    val orderedGames = games
-        .filterByMinTier(minTierFilterEnabled, minTierFilter, weights, soccerWeights)
+    // Same unscored-games-fall-back-to-newest-first treatment as every
+    // other sortable tab - an upcoming/live game on this same day has no
+    // score to sort by yet.
+    val orderedGames = when (sortOption) {
+        SortOption.RATING_HIGHEST_FIRST -> {
+            val (scored, unscored) = games.partition { it.effectiveScore(weights, soccerWeights) != null }
+            scored.sortedByDescending { it.effectiveScore(weights, soccerWeights) } + unscored.sortedByDescending { it.tipoffUtc }
+        }
+        SortOption.RATING_LOWEST_FIRST -> {
+            val (scored, unscored) = games.partition { it.effectiveScore(weights, soccerWeights) != null }
+            scored.sortedBy { it.effectiveScore(weights, soccerWeights) } + unscored.sortedByDescending { it.tipoffUtc }
+        }
+        SortOption.DATE_OLDEST_FIRST -> games.sortedBy { it.tipoffUtc }
+        SortOption.DATE_NEWEST_FIRST -> games.sortedByDescending { it.tipoffUtc }
+    }.filterByMinTier(minTierFilterEnabled, minTierFilter, weights, soccerWeights)
         .bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
+
+    val listState = rememberLazyListState()
+    // Without this, LazyColumn's key-based item tracking keeps whatever
+    // tile was on top in view across a re-sort, same reasoning as every
+    // other sortable tab's identical effect.
+    LaunchedEffect(sortOption) { listState.animateScrollToTopAdaptively() }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {

@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextSecondary
@@ -73,7 +74,7 @@ fun NavChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Mod
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(label) },
+        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         modifier = modifier,
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = TierWorthYourTime,
