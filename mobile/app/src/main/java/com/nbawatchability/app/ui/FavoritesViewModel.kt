@@ -23,7 +23,7 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
         private set
 
     // True once the very first DataStore emission (even an empty list) has
-    // arrived - lets My Teams distinguish "still loading" from "genuinely no
+    // arrived - lets the Favorites tab distinguish "still loading" from "genuinely no
     // favorites yet" instead of flashing an empty state first.
     var isLoaded by mutableStateOf(false)
         private set

@@ -21,8 +21,8 @@ private val json = Json { ignoreUnknownKeys = true }
 /**
  * Favorite teams and players, capped per-league (not globally) - a personal
  * preference, on-device only, same as StarredGamesRepository. The full Team
- * snapshot (name + logo) is persisted, not just the name, so My Teams can
- * render immediately without a fresh network round-trip - the logo shown
+ * snapshot (name + logo) is persisted, not just the name, so the Favorites
+ * tab can render immediately without a fresh network round-trip - the logo shown
  * there could go stale if ESPN ever changes a crest, an acceptable tradeoff
  * for a favorites list capped at MAX_FAVORITE_TEAMS per league. Favorite
  * players are stored the same way (name + team + leagueGroup), so the

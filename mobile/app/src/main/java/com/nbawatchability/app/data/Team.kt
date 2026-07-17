@@ -44,7 +44,7 @@ data class RosterResponse(
 /**
  * A favorited player, as persisted by FavoritesRepository - stores the
  * team's display name alongside the player's own name (not just an id)
- * since My Teams needs to show "which team is this player on" without a
+ * since the Favorites tab needs to show "which team is this player on" without a
  * fresh network round-trip, same reasoning as Team's persisted logo.
  */
 @Serializable

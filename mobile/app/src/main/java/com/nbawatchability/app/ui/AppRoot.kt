@@ -63,9 +63,11 @@ import com.nbawatchability.app.ui.theme.TierWorthYourTime
 enum class BottomNavTab(val label: String, val icon: ImageVector) {
     GAMES("Games", Icons.Default.SportsBasketball),
     STARRED("Starred", Icons.Default.Star),
-    // Team-crest icon, distinct from Starred's star (favorite games) - this
-    // tab is for favorite teams/players, a separate concept.
-    MY_TEAMS("My Teams", Icons.Default.Shield),
+    // Team-crest icon, distinct from Starred's star (manually-starred
+    // individual games) - this tab is scoped to favorited teams/players
+    // instead: their own upcoming/past games (any league, merged into one
+    // list), plus the existing team/player management lists.
+    FAVORITES("Favorites", Icons.Default.Shield),
     // Icon is a flame ("barn burner") even though the nav label stays
     // "History" - the in-screen title is the one that says "Past Barn
     // Burners" (HistoryScreen.kt).
@@ -85,7 +87,7 @@ enum class BottomNavTab(val label: String, val icon: ImageVector) {
  * scrollable (ScrollableBottomNavBar below) rather than shrinking each item
  * to fit - Material3's NavigationBar distributes equal width across however
  * many items it holds, which would visibly cramp 7 tabs onto one screen
- * width. My Teams and Settings are both global (not scoped to a league), so
+ * width. Favorites and Settings are both global (not scoped to a league), so
  * they're dispatched before the isSupported gate below and never show
  * ComingSoonTab. Every other tab's top bar shows the same tappable league
  * selector so the league can be switched from anywhere, not just Games -
@@ -221,7 +223,7 @@ fun AppRoot() {
             val selectedLeague = appSettingsViewModel.settings.selectedLeague
             val enabledLeagues = appSettingsViewModel.settings.enabledLeagues
 
-            // Settings and My Teams are both global (not scoped to a
+            // Settings and Favorites are both global (not scoped to a
             // league), so they're resolved before the isSupported gate below
             // - neither should ever show ComingSoonTab just because the
             // dropdown happens to be sitting on a placeholder league.
@@ -251,12 +253,17 @@ fun AppRoot() {
                     defaultGameDetailTab = GameDetailTab.entries.find { it.name == appSettingsViewModel.settings.defaultGameDetailTab } ?: GameDetailTab.BREAKDOWN,
                     onDefaultGameDetailTabChange = { appSettingsViewModel.setDefaultGameDetailTab(it.name) }
                 )
-                BottomNavTab.MY_TEAMS -> MyTeamsScreen(
-                    favoriteTeams = favoritesViewModel.favoriteTeams,
-                    onRemoveFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
+                BottomNavTab.FAVORITES -> FavoritesTab(
+                    favoritesViewModel = favoritesViewModel,
+                    showNumericScore = appSettingsViewModel.settings.showNumericScore,
+                    onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
+                    weights = settingsViewModel.weights,
+                    soccerWeights = soccerSettingsViewModel.weights,
+                    starredIds = starredGamesViewModel.starredIds,
+                    onToggleStar = starredGamesViewModel::toggleStar,
+                    onWatchHighlights = { videoId -> highlightsVideoId = videoId },
+                    onGameClick = { showGameDetail = it },
                     onAddTeamClick = { showFavoriteTeams = true },
-                    favoritePlayers = favoritesViewModel.favoritePlayers,
-                    onRemoveFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
                     onAddPlayerClick = { showFavoritePlayers = true }
                 )
                 else -> if (!selectedLeague.isSupported) {
@@ -339,7 +346,7 @@ fun AppRoot() {
                             soccerWeights = soccerSettingsViewModel.weights,
                             onGameClick = { showGameDetail = it }
                         )
-                        else -> {} // unreachable: SETTINGS/MY_TEAMS handled above
+                        else -> {} // unreachable: SETTINGS/FAVORITES handled above
                     }
                 }
             }
@@ -587,6 +594,50 @@ private fun HistoryTab(
 }
 
 @Composable
+private fun FavoritesTab(
+    favoritesViewModel: FavoritesViewModel,
+    showNumericScore: Boolean,
+    onToggleNumericScore: () -> Unit,
+    weights: RubricWeights,
+    soccerWeights: SoccerRubricWeights,
+    starredIds: Set<String>,
+    onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
+    onWatchHighlights: (String) -> Unit,
+    onGameClick: (com.nbawatchability.app.data.Game) -> Unit,
+    onAddTeamClick: () -> Unit,
+    onAddPlayerClick: () -> Unit
+) {
+    val favoriteGamesViewModel: FavoriteGamesViewModel = viewModel()
+    // Re-fetches whenever the favorited-team set itself changes (add/remove
+    // a team from either this tab's own Teams page or the Settings browse
+    // screen) - List's structural equals means this only actually re-runs
+    // on a real change, not every recomposition.
+    LaunchedEffect(favoritesViewModel.favoriteTeams) {
+        favoriteGamesViewModel.load(favoritesViewModel.favoriteTeams)
+    }
+    FavoritesScreen(
+        favoriteGamesUiState = favoriteGamesViewModel.uiState,
+        onFavoriteGamesRetry = { favoriteGamesViewModel.retry(favoritesViewModel.favoriteTeams) },
+        showNumericScore = showNumericScore,
+        onToggleNumericScore = onToggleNumericScore,
+        weights = weights,
+        soccerWeights = soccerWeights,
+        starredIds = starredIds,
+        onToggleStar = onToggleStar,
+        onWatchHighlights = onWatchHighlights,
+        onGameClick = onGameClick,
+        favoriteTeams = favoritesViewModel.favoriteTeams,
+        onRemoveFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
+        onAddTeamClick = onAddTeamClick,
+        favoritePlayers = favoritesViewModel.favoritePlayers,
+        onRemoveFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
+        onAddPlayerClick = onAddPlayerClick,
+        onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
+        onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer
+    )
+}
+
+@Composable
 private fun LeadersTab(
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
@@ -631,7 +682,7 @@ private fun NewsTab(
  * [LeagueGroup.isSupported] - one shared "coming soon" body for the 5
  * league-scoped tabs (Games, Starred, History, Leaders, News) rather than
  * special-casing each Screen file individually, since there's no per-tab
- * distinction to make anyway. My Teams and Settings are resolved before this
+ * distinction to make anyway. Favorites and Settings are resolved before this
  * gate even runs (see AppRoot's dispatch above), so they're never replaced
  * by this. Keeps its own minimal top bar (league selector only - no gear
  * icon anymore, since Settings is a persistent bottom-nav tab reachable

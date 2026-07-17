@@ -142,4 +142,38 @@ object NetworkGameRepository {
                 connection.disconnect()
             }
         }
+
+    /**
+     * A single team's own real schedule (past and upcoming, current season,
+     * no client-side date windowing) - backs the Favorites tab's Games page,
+     * which fetches this once per favorited team and merges the results
+     * rather than scanning a date range per league.
+     */
+    suspend fun teamSchedule(
+        baseUrl: String,
+        teamId: String,
+        leagueGroup: LeagueGroup
+    ): List<Game> =
+        withContext(Dispatchers.IO) {
+            val url = URL("$baseUrl/team-schedule?teamId=$teamId&leagueGroup=${leagueGroup.apiValue}")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.connectTimeout = 45000
+            connection.readTimeout = 45000
+            connection.requestMethod = "GET"
+
+            try {
+                val status = connection.responseCode
+                val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+                val body = BufferedReader(InputStreamReader(stream)).use { it.readText() }
+
+                if (status !in 200..299) {
+                    val message = runCatching { json.decodeFromString<ErrorResponse>(body).error }.getOrNull()
+                    throw BackendRequestException(message ?: "Backend returned HTTP $status")
+                }
+
+                json.decodeFromString<List<Game>>(body)
+            } finally {
+                connection.disconnect()
+            }
+        }
 }
