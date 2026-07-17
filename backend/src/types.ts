@@ -182,6 +182,10 @@ export interface TeamJson {
 export interface PlayerJson {
   id: string;
   name: string;
+  // Real headshot photo URL - only ESPN's basketball roster endpoint carries
+  // one (confirmed absent for EPL/La Liga via 3 separate checks); undefined
+  // here means "no photo available," not "not yet fetched."
+  headshot?: string;
 }
 
 export interface RosterResponseJson {

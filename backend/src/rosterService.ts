@@ -27,7 +27,7 @@ export async function getRoster(leagueGroup: LeagueGroup, teamId: string): Promi
   } else if (leagueGroup === "nba" || leagueGroup === "wnba") {
     const league = BASKETBALL_LEAGUE_FOR_GROUP[leagueGroup];
     const athletes = await fetchRoster(teamId, league);
-    players = athletes.map((a) => ({ id: a.id, name: a.displayName }));
+    players = athletes.map((a) => ({ id: a.id, name: a.displayName, headshot: a.headshot?.href }));
   } else {
     // Same "no real backend route yet" placeholder-league behavior as
     // teamsService.ts's getTeams.

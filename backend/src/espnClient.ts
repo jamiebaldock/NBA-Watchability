@@ -204,9 +204,10 @@ export async function fetchTeams(league: League): Promise<EspnTeam[]> {
 export interface EspnRosterAthlete {
   id: string;
   displayName: string;
+  headshot?: { href: string };
 }
 
-/** A team's current player list - backs the favorite-players search/browse screen's league -> team -> player drill-down. */
+/** A team's current player list - backs the favorite-players search/browse screen's league -> team -> player drill-down. Basketball's roster endpoint carries a real headshot photo per athlete (soccer's does not - see fetchSoccerRoster). */
 export async function fetchRoster(teamId: string, league: League): Promise<EspnRosterAthlete[]> {
   const data = await getJson<{ athletes: EspnRosterAthlete[] }>(`${basePath(league)}/teams/${teamId}/roster`);
   return data.athletes ?? [];
