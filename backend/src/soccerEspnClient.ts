@@ -160,6 +160,71 @@ interface EspnTournamentCalendarEntry {
   entries?: EspnTournamentStageEntry[];
 }
 
+interface EspnSoccerScheduleLogo {
+  href: string;
+  rel: string[];
+}
+
+// Same shape difference as espnClient.ts's fetchTeamSchedule - the
+// /teams/{id}/schedule endpoint's competitor.team only carries a logos[]
+// array, not the plain team.logo string every other soccer endpoint in
+// this file returns. Normalized back into EspnSoccerEvent's shape below so
+// the fetch-layer difference doesn't leak into shared game-processing logic.
+interface EspnSoccerScheduleEvent {
+  id: string;
+  date: string;
+  competitions: Array<{
+    status: EspnSoccerStatus;
+    competitors: Array<{
+      id: string;
+      homeAway: "home" | "away";
+      score?: string;
+      team: {
+        id: string;
+        displayName: string;
+        logos?: EspnSoccerScheduleLogo[];
+      };
+    }>;
+    notes?: Array<{ type: string; headline: string }>;
+  }>;
+}
+
+function logoFromLogos(logos: EspnSoccerScheduleLogo[] | undefined, rel: string): string | undefined {
+  return logos?.find((l) => l.rel.includes(rel))?.href;
+}
+
+function toStandardSoccerEvent(raw: EspnSoccerScheduleEvent): EspnSoccerEvent {
+  return {
+    id: raw.id,
+    date: raw.date,
+    competitions: raw.competitions.map((c) => ({
+      status: c.status,
+      competitors: c.competitors.map((comp) => ({
+        id: comp.id,
+        homeAway: comp.homeAway,
+        score: comp.score ?? "0",
+        team: {
+          id: comp.team.id,
+          displayName: comp.team.displayName,
+          logo: logoFromLogos(comp.team.logos, "default") ?? logoFromLogos(comp.team.logos, "scoreboard"),
+        },
+      })),
+      notes: c.notes,
+    })),
+  };
+}
+
+/**
+ * A team's own real schedule (past and upcoming, current season) in one
+ * call - soccer analogue of espnClient.ts's fetchTeamSchedule, same
+ * reasoning (the Favorites tab's Games page). No client-side date
+ * windowing - whatever ESPN currently returns is shown as-is.
+ */
+export async function fetchSoccerTeamSchedule(teamId: string, league: SoccerLeague): Promise<EspnSoccerEvent[]> {
+  const data = await getJson<{ events?: EspnSoccerScheduleEvent[] }>(`${basePath(league)}/teams/${teamId}/schedule`);
+  return (data.events ?? []).map(toStandardSoccerEvent);
+}
+
 /**
  * Mirrors espnClient.ts's fetchCalendarDates - backs the season-window/
  * calendar-picker derivation for soccer groups. A domestic league's

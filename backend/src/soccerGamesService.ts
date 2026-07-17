@@ -34,7 +34,14 @@ import {
   upsertBaseEntry
 } from "./gameStore";
 import { decidedByShootout, mapSoccerEspnState, mapSoccerEventToGame, wentToExtraTime } from "./soccerGameMapper";
-import { fetchSoccerCalendarDates, fetchSoccerScoreboard, fetchSoccerSummary, SoccerLeague } from "./soccerEspnClient";
+import {
+  EspnSoccerEvent,
+  fetchSoccerCalendarDates,
+  fetchSoccerScoreboard,
+  fetchSoccerSummary,
+  fetchSoccerTeamSchedule,
+  SoccerLeague
+} from "./soccerEspnClient";
 import { generateHookAndStakes } from "./llm";
 import { tierForScore } from "./rubric";
 import { computeSoccerWatchabilityScore } from "./soccerRubric";
@@ -167,6 +174,117 @@ function toSoccerGameJson(row: GameRow, competitionLabel: string, status: "upcom
 }
 
 /**
+ * Processes exactly one event through the full pipeline (upsert, status,
+ * competition label, pregame preview, final-rubric compute-once) and
+ * returns its GameJson - the shared body every per-event caller uses,
+ * whether the event came from a single day's scoreboard
+ * (getSoccerGamesForDate below) or a specific team's own schedule
+ * (getSoccerTeamSchedule).
+ */
+async function processSoccerEvent(leagueGroup: SoccerLeagueGroup, event: EspnSoccerEvent): Promise<GameJson> {
+  const league = SOCCER_LEAGUE_FOR_GROUP[leagueGroup];
+  const competition = event.competitions[0];
+  const away = competition.competitors.find((c) => c.homeAway === "away")!;
+  const home = competition.competitors.find((c) => c.homeAway === "home")!;
+  const status = mapSoccerEspnState(competition.status.type.state);
+  // Computed per-event, not once per date - a knockout tournament can (and
+  // for the World Cup's 3rd-Place Match/Final, does) have a date whose
+  // real stage differs from the scoreboard's own top-level "current phase"
+  // pointer. Irrelevant for domestic leagues (every event shares the same
+  // flat "Regular Season" label either way).
+  const stageLabel = leagueGroup === "fifa-world" ? worldCupStageLabel(event.season?.slug) : undefined;
+  const competitionLabel = competitionLabelFor(leagueGroup, stageLabel);
+
+  upsertBaseEntry({
+    eventId: event.id,
+    league,
+    leagueGroup,
+    away: away.team.displayName,
+    home: home.team.displayName,
+    awayLogo: away.team.logo,
+    homeLogo: home.team.logo,
+    tipoffUtc: event.date,
+    status
+  });
+  updateStatus(event.id, status);
+  setSeasonStageLabel(event.id, competitionLabel);
+
+  let row = getGame(event.id)!;
+
+  if (status !== "final") {
+    await ensureSoccerPregamePreview(row, leagueGroup, stageLabel);
+    row = getGame(event.id)!;
+  }
+
+  if (status === "upcoming") return toSoccerGameJson(row, competitionLabel, "upcoming");
+  if (status === "live") return toSoccerGameJson(row, competitionLabel, "live", competition.status.period, competition.status.displayClock);
+
+  // final: compute the rubric once, ever - already-set fields are never touched again.
+  if (row.score === null) {
+    const summary = await fetchSoccerSummary(event.id, league);
+    const mapped = mapSoccerEventToGame(event, summary);
+    const score = computeSoccerWatchabilityScore(mapped.rubricInputs, row.stakes ?? undefined).total;
+    setSoccerFinalRubric(event.id, {
+      awayScore: mapped.awayScore,
+      homeScore: mapped.homeScore,
+      score,
+      tier: tierForScore(score),
+      standoutPerformers: mapped.standoutPerformers,
+      finalMargin: mapped.rubricInputs.margin,
+      largestDeficitOvercome: mapped.rubricInputs.largestDeficitOvercome,
+      totalGoals: mapped.rubricInputs.totalGoals,
+      lateDecisiveGoal: mapped.rubricInputs.lateDecisiveGoal,
+      maxGoalsByPlayer: mapped.rubricInputs.maxGoalsByPlayer,
+      combinedShotsOnTarget: mapped.rubricInputs.combinedShotsOnTarget,
+      anyRedCard: mapped.rubricInputs.anyRedCard,
+      maxSavesByKeeper: mapped.rubricInputs.maxSavesByKeeper,
+      anyFreeKickGoal: mapped.rubricInputs.anyFreeKickGoal,
+      anyPenaltyMissed: mapped.rubricInputs.anyPenaltyMissed,
+      wentToExtraTime: mapped.rubricInputs.wentToExtraTime,
+      decidedByShootout: mapped.rubricInputs.decidedByShootout
+    });
+    row = getGame(event.id)!;
+  }
+
+  return {
+    id: row.eventId,
+    a: row.away,
+    h: row.home,
+    al: row.awayLogo ?? undefined,
+    hl: row.homeLogo ?? undefined,
+    stt: "final",
+    utc: row.tipoffUtc,
+    lg: "soccer",
+    cl: competitionLabel,
+    ot: 0,
+    c5: false,
+    lcf: false,
+    fp: false,
+    bz: false,
+    st: null,
+    sop: row.standoutPerformers,
+    m: row.finalMargin ?? undefined,
+    cb: row.largestDeficitOvercome ?? undefined,
+    tg: row.totalGoals ?? undefined,
+    ldg: Boolean(row.lateDecisiveGoal),
+    mgp: row.maxGoalsByPlayer ?? undefined,
+    cst: row.combinedShotsOnTarget ?? undefined,
+    rc: Boolean(row.anyRedCard),
+    sv: row.maxSavesByKeeper ?? undefined,
+    fkg: Boolean(row.anyFreeKickGoal),
+    pm: Boolean(row.anyPenaltyMissed),
+    et: Boolean(row.wentToExtraTime),
+    pk: Boolean(row.decidedByShootout),
+    sk: row.stakes ?? undefined,
+    hook: row.hook ?? fallbackHook(row.away, row.home),
+    pitch: row.pitch ?? undefined,
+    score: row.score ?? undefined,
+    score_visible: true,
+    yt: row.ytVideoId ?? undefined
+  };
+}
+
+/**
  * Fetches, scores, and caches one day's soccer games - the soccer analogue
  * of gamesService.ts's getGamesForDate. The one expensive ESPN call
  * (fetchSoccerSummary - keyEvents + box score) only ever runs once per game,
@@ -178,116 +296,27 @@ export async function getSoccerGamesForDate(date: string, leagueGroup: SoccerLea
   const events = await fetchSoccerScoreboard(espnDate, league);
 
   const results: GameJson[] = [];
-
   for (const event of events) {
-    const competition = event.competitions[0];
-    const away = competition.competitors.find((c) => c.homeAway === "away")!;
-    const home = competition.competitors.find((c) => c.homeAway === "home")!;
-    const status = mapSoccerEspnState(competition.status.type.state);
-    // Computed per-event, not once per date - a knockout tournament can (and
-    // for the World Cup's 3rd-Place Match/Final, does) have a date whose
-    // real stage differs from the scoreboard's own top-level "current
-    // phase" pointer. Irrelevant for domestic leagues (every event on a
-    // date shares the same flat "Regular Season" label either way).
-    const stageLabel = leagueGroup === "fifa-world" ? worldCupStageLabel(event.season?.slug) : undefined;
-    const competitionLabel = competitionLabelFor(leagueGroup, stageLabel);
-
-    upsertBaseEntry({
-      eventId: event.id,
-      league,
-      leagueGroup,
-      away: away.team.displayName,
-      home: home.team.displayName,
-      awayLogo: away.team.logo,
-      homeLogo: home.team.logo,
-      tipoffUtc: event.date,
-      status
-    });
-    updateStatus(event.id, status);
-    setSeasonStageLabel(event.id, competitionLabel);
-
-    let row = getGame(event.id)!;
-
-    if (status !== "final") {
-      await ensureSoccerPregamePreview(row, leagueGroup, stageLabel);
-      row = getGame(event.id)!;
-    }
-
-    if (status === "upcoming") {
-      results.push(toSoccerGameJson(row, competitionLabel, "upcoming"));
-      continue;
-    }
-
-    if (status === "live") {
-      results.push(toSoccerGameJson(row, competitionLabel, "live", competition.status.period, competition.status.displayClock));
-      continue;
-    }
-
-    // final: compute the rubric once, ever - already-set fields are never touched again.
-    if (row.score === null) {
-      const summary = await fetchSoccerSummary(event.id, league);
-      const mapped = mapSoccerEventToGame(event, summary);
-      const score = computeSoccerWatchabilityScore(mapped.rubricInputs, row.stakes ?? undefined).total;
-      setSoccerFinalRubric(event.id, {
-        awayScore: mapped.awayScore,
-        homeScore: mapped.homeScore,
-        score,
-        tier: tierForScore(score),
-        standoutPerformers: mapped.standoutPerformers,
-        finalMargin: mapped.rubricInputs.margin,
-        largestDeficitOvercome: mapped.rubricInputs.largestDeficitOvercome,
-        totalGoals: mapped.rubricInputs.totalGoals,
-        lateDecisiveGoal: mapped.rubricInputs.lateDecisiveGoal,
-        maxGoalsByPlayer: mapped.rubricInputs.maxGoalsByPlayer,
-        combinedShotsOnTarget: mapped.rubricInputs.combinedShotsOnTarget,
-        anyRedCard: mapped.rubricInputs.anyRedCard,
-        maxSavesByKeeper: mapped.rubricInputs.maxSavesByKeeper,
-        anyFreeKickGoal: mapped.rubricInputs.anyFreeKickGoal,
-        anyPenaltyMissed: mapped.rubricInputs.anyPenaltyMissed,
-        wentToExtraTime: mapped.rubricInputs.wentToExtraTime,
-        decidedByShootout: mapped.rubricInputs.decidedByShootout
-      });
-      row = getGame(event.id)!;
-    }
-
-    results.push({
-      id: row.eventId,
-      a: row.away,
-      h: row.home,
-      al: row.awayLogo ?? undefined,
-      hl: row.homeLogo ?? undefined,
-      stt: "final",
-      utc: row.tipoffUtc,
-      lg: "soccer",
-      cl: competitionLabel,
-      ot: 0,
-      c5: false,
-      lcf: false,
-      fp: false,
-      bz: false,
-      st: null,
-      sop: row.standoutPerformers,
-      m: row.finalMargin ?? undefined,
-      cb: row.largestDeficitOvercome ?? undefined,
-      tg: row.totalGoals ?? undefined,
-      ldg: Boolean(row.lateDecisiveGoal),
-      mgp: row.maxGoalsByPlayer ?? undefined,
-      cst: row.combinedShotsOnTarget ?? undefined,
-      rc: Boolean(row.anyRedCard),
-      sv: row.maxSavesByKeeper ?? undefined,
-      fkg: Boolean(row.anyFreeKickGoal),
-      pm: Boolean(row.anyPenaltyMissed),
-      et: Boolean(row.wentToExtraTime),
-      pk: Boolean(row.decidedByShootout),
-      sk: row.stakes ?? undefined,
-      hook: row.hook ?? fallbackHook(row.away, row.home),
-      pitch: row.pitch ?? undefined,
-      score: row.score ?? undefined,
-      score_visible: true,
-      yt: row.ytVideoId ?? undefined
-    });
+    results.push(await processSoccerEvent(leagueGroup, event));
   }
+  return results;
+}
 
+/**
+ * A single favorited team's own real schedule (past and upcoming, current
+ * season) - backs the Favorites tab's Games page, soccer analogue of
+ * gamesService.ts's getTeamSchedule. [teamId] is ESPN's own team id
+ * (Team.id on the client), meaningless for "fifa-world" (national teams,
+ * not club teams - favoriting a World Cup team was never possible, this
+ * league group simply never appears here).
+ */
+export async function getSoccerTeamSchedule(teamId: string, leagueGroup: SoccerLeagueGroup): Promise<GameJson[]> {
+  const league = SOCCER_LEAGUE_FOR_GROUP[leagueGroup];
+  const events = await fetchSoccerTeamSchedule(teamId, league);
+  const results: GameJson[] = [];
+  for (const event of events) {
+    results.push(await processSoccerEvent(leagueGroup, event));
+  }
   return results;
 }
 

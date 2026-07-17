@@ -1,4 +1,4 @@
-import { EspnEvent, League, fetchCalendarDates, fetchScoreboard, fetchSummary, toEspnDate } from "./espnClient";
+import { EspnEvent, League, fetchCalendarDates, fetchScoreboard, fetchSummary, fetchTeamSchedule, toEspnDate } from "./espnClient";
 import { deriveCompetitionLabel, mapEspnState, mapEventToGame } from "./gameMapper";
 import {
   FinalRubric,
@@ -17,7 +17,7 @@ import {
 } from "./gameStore";
 import { generateHookAndStakes } from "./llm";
 import { computeWatchabilityScore, tierForScore } from "./rubric";
-import { preferDarkLogoVariant } from "./teamLogos";
+import { preferDarkLogoVariant, teamLogoUrl } from "./teamLogos";
 import { GameJson, LeagueGroup } from "./types";
 import { HighlightsLeague, isYoutubeSearchConfigured, searchHighlightsVideo } from "./youtubeClient";
 
@@ -241,8 +241,13 @@ function toGameJson(row: GameRow, status: "upcoming" | "live", cl: string | unde
     id: row.eventId,
     a: row.away,
     h: row.home,
-    al: row.awayLogo ?? undefined,
-    hl: row.homeLogo ?? undefined,
+    // Historical rows migrated from the pre-gameStore backfill never had
+    // logos (that backfill only kept team display names) - fall back to
+    // the static name->abbreviation map for those, same reasoning as
+    // historyService.ts's own al/hl fallback. Live-collected rows always
+    // have the real ESPN logo already, so this is a no-op for them.
+    al: row.awayLogo ?? teamLogoUrl(row.away, row.leagueGroup),
+    hl: row.homeLogo ?? teamLogoUrl(row.home, row.leagueGroup),
     stt: status,
     utc: row.tipoffUtc,
     lg,
@@ -263,6 +268,125 @@ function toGameJson(row: GameRow, status: "upcoming" | "live", cl: string | unde
 }
 
 /**
+ * Processes exactly one event through the full pipeline (upsert, status,
+ * competition label, pregame preview, final-rubric compute-once, highlights
+ * check) and returns its GameJson - the shared body every per-event caller
+ * uses, whether the event came from a single day's scoreboard
+ * (getGamesForDate below) or a specific team's own schedule
+ * (getTeamSchedule) - both just need "here's an event, tell me its tile,"
+ * not two copies of this same upsert/preview/rubric logic. Returns null for
+ * a TBD-team placeholder slot (see the inline comment below) - the only
+ * case a caller needs to skip rather than push.
+ */
+async function processEvent(league: League, leagueGroup: BasketballLeagueGroup, event: EspnEvent): Promise<GameJson | null> {
+  const competition = event.competitions[0];
+  const away = competition.competitors.find((c) => c.homeAway === "away")!;
+  const home = competition.competitors.find((c) => c.homeAway === "home")!;
+  // Summer League's bracket rounds get scheduled on ESPN before the earlier
+  // group-stage games that decide the actual matchup finish - those slots
+  // carry literal "TBD" team names until ESPN fills them in. Skipped
+  // entirely (not even upserted into gameStore) rather than shown as a
+  // placeholder tile, since upsertBaseEntry's insert-once behavior would
+  // otherwise freeze "TBD" as this game's permanent team names, and there's
+  // nothing real to show anyway - once ESPN resolves the real matchup, this
+  // same event naturally starts coming through normally on a later request.
+  if (away.team.displayName === "TBD" || home.team.displayName === "TBD") return null;
+  const status = mapEspnState(competition.status.type.state);
+
+  upsertBaseEntry({
+    eventId: event.id,
+    league,
+    leagueGroup,
+    away: away.team.displayName,
+    home: home.team.displayName,
+    awayLogo: preferDarkLogoVariant(away.team.logo),
+    homeLogo: preferDarkLogoVariant(home.team.logo),
+    tipoffUtc: event.date,
+    status,
+  });
+  updateStatus(event.id, status);
+
+  let row = getGame(event.id)!;
+  // Summer League keeps its own separate static label client-side.
+  const cl = league.startsWith("nba-summer") ? undefined : deriveCompetitionLabel(event, league === "wnba" ? "wnba" : "nba");
+  // Persisted once (gameStore's IS NULL guard) so this same label is still
+  // available once the game graduates into History, long after the raw
+  // ESPN event/notes data used to derive it is gone.
+  if (cl) setSeasonStageLabel(event.id, cl);
+
+  if (status !== "final") {
+    await ensurePregamePreview(row, league, event);
+    row = getGame(event.id)!;
+  }
+
+  if (status === "upcoming") return toGameJson(row, "upcoming", cl);
+  if (status === "live") return toGameJson(row, "live", cl, competition.status.period, competition.status.displayClock);
+
+  // final: compute the rubric once, ever - already-set fields are never touched again.
+  if (row.score === null) {
+    const summary = await fetchSummary(event.id, league);
+    const mapped = mapEventToGame(event, league, summary);
+    const score = computeWatchabilityScore(mapped.rubric, row.stakes ?? undefined, league).total;
+    const rubric: FinalRubric = {
+      awayScore: parseFloat(away.score),
+      homeScore: parseFloat(home.score),
+      finalMargin: mapped.rubric.finalMargin ?? 0,
+      largestDeficitOvercome: mapped.rubric.largestDeficitOvercome ?? 0,
+      leadChanges: mapped.rubric.leadChanges ?? 0,
+      overtimePeriods: mapped.rubric.overtimePeriods,
+      closeInFinalTwoMin: mapped.rubric.closeInFinalTwoMin,
+      leadChangeInFinalMin: mapped.rubric.leadChangeInFinalMin,
+      decidedOnFinalPossession: mapped.rubric.decidedOnFinalPossession,
+      buzzerBeater: mapped.rubric.buzzerBeater,
+      starPerformance: mapped.rubric.starPerformance,
+      standoutPerformers: mapped.rubric.standoutPerformers ?? [],
+      score,
+      tier: tierForScore(score),
+    };
+    setFinalRubric(event.id, rubric);
+    row = getGame(event.id)!;
+  }
+
+  // Demand-driven: a live request touching this game is a chance to check
+  // sooner than the next poller tick, if the learned per-league schedule
+  // says it's actually due (isDueForHighlightsCheck) - not on every request
+  // regardless, which would defeat the whole point of scheduling.
+  if (!row.ytVideoId && isYoutubeSearchConfigured() && isDueForHighlightsCheck(row, Date.now())) {
+    await checkGameHighlights(row);
+    row = getGame(event.id)!;
+  }
+
+  const lg: GameJson["lg"] = row.league === "nba" ? "nba" : row.league === "wnba" ? "wnba" : "summer";
+  return {
+    id: row.eventId,
+    a: row.away,
+    h: row.home,
+    al: row.awayLogo ?? teamLogoUrl(row.away, row.leagueGroup),
+    hl: row.homeLogo ?? teamLogoUrl(row.home, row.leagueGroup),
+    stt: "final",
+    utc: row.tipoffUtc,
+    lg,
+    cl,
+    ot: row.overtimePeriods ?? 0,
+    m: row.finalMargin ?? undefined,
+    cb: row.largestDeficitOvercome ?? undefined,
+    lc: row.leadChanges ?? undefined,
+    c5: Boolean(row.closeInFinalTwoMin),
+    lcf: Boolean(row.leadChangeInFinalMin),
+    fp: Boolean(row.decidedOnFinalPossession),
+    bz: Boolean(row.buzzerBeater),
+    st: row.starPerformance,
+    sop: row.standoutPerformers,
+    sk: row.stakes ?? undefined,
+    hook: row.hook ?? fallbackHook(row.away, row.home),
+    pitch: row.pitch ?? undefined,
+    score: row.score ?? undefined,
+    score_visible: true,
+    yt: row.ytVideoId ?? undefined,
+  };
+}
+
+/**
  * Fetches, scores, and caches one day's games, matching the mobile client's
  * JSON contract (nba-watchability-spec.md section 5).
  *
@@ -279,123 +403,33 @@ export async function getGamesForDate(date: string, leagueGroup: BasketballLeagu
   const leagueEvents = await fetchAllEvents(espnDate, leagueGroup);
 
   const results: GameJson[] = [];
-
   for (const { league, event } of leagueEvents) {
-    const competition = event.competitions[0];
-    const away = competition.competitors.find((c) => c.homeAway === "away")!;
-    const home = competition.competitors.find((c) => c.homeAway === "home")!;
-    // Summer League's bracket rounds get scheduled on ESPN before the
-    // earlier group-stage games that decide the actual matchup finish -
-    // those slots carry literal "TBD" team names until ESPN fills them in.
-    // Skipped entirely (not even upserted into gameStore) rather than shown
-    // as a placeholder tile, since upsertBaseEntry's insert-once behavior
-    // would otherwise freeze "TBD" as this game's permanent team names, and
-    // there's nothing real to show anyway - once ESPN resolves the real
-    // matchup, this same event naturally starts coming through normally on
-    // a later request for this date.
-    if (away.team.displayName === "TBD" || home.team.displayName === "TBD") continue;
-    const status = mapEspnState(competition.status.type.state);
-
-    upsertBaseEntry({
-      eventId: event.id,
-      league,
-      leagueGroup,
-      away: away.team.displayName,
-      home: home.team.displayName,
-      awayLogo: preferDarkLogoVariant(away.team.logo),
-      homeLogo: preferDarkLogoVariant(home.team.logo),
-      tipoffUtc: event.date,
-      status,
-    });
-    updateStatus(event.id, status);
-
-    let row = getGame(event.id)!;
-    // Summer League keeps its own separate static label client-side.
-    const cl = league.startsWith("nba-summer") ? undefined : deriveCompetitionLabel(event, league === "wnba" ? "wnba" : "nba");
-    // Persisted once (gameStore's IS NULL guard) so this same label is still
-    // available once the game graduates into History, long after the raw
-    // ESPN event/notes data used to derive it is gone.
-    if (cl) setSeasonStageLabel(event.id, cl);
-
-    if (status !== "final") {
-      await ensurePregamePreview(row, league, event);
-      row = getGame(event.id)!;
-    }
-
-    if (status === "upcoming") {
-      results.push(toGameJson(row, "upcoming", cl));
-      continue;
-    }
-
-    if (status === "live") {
-      results.push(toGameJson(row, "live", cl, competition.status.period, competition.status.displayClock));
-      continue;
-    }
-
-    // final: compute the rubric once, ever - already-set fields are never touched again.
-    if (row.score === null) {
-      const summary = await fetchSummary(event.id, league);
-      const mapped = mapEventToGame(event, league, summary);
-      const score = computeWatchabilityScore(mapped.rubric, row.stakes ?? undefined, league).total;
-      const rubric: FinalRubric = {
-        awayScore: parseFloat(away.score),
-        homeScore: parseFloat(home.score),
-        finalMargin: mapped.rubric.finalMargin ?? 0,
-        largestDeficitOvercome: mapped.rubric.largestDeficitOvercome ?? 0,
-        leadChanges: mapped.rubric.leadChanges ?? 0,
-        overtimePeriods: mapped.rubric.overtimePeriods,
-        closeInFinalTwoMin: mapped.rubric.closeInFinalTwoMin,
-        leadChangeInFinalMin: mapped.rubric.leadChangeInFinalMin,
-        decidedOnFinalPossession: mapped.rubric.decidedOnFinalPossession,
-        buzzerBeater: mapped.rubric.buzzerBeater,
-        starPerformance: mapped.rubric.starPerformance,
-        standoutPerformers: mapped.rubric.standoutPerformers ?? [],
-        score,
-        tier: tierForScore(score),
-      };
-      setFinalRubric(event.id, rubric);
-      row = getGame(event.id)!;
-    }
-
-    // Demand-driven: a live request touching this game is a chance to check
-    // sooner than the next poller tick, if the learned per-league schedule
-    // says it's actually due (isDueForHighlightsCheck) - not on every
-    // request regardless, which would defeat the whole point of scheduling.
-    if (!row.ytVideoId && isYoutubeSearchConfigured() && isDueForHighlightsCheck(row, Date.now())) {
-      await checkGameHighlights(row);
-      row = getGame(event.id)!;
-    }
-
-    const lg: GameJson["lg"] = row.league === "nba" ? "nba" : row.league === "wnba" ? "wnba" : "summer";
-    results.push({
-      id: row.eventId,
-      a: row.away,
-      h: row.home,
-      al: row.awayLogo ?? undefined,
-      hl: row.homeLogo ?? undefined,
-      stt: "final",
-      utc: row.tipoffUtc,
-      lg,
-      cl,
-      ot: row.overtimePeriods ?? 0,
-      m: row.finalMargin ?? undefined,
-      cb: row.largestDeficitOvercome ?? undefined,
-      lc: row.leadChanges ?? undefined,
-      c5: Boolean(row.closeInFinalTwoMin),
-      lcf: Boolean(row.leadChangeInFinalMin),
-      fp: Boolean(row.decidedOnFinalPossession),
-      bz: Boolean(row.buzzerBeater),
-      st: row.starPerformance,
-      sop: row.standoutPerformers,
-      sk: row.stakes ?? undefined,
-      hook: row.hook ?? fallbackHook(row.away, row.home),
-      pitch: row.pitch ?? undefined,
-      score: row.score ?? undefined,
-      score_visible: true,
-      yt: row.ytVideoId ?? undefined,
-    });
+    const gameJson = await processEvent(league, leagueGroup, event);
+    if (gameJson) results.push(gameJson);
   }
+  return results;
+}
 
+/**
+ * A single favorited team's own real schedule (past and upcoming, current
+ * season) - backs the Favorites tab's Games page. Reuses processEvent
+ * (same upsert/preview/rubric pipeline getGamesForDate uses), so a game
+ * already seen via the day-based Games tab is returned with its
+ * already-computed score instead of recomputing anything, and a game
+ * nobody's browsed to yet still gets scored here.
+ *
+ * [teamId] is ESPN's own team id (Team.id on the client) - only meaningful
+ * against the real league (leagueGroup itself, "nba"/"wnba"), not a Summer
+ * League variant, since a favorited team was only ever sourced from the
+ * real league's own /teams list.
+ */
+export async function getTeamSchedule(teamId: string, leagueGroup: BasketballLeagueGroup): Promise<GameJson[]> {
+  const events = await fetchTeamSchedule(teamId, leagueGroup);
+  const results: GameJson[] = [];
+  for (const event of events) {
+    const gameJson = await processEvent(leagueGroup, leagueGroup, event);
+    if (gameJson) results.push(gameJson);
+  }
   return results;
 }
 

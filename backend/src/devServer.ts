@@ -12,6 +12,7 @@ import {
   getSeasonWindowForLeagueGroup,
   getStandingsForLeagueGroup,
   getStatsForLeagueGroup,
+  getTeamScheduleForLeagueGroup,
   getTeamsForLeagueGroup,
 } from "./httpHandler";
 import { startHighlightsPoller } from "./highlightsPoller";
@@ -176,6 +177,21 @@ app.get("/game-detail", async (req, res) => {
   try {
     const eventId = String(req.query.eventId ?? "");
     res.json(await getGameDetailForEvent(eventId));
+  } catch (err) {
+    if (err instanceof BadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
+});
+
+app.get("/team-schedule", async (req, res) => {
+  try {
+    const teamId = String(req.query.teamId ?? "");
+    const leagueGroup = String(req.query.leagueGroup ?? "nba");
+    res.json(await getTeamScheduleForLeagueGroup(teamId, leagueGroup));
   } catch (err) {
     if (err instanceof BadRequestError) {
       res.status(400).json({ error: err.message });

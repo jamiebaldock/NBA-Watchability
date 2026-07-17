@@ -1,11 +1,11 @@
 import { dateStringsBetween } from "./dateRange";
 import { currentSoccerSeasonStartDate, earliestGameDate, getMostRecentFinalsEnd } from "./gameStore";
 import { getGameDetail } from "./gameDetailService";
-import { getGamesForDate, getNextScheduledDate } from "./gamesService";
+import { getGamesForDate, getNextScheduledDate, getTeamSchedule } from "./gamesService";
 import { getHistory, HistoryResult } from "./historyService";
 import { getNews } from "./newsService";
 import { getSeasonWindow, SeasonWindow } from "./seasonWindowService";
-import { getNextSoccerScheduledDate, getSoccerGamesForDate, isSoccerLeagueGroup } from "./soccerGamesService";
+import { getNextSoccerScheduledDate, getSoccerGamesForDate, getSoccerTeamSchedule, isSoccerLeagueGroup } from "./soccerGamesService";
 import { getRoster } from "./rosterService";
 import { getStandings } from "./standingsService";
 import { getStats } from "./statsService";
@@ -49,6 +49,22 @@ function parseLeagueGroup(raw: string): LeagueGroup {
 function getGamesForDateAnySport(date: string, leagueGroup: LeagueGroup): Promise<GameJson[]> {
   if (isSoccerLeagueGroup(leagueGroup)) return getSoccerGamesForDate(date, leagueGroup);
   return getGamesForDate(date, leagueGroup);
+}
+
+/**
+ * Backs the Favorites tab's Games page - a single favorited team's own
+ * real schedule (past and upcoming), not a whole day's slate. "fifa-world"
+ * never reaches here in practice (no favorite-teams route exists for
+ * national teams - teamsService.ts's getTeams already returns an empty
+ * list for it), but is still rejected explicitly rather than silently
+ * mis-dispatched to the soccer club pipeline with a nonsense team id.
+ */
+export async function getTeamScheduleForLeagueGroup(teamId: string, leagueGroupRaw = "nba"): Promise<GameJson[]> {
+  if (!teamId) throw new BadRequestError("teamId is required");
+  const leagueGroup = parseLeagueGroup(leagueGroupRaw);
+  if (leagueGroup === "fifa-world") throw new BadRequestError("team schedules aren't available for fifa-world");
+  if (isSoccerLeagueGroup(leagueGroup)) return getSoccerTeamSchedule(teamId, leagueGroup);
+  return getTeamSchedule(teamId, leagueGroup);
 }
 
 export async function getSchedule(start: string, end: string, leagueGroupRaw = "nba"): Promise<DaySchedule[]> {

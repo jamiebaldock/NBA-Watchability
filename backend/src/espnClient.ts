@@ -108,6 +108,81 @@ async function getJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+interface EspnTeamScheduleLogo {
+  href: string;
+  rel: string[];
+}
+
+// The /teams/{id}/schedule endpoint's own competitor.team shape only ever
+// carries a logos[] array (many variants: default/dark/scoreboard/...), not
+// the plain team.logo string field every other endpoint in this file
+// returns - confirmed directly against a real response, not assumed from
+// the scoreboard shape. toStandardEvent below normalizes this back into
+// the same EspnEvent shape every other pipeline function already expects,
+// so the fetch-layer shape difference doesn't leak into game-processing
+// logic shared with the day-based schedule fetch.
+interface EspnTeamScheduleEvent {
+  id: string;
+  date: string;
+  competitions: Array<{
+    status: EspnStatus;
+    competitors: Array<{
+      id: string;
+      homeAway: "home" | "away";
+      score?: string;
+      team: {
+        id: string;
+        displayName: string;
+        logos?: EspnTeamScheduleLogo[];
+      };
+    }>;
+    notes?: Array<{ type: string; headline: string }>;
+  }>;
+}
+
+function logoFromLogos(logos: EspnTeamScheduleLogo[] | undefined, rel: string): string | undefined {
+  return logos?.find((l) => l.rel.includes(rel))?.href;
+}
+
+function toStandardEvent(raw: EspnTeamScheduleEvent): EspnEvent {
+  return {
+    id: raw.id,
+    date: raw.date,
+    competitions: raw.competitions.map((c) => ({
+      status: c.status,
+      competitors: c.competitors.map((comp) => ({
+        id: comp.id,
+        homeAway: comp.homeAway,
+        score: comp.score ?? "0",
+        team: {
+          id: comp.team.id,
+          name: comp.team.displayName,
+          displayName: comp.team.displayName,
+          // "scoreboard" is the same variant every other game tile in this
+          // app already uses (teamLogos.ts's preferDarkLogoVariant then
+          // picks light/dark from there) - "default" is the fallback for
+          // the rare team missing that specific variant.
+          logo: logoFromLogos(comp.team.logos, "scoreboard") ?? logoFromLogos(comp.team.logos, "default"),
+        },
+      })),
+      notes: c.notes,
+    })),
+  };
+}
+
+/**
+ * A team's own real schedule (past and upcoming games, current season) in
+ * one call - the Favorites tab's Games page uses this instead of scanning
+ * day-by-day across a date range, since a favorited team's games are sparse
+ * relative to a full league slate. No client-side date windowing - whatever
+ * ESPN's own endpoint currently returns for this team is shown as-is (no
+ * artificial forward/backward cutoff).
+ */
+export async function fetchTeamSchedule(teamId: string, league: League): Promise<EspnEvent[]> {
+  const data = await getJson<{ events?: EspnTeamScheduleEvent[] }>(`${basePath(league)}/teams/${teamId}/schedule`);
+  return (data.events ?? []).map(toStandardEvent);
+}
+
 /** dateYyyymmdd must be in YYYYMMDD form (ESPN's scoreboard date format). */
 export async function fetchScoreboard(dateYyyymmdd: string, league: League): Promise<EspnEvent[]> {
   const data = await getJson<{ events: EspnEvent[] }>(`${basePath(league)}/scoreboard?dates=${dateYyyymmdd}`);
