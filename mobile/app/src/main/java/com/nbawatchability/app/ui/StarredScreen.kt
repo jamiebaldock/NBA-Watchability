@@ -10,17 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
@@ -47,7 +42,6 @@ import com.nbawatchability.app.data.filterByMinTier
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
-import com.nbawatchability.app.ui.theme.TierWorthYourTime
 
 /**
  * Scoped to [selectedLeague] by default, same as every other tab - but
@@ -98,8 +92,8 @@ fun StarredScreen(
     Scaffold(
         containerColor = BackgroundBase,
         topBar = {
-            TopAppBar(
-                title = {
+            AppTopBar(
+                leading = {
                     if (showAllLeagues) {
                         Text(
                             text = "All Leagues",
@@ -116,19 +110,13 @@ fun StarredScreen(
                         selected = sortOption,
                         onSelected = { sortOption = it }
                     )
-                    IconToggleButton(
+                    NumericScoreToggleButton(
                         checked = showNumericScore,
                         onCheckedChange = {
                             onToggleNumericScore()
                             actionLabel = if (it) "Showing numeric score" else "Hiding numeric score"
                         }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Tag,
-                            contentDescription = "Show numeric score",
-                            tint = if (showNumericScore) TierWorthYourTime else TextSecondary
-                        )
-                    }
+                    )
                 }
             )
         }

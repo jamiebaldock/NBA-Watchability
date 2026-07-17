@@ -33,10 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -112,31 +109,44 @@ fun FavoritesScreen(
     // two independent ones. Defaults on (every league) to match this tab's
     // behavior before this toggle existed.
     var showAllLeagues by remember { mutableStateOf(true) }
+    // Each Games page keeps its own independent sort - unlike showAllLeagues
+    // above, "oldest first" for Upcoming and "newest first" for Past are
+    // both meaningful defaults in their own right, not one shared decision.
+    // Lifted up here (rather than owned locally per page, as before) since
+    // the sort icon now lives in the single shared action row, which needs
+    // to know which page's sort state it's currently controlling.
+    var sortOptionUpcoming by remember { mutableStateOf(SortOption.DATE_OLDEST_FIRST) }
+    var sortOptionPast by remember { mutableStateOf(SortOption.DATE_NEWEST_FIRST) }
 
     Scaffold(
         containerColor = BackgroundBase,
         topBar = {
-            Column {
-                TopAppBar(title = { Text("Favorites", color = TextPrimary) })
-                TabRow(
-                    selectedTabIndex = pagerState.currentPage,
-                    containerColor = BackgroundBase,
-                    contentColor = TierWorthYourTime
-                ) {
-                    FAVORITES_PAGE_TITLES.forEachIndexed { index, title ->
-                        Tab(
-                            selected = pagerState.currentPage == index,
-                            onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                            text = {
-                                Text(
-                                    text = title,
-                                    color = if (pagerState.currentPage == index) TierWorthYourTime else TextSecondary
-                                )
-                            }
+            AppTopBar(
+                leading = { Text("Favorites", color = TextPrimary) },
+                actions = {
+                    // Sort/hashtag only make sense on the two Games pages -
+                    // Teams/Players have no sortable list and never show a
+                    // GameCard tile.
+                    if (pagerState.currentPage == 0 || pagerState.currentPage == 1) {
+                        val onUpcoming = pagerState.currentPage == 0
+                        SortMenuButton(
+                            selected = if (onUpcoming) sortOptionUpcoming else sortOptionPast,
+                            onSelected = { if (onUpcoming) sortOptionUpcoming = it else sortOptionPast = it }
                         )
+                        NumericScoreToggleButton(checked = showNumericScore, onCheckedChange = { onToggleNumericScore() })
                     }
+                },
+                secondary = {
+                    NavChipRow(
+                        items = FAVORITES_PAGE_TITLES,
+                        selected = FAVORITES_PAGE_TITLES[pagerState.currentPage],
+                        onSelected = { title ->
+                            scope.launch { pagerState.animateScrollToPage(FAVORITES_PAGE_TITLES.indexOf(title)) }
+                        },
+                        label = { it }
+                    )
                 }
-            }
+            )
         }
     ) { padding ->
         HorizontalPager(
@@ -152,8 +162,8 @@ fun FavoritesScreen(
                     favoriteTeams = favoriteTeams,
                     showAllLeagues = showAllLeagues,
                     onToggleShowAllLeagues = { showAllLeagues = it },
+                    sortOption = sortOptionUpcoming,
                     showNumericScore = showNumericScore,
-                    onToggleNumericScore = onToggleNumericScore,
                     weights = weights,
                     soccerWeights = soccerWeights,
                     starredIds = starredIds,
@@ -173,8 +183,8 @@ fun FavoritesScreen(
                     favoriteTeams = favoriteTeams,
                     showAllLeagues = showAllLeagues,
                     onToggleShowAllLeagues = { showAllLeagues = it },
+                    sortOption = sortOptionPast,
                     showNumericScore = showNumericScore,
-                    onToggleNumericScore = onToggleNumericScore,
                     weights = weights,
                     soccerWeights = soccerWeights,
                     starredIds = starredIds,
@@ -215,8 +225,8 @@ private fun FavoriteGamesPage(
     favoriteTeams: List<Team>,
     showAllLeagues: Boolean,
     onToggleShowAllLeagues: (Boolean) -> Unit,
+    sortOption: SortOption,
     showNumericScore: Boolean,
-    onToggleNumericScore: () -> Unit,
     weights: RubricWeights,
     soccerWeights: SoccerRubricWeights,
     starredIds: Set<String>,
@@ -228,8 +238,6 @@ private fun FavoriteGamesPage(
     favoritePlayerNames: Set<String>,
     onToggleFavoritePlayer: (FavoritePlayer) -> Unit
 ) {
-    var sortOption by remember { mutableStateOf(if (onlyPast) SortOption.DATE_NEWEST_FIRST else SortOption.DATE_OLDEST_FIRST) }
-
     when (uiState) {
         is FavoriteGamesUiState.Loading -> LoadingBox()
         is FavoriteGamesUiState.Error -> ErrorBox(uiState.message, onRetry)
@@ -237,19 +245,15 @@ private fun FavoriteGamesPage(
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "Show all leagues", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
-                        Switch(
-                            checked = showAllLeagues,
-                            onCheckedChange = onToggleShowAllLeagues,
-                            colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime),
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
-                    }
-                    SortMenuButton(selected = sortOption, onSelected = { sortOption = it })
+                    Text(text = "Show all leagues", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                    Switch(
+                        checked = showAllLeagues,
+                        onCheckedChange = onToggleShowAllLeagues,
+                        colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime),
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
                 }
 
                 val namesInSelectedLeague = remember(favoriteTeams, selectedLeague) {
