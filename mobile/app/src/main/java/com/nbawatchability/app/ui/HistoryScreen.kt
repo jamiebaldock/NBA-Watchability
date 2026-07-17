@@ -151,7 +151,8 @@ fun HistoryScreen(
     minTierFilter: Tier = Tier.SKIPPABLE,
     showScoresByDefault: Boolean = false,
     soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT,
-    onGameClick: (Game) -> Unit = {}
+    onGameClick: (Game) -> Unit = {},
+    onPrefetch: (HistoryRangePreset) -> Unit = {}
 ) {
     // Plain remember (not rememberSaveable) - resets to showScoresByDefault
     // every time this composable enters composition, e.g. switching back to
@@ -170,13 +171,13 @@ fun HistoryScreen(
     // so an in-flight programmatic jump (e.g. tapping a non-adjacent chip)
     // doesn't re-trigger onPresetSelected for every transient page it
     // crosses, only the one it actually lands on. Unlike DayTabsScreen (or
-    // Leaders/Favorites' pagers), each preset's games aren't pre-fetched -
-    // History only ever holds one preset's data at a time (a fresh
-    // /api/history call per switch), so every page in this pager renders
-    // the same current [uiState] rather than its own distinct slice; the
-    // pager here is purely the swipe-gesture/tab-sync layer over that
-    // existing single-fetch-per-preset flow, not a new prefetch-everything
-    // mechanism.
+    // Leaders/Favorites' pagers), each preset's games aren't pre-fetched by
+    // default - History only ever shows one preset's data at a time, so
+    // every page in this pager renders the same current [uiState] rather
+    // than its own distinct slice; the pager here is purely the
+    // swipe-gesture/tab-sync layer over the ViewModel's own
+    // cache/in-flight-request bookkeeping (HistoryViewModel.fetch), not a
+    // second copy of it.
     val pagerState = rememberPagerState(initialPage = presets.indexOf(selectedPreset).coerceAtLeast(0)) { presets.size }
     LaunchedEffect(pagerState.settledPage, presets) {
         val target = presets.getOrNull(pagerState.settledPage)
@@ -187,6 +188,18 @@ fun HistoryScreen(
         if (targetIndex >= 0 && pagerState.currentPage != targetIndex) {
             pagerState.animateScrollToPage(targetIndex)
         }
+    }
+    // Warms both neighbors of whichever page is currently front-most -
+    // currentPage (not settledPage) so this starts as soon as a swipe
+    // begins moving toward a neighbor, not only once it fully settles there,
+    // and also fires once up front for the initial page's neighbors while
+    // the user is simply sitting on the first page. onPrefetch itself is a
+    // no-op for a preset that's already cached or already being fetched
+    // (HistoryViewModel.fetch's own guard), so calling this liberally on
+    // every currentPage/presets change is cheap.
+    LaunchedEffect(pagerState.currentPage, presets) {
+        presets.getOrNull(pagerState.currentPage - 1)?.let(onPrefetch)
+        presets.getOrNull(pagerState.currentPage + 1)?.let(onPrefetch)
     }
 
     Scaffold(

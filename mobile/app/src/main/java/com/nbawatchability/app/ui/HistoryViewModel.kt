@@ -9,6 +9,7 @@ import com.nbawatchability.app.data.BACKEND_BASE_URL
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.NetworkLeagueContentRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -67,12 +68,70 @@ class HistoryViewModel : ViewModel() {
 
     private var leagueGroup: LeagueGroup = LeagueGroup.NBA
 
+    // Already-fetched presets' games for the current [leagueGroup] only -
+    // cleared on every league switch (below), since a league switch always
+    // means an entirely different set of games/date ranges under the exact
+    // same preset objects (HistoryRangePreset.ThisSeason is a single shared
+    // instance across every league, not one per league). Lives only as long
+    // as this ViewModel does - no persistence needed, just avoiding
+    // redundant refetches within a session, per James's ask.
+    private val cache = mutableMapOf<HistoryRangePreset, List<Game>>()
+
+    // Presets with a fetch already in flight, keyed the same way - lets an
+    // explicit selection (swipe settle or chip tap) for a preset that's
+    // already being prefetched in the background just ride along with that
+    // existing request instead of firing a second, redundant one; also
+    // covers the reverse (a prefetch request for a preset the user already
+    // explicitly jumped to and is loading). Cleared as each request
+    // finishes, so a failed/cancelled fetch doesn't permanently block retries.
+    private val inFlight = mutableMapOf<HistoryRangePreset, Job>()
+
     fun load(leagueGroup: LeagueGroup, preset: HistoryRangePreset = selectedPreset) {
+        if (leagueGroup != this.leagueGroup) {
+            // Every in-flight request (explicit or prefetched) belongs to
+            // the league being left - their eventual results are for
+            // presets/date-ranges that no longer mean anything under the
+            // new league, so both the cache and any pending jobs are
+            // dropped rather than risking a stale cross-league write later.
+            cache.clear()
+            inFlight.values.forEach { it.cancel() }
+            inFlight.clear()
+        }
         this.leagueGroup = leagueGroup
         selectedPreset = preset
-        uiState = HistoryUiState.Loading
-        viewModelScope.launch {
-            uiState = try {
+
+        val cached = cache[preset]
+        uiState = if (cached != null) HistoryUiState.Loaded(cached) else HistoryUiState.Loading
+
+        fetch(leagueGroup, preset)
+    }
+
+    /**
+     * Warms the cache for a preset the user isn't looking at yet (the
+     * season adjacent to whichever page the History pager is currently
+     * on/settling toward) - a no-op if it's already cached or already being
+     * fetched (including by a prior call to this same function), so rapid
+     * back-and-forth swiping never piles up duplicate requests for the same
+     * preset. Failures aren't surfaced here directly - [fetch]'s own
+     * `preset == selectedPreset` check below only shows an error if/when the
+     * user actually lands on this preset while it's still failing, which
+     * naturally covers both "purely a background prefetch that never got
+     * looked at" (silent) and "user swiped here before this prefetch
+     * resolved, and it then failed" (a real error, correctly shown) with the
+     * same one check - no separate "was this explicitly requested" flag
+     * needed, since a fetch already in flight is shared between whoever
+     * started it and whoever else asks for the same preset afterward.
+     */
+    fun prefetch(leagueGroup: LeagueGroup, preset: HistoryRangePreset) {
+        if (leagueGroup != this.leagueGroup) return
+        fetch(leagueGroup, preset)
+    }
+
+    private fun fetch(leagueGroup: LeagueGroup, preset: HistoryRangePreset) {
+        if (cache.containsKey(preset) || inFlight.containsKey(preset)) return
+
+        inFlight[preset] = viewModelScope.launch {
+            try {
                 val today = LocalDate.now()
                 val (start, end) = dateRangeFor(preset, today, leagueGroup)
                 val response = NetworkLeagueContentRepository.history(
@@ -81,13 +140,33 @@ class HistoryViewModel : ViewModel() {
                     end = end,
                     leagueGroup = leagueGroup
                 )
+                // A stale response for a league the user has since switched
+                // away from - already-cleared cache/inFlight above means
+                // this can only land here if the league changed again
+                // *after* this specific request started; either way, this
+                // result no longer belongs to anything currently shown.
+                if (leagueGroup != this@HistoryViewModel.leagueGroup) return@launch
+
+                cache[preset] = response.games
+                // These describe the league as a whole (every preset's
+                // response carries the same season list/earliest date), not
+                // just this one preset - kept up to date from any
+                // successful fetch, prefetch included, same as before this
+                // caching change existed.
                 earliestDate = LocalDate.parse(response.earliestDate)
                 presets = listOf(HistoryRangePreset.ThisSeason) +
                     response.seasons.map { HistoryRangePreset.NamedSeason(it) } +
                     listOf(HistoryRangePreset.AllTime)
-                HistoryUiState.Loaded(response.games)
+
+                if (preset == selectedPreset) {
+                    uiState = HistoryUiState.Loaded(response.games)
+                }
             } catch (e: Exception) {
-                HistoryUiState.Error(e.message ?: "Couldn't reach the backend")
+                if (preset == selectedPreset && leagueGroup == this@HistoryViewModel.leagueGroup) {
+                    uiState = HistoryUiState.Error(e.message ?: "Couldn't reach the backend")
+                }
+            } finally {
+                inFlight.remove(preset)
             }
         }
     }

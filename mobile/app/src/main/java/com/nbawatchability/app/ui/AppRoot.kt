@@ -571,6 +571,7 @@ private fun HistoryTab(
         selectedPreset = viewModel.selectedPreset,
         earliestDate = viewModel.earliestDate,
         onPresetSelected = { viewModel.load(selectedLeague, it) },
+        onPrefetch = { viewModel.prefetch(selectedLeague, it) },
         onRetry = viewModel::retry,
         showNumericScore = showNumericScore,
         onToggleNumericScore = onToggleNumericScore,
