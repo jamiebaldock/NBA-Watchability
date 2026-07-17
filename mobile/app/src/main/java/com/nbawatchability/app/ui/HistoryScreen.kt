@@ -1,11 +1,9 @@
 package com.nbawatchability.app.ui
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,22 +12,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Tag
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,7 +42,6 @@ import com.nbawatchability.app.data.filterByMinTier
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
-import com.nbawatchability.app.ui.theme.TierWorthYourTime
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
@@ -205,62 +192,41 @@ fun HistoryScreen(
     Scaffold(
         containerColor = BackgroundBase,
         topBar = {
-            TopAppBar(
-                title = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
+            AppTopBar(
+                leading = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
                 actions = {
                     SortMenuButton(
                         selected = sortOption,
                         onSelected = { sortOption = it }
                     )
-                    IconToggleButton(
+                    HideScoresToggleButton(
                         checked = showScore,
                         onCheckedChange = {
                             showScore = it
                             actionLabel = if (it) "Showing scores" else "Hiding scores"
                         }
-                    ) {
-                        Icon(
-                            imageVector = if (showScore) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                            contentDescription = if (showScore) "Hide scores" else "Show scores",
-                            tint = if (!showScore) TierWorthYourTime else TextSecondary
-                        )
-                    }
-                    IconToggleButton(
+                    )
+                    NumericScoreToggleButton(
                         checked = showNumericScore,
                         onCheckedChange = {
                             onToggleNumericScore()
                             actionLabel = if (it) "Showing numeric score" else "Hiding numeric score"
                         }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Tag,
-                            contentDescription = "Show numeric score",
-                            tint = if (showNumericScore) TierWorthYourTime else TextSecondary
-                        )
-                    }
+                    )
+                },
+                secondary = {
+                    NavChipRow(
+                        items = presets,
+                        selected = selectedPreset,
+                        onSelected = onPresetSelected,
+                        label = { it.label }
+                    )
                 }
             )
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                presets.forEach { preset ->
-                    FilterChip(
-                        selected = preset == selectedPreset,
-                        onClick = { onPresetSelected(preset) },
-                        label = { Text(preset.label) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = TierWorthYourTime,
-                            selectedLabelColor = BackgroundBase
-                        )
-                    )
-                }
-            }
-
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize()
