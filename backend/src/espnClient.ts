@@ -372,6 +372,27 @@ export async function fetchLeaders(league: ContentLeague, seasonYear: number): P
   }
 }
 
+/**
+ * Generic sport-namespace-parameterized sibling of fetchLeaders - see
+ * fetchTeamsForSport's comment. Confirmed directly against a real MLB
+ * response (baseball/mlb/seasons/2026/types/2/leaders): same top-level
+ * shape (categories[].leaders[] with displayValue/athlete.$ref/team.$ref),
+ * so EspnLeaderEntry/EspnLeaderCategory/EspnLeadersRoot and statsService.ts's
+ * resolveLeader (which only ever walks $ref URLs generically) needed zero
+ * changes to work for MLB - only the category name list differs (avg/
+ * homeRuns/RBIs/ERA/strikeouts/wins for MLB vs. basketball's per-game
+ * counting stats), which statsService.ts selects per sport.
+ */
+export async function fetchLeadersForSport(sportSlug: string, league: string, seasonYear: number): Promise<EspnLeadersRoot | null> {
+  try {
+    return await getJson<EspnLeadersRoot>(
+      `https://sports.core.api.espn.com/v2/sports/${sportSlug}/leagues/${league}/seasons/${seasonYear}/types/2/leaders`
+    );
+  } catch {
+    return null;
+  }
+}
+
 /** Resolves a leader's athlete $ref to a display name (small ~7KB fetch each, cached daily by the caller). */
 export async function fetchAthleteName(ref: string): Promise<string> {
   const data = await getJson<{ displayName: string }>(ref);
