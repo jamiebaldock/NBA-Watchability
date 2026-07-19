@@ -11,11 +11,12 @@ package com.nbawatchability.app.data
 fun List<Game>.filterByMinTier(
     enabled: Boolean,
     minTier: Tier,
-    weights: RubricWeights
+    nbaWeights: RubricWeights,
+    wnbaWeights: RubricWeights
 ): List<Game> {
     if (!enabled) return this
     return filter { game ->
-        val tier = game.effectiveTier(weights) ?: return@filter true
+        val tier = game.effectiveTier(nbaWeights, wnbaWeights) ?: return@filter true
         tier.ordinal <= minTier.ordinal
     }
 }

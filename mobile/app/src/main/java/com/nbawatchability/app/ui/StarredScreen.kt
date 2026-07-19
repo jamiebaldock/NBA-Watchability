@@ -56,7 +56,8 @@ fun StarredScreen(
     games: List<Game>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
-    weights: RubricWeights,
+    nbaWeights: RubricWeights,
+    wnbaWeights: RubricWeights,
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
@@ -135,16 +136,16 @@ fun StarredScreen(
             // (future/live) starred games, since those have no rating to sort by.
             val ordered = when (sortOption) {
                 SortOption.RATING_HIGHEST_FIRST -> {
-                    val (scored, unscored) = visibleGames.partition { it.effectiveScore(weights) != null }
-                    scored.sortedByDescending { it.effectiveScore(weights) } + unscored.sortedByDescending { it.tipoffUtc }
+                    val (scored, unscored) = visibleGames.partition { it.effectiveScore(nbaWeights, wnbaWeights) != null }
+                    scored.sortedByDescending { it.effectiveScore(nbaWeights, wnbaWeights) } + unscored.sortedByDescending { it.tipoffUtc }
                 }
                 SortOption.RATING_LOWEST_FIRST -> {
-                    val (scored, unscored) = visibleGames.partition { it.effectiveScore(weights) != null }
-                    scored.sortedBy { it.effectiveScore(weights) } + unscored.sortedByDescending { it.tipoffUtc }
+                    val (scored, unscored) = visibleGames.partition { it.effectiveScore(nbaWeights, wnbaWeights) != null }
+                    scored.sortedBy { it.effectiveScore(nbaWeights, wnbaWeights) } + unscored.sortedByDescending { it.tipoffUtc }
                 }
                 SortOption.DATE_OLDEST_FIRST -> visibleGames.sortedBy { it.tipoffUtc }
                 SortOption.DATE_NEWEST_FIRST -> visibleGames.sortedByDescending { it.tipoffUtc }
-            }.filterByMinTier(minTierFilterEnabled, minTierFilter, weights)
+            }.filterByMinTier(minTierFilterEnabled, minTierFilter, nbaWeights, wnbaWeights)
                 .bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
             val listState = rememberLazyListState()
@@ -165,7 +166,8 @@ fun StarredScreen(
                     GameCard(
                         game = game,
                         showNumericScore = showNumericScore,
-                        weights = weights,
+                        nbaWeights = nbaWeights,
+                        wnbaWeights = wnbaWeights,
                         isStarred = starredIds.contains(game.id),
                         onToggleStar = { onToggleStar(game) },
                         onWatchHighlights = onWatchHighlights,

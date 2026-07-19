@@ -71,7 +71,8 @@ private val headToHeadDateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
 @Composable
 fun GameDetailScreen(
     game: Game,
-    weights: RubricWeights,
+    nbaWeights: RubricWeights,
+    wnbaWeights: RubricWeights,
     defaultTab: GameDetailTab,
     onBack: () -> Unit
 ) {
@@ -95,7 +96,7 @@ fun GameDetailScreen(
                 },
                 actions = {
                     IconButton(onClick = {
-                        val shareText = buildShareText(game, weights)
+                        val shareText = buildShareText(game, nbaWeights, wnbaWeights)
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_TEXT, shareText)
@@ -155,7 +156,7 @@ fun GameDetailScreen(
                 }
 
                 when (selectedTab) {
-                    GameDetailTab.BREAKDOWN -> BreakdownTab(game, weights)
+                    GameDetailTab.BREAKDOWN -> BreakdownTab(game, nbaWeights, wnbaWeights)
                     GameDetailTab.TOP_PERFORMERS -> TopPerformersTab(viewModel)
                 }
 
@@ -168,8 +169,8 @@ fun GameDetailScreen(
     }
 }
 
-private fun buildShareText(game: Game, weights: RubricWeights): String {
-    val score = game.effectiveScore(weights)
+private fun buildShareText(game: Game, nbaWeights: RubricWeights, wnbaWeights: RubricWeights): String {
+    val score = game.effectiveScore(nbaWeights, wnbaWeights)
     val tier = game.tier
     return buildString {
         append("${game.away} @ ${game.home}")
@@ -183,9 +184,9 @@ private fun buildShareText(game: Game, weights: RubricWeights): String {
 }
 
 @Composable
-private fun BreakdownTab(game: Game, weights: RubricWeights) {
-    val entries = remember(game.id, weights) { game.rubricBreakdown(weights) }
-    val total = game.effectiveScore(weights) ?: 0
+private fun BreakdownTab(game: Game, nbaWeights: RubricWeights, wnbaWeights: RubricWeights) {
+    val entries = remember(game.id, nbaWeights, wnbaWeights) { game.rubricBreakdown(nbaWeights, wnbaWeights) }
+    val total = game.effectiveScore(nbaWeights, wnbaWeights) ?: 0
 
     Column {
         entries.forEach { entry ->

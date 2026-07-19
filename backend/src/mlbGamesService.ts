@@ -4,19 +4,19 @@
 // ESPN shape and rubric don't overlap with basketball's beyond the generic
 // gameStore setters and the LLM preview call.
 //
-// Deliberately narrower than the full soccer pipeline for this first pass
-// (Games tab only - James's explicit call, same as fifa-world's initial
-// scope): no team-schedule route, no season-window/History wiring yet, and
+// Deliberately narrower than the full soccer pipeline in one remaining way:
 // no per-game rubric-input persistence beyond score/tier (setMlbFinalRubric
 // only ever touches the same columns setSoccerFinalRubric's shared basics
 // use - final_margin/largest_deficit_overcome/score/tier/standout_performers
 // - not ten new MLB-only columns), so there's no client-side weight-adjusted
-// recompute for MLB yet. Can be widened the same way soccer was once that's
+// recompute for MLB yet. Team schedule (getMlbTeamSchedule) and season
+// window (seasonWindowService.ts's getMlbSeasonWindow) are both wired up.
+// Can be widened the same way soccer was once weight-adjusted recompute is
 // actually wanted.
 import { toEspnDate } from "./espnClient";
 import { GameRow, getGame, setMlbFinalRubric, setPreview, setSeasonStageLabel, updateStatus, upsertBaseEntry } from "./gameStore";
 import { mapMlbEspnState, mapMlbEventToGame } from "./mlbGameMapper";
-import { EspnMlbEvent, fetchMlbCalendarDates, fetchMlbScoreboard, fetchMlbSummary } from "./mlbEspnClient";
+import { EspnMlbEvent, fetchMlbCalendarDates, fetchMlbScoreboard, fetchMlbSummary, fetchMlbTeamSchedule } from "./mlbEspnClient";
 import { generateHookAndStakes } from "./llm";
 import { computeMlbWatchabilityScore, tierForMlbScore } from "./mlbRubric";
 import { GameJson } from "./types";
@@ -162,8 +162,11 @@ async function processMlbEvent(event: EspnMlbEvent): Promise<GameJson> {
 // Regular-season and postseason only - spring training (type 1) is
 // deliberately excluded, same rule backfillRawStatsMlb.ts already validated
 // against real data (a spring-training final has no real stakes and pads
-// the Games tab with exhibition noise).
-function isRealSeasonEvent(event: EspnMlbEvent): boolean {
+// the Games tab with exhibition noise). Exported so seasonWindowService.ts's
+// getMlbSeasonWindow can reuse the exact same "skip spring training" rule
+// when scanning for the real regular-season start date, rather than
+// re-deriving it.
+export function isRealSeasonEvent(event: EspnMlbEvent): boolean {
   return event.season?.type !== 1 && event.season?.slug !== "preseason" && event.season?.slug !== "off-season";
 }
 
@@ -172,6 +175,24 @@ export async function getMlbGamesForDate(date: string): Promise<GameJson[]> {
   const espnDate = toEspnDate(new Date(`${date}T12:00:00Z`));
   const events = (await fetchMlbScoreboard(espnDate)).filter(isRealSeasonEvent);
 
+  const results: GameJson[] = [];
+  for (const event of events) {
+    results.push(await processMlbEvent(event));
+  }
+  return results;
+}
+
+/**
+ * A single favorited team's own real schedule (past and upcoming, current
+ * season) - backs the Favorites tab's Games page, MLB analogue of
+ * gamesService.ts's getTeamSchedule / soccerGamesService.ts's
+ * getSoccerTeamSchedule. Reuses the same processMlbEvent pipeline every
+ * other MLB event (day-based or team-based) goes through, so a favorited
+ * team's games get the same preview/final-rubric treatment as the Games
+ * tab's own slate.
+ */
+export async function getMlbTeamSchedule(teamId: string): Promise<GameJson[]> {
+  const events = (await fetchMlbTeamSchedule(teamId)).filter(isRealSeasonEvent);
   const results: GameJson[] = [];
   for (const event of events) {
     results.push(await processMlbEvent(event));

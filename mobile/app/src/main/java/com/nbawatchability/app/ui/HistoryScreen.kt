@@ -106,7 +106,8 @@ fun HistoryScreen(
     onRetry: () -> Unit,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
-    weights: RubricWeights,
+    nbaWeights: RubricWeights,
+    wnbaWeights: RubricWeights,
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
@@ -267,7 +268,7 @@ fun HistoryScreen(
                                 LeagueGroup.WNBA -> ALL_TIME_MIN_SCORE_WNBA
                                 else -> ALL_TIME_MIN_SCORE_NBA
                             }
-                            (game.effectiveScore(weights) ?: 0) >= allTimeMinScore
+                            (game.effectiveScore(nbaWeights, wnbaWeights) ?: 0) >= allTimeMinScore
                         }
                     } else {
                         uiState.games
@@ -294,11 +295,11 @@ fun HistoryScreen(
                         // every History game already has a score, so unlike
                         // Starred there's no unscored tail to fall back to.
                         val ordered = when (sortOption) {
-                            SortOption.RATING_HIGHEST_FIRST -> displayGames.sortedByDescending { it.effectiveScore(weights) }
-                            SortOption.RATING_LOWEST_FIRST -> displayGames.sortedBy { it.effectiveScore(weights) }
+                            SortOption.RATING_HIGHEST_FIRST -> displayGames.sortedByDescending { it.effectiveScore(nbaWeights, wnbaWeights) }
+                            SortOption.RATING_LOWEST_FIRST -> displayGames.sortedBy { it.effectiveScore(nbaWeights, wnbaWeights) }
                             SortOption.DATE_OLDEST_FIRST -> displayGames.sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
                             SortOption.DATE_NEWEST_FIRST -> displayGames.sortedByDescending { OffsetDateTime.parse(it.tipoffUtc) }
-                        }.filterByMinTier(minTierFilterEnabled, minTierFilter, weights)
+                        }.filterByMinTier(minTierFilterEnabled, minTierFilter, nbaWeights, wnbaWeights)
                             .bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
                         val listState = rememberLazyListState()
@@ -320,7 +321,8 @@ fun HistoryScreen(
                                 GameCard(
                                     game = game,
                                     showNumericScore = showNumericScore,
-                                    weights = weights,
+                                    nbaWeights = nbaWeights,
+                                    wnbaWeights = wnbaWeights,
                                     isStarred = starredIds.contains(game.id),
                                     onToggleStar = { onToggleStar(game) },
                                     onWatchHighlights = onWatchHighlights,

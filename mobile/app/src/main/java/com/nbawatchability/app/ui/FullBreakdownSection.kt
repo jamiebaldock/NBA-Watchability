@@ -61,7 +61,8 @@ private val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 @Composable
 fun FullBreakdownSection(
     game: Game,
-    weights: RubricWeights,
+    nbaWeights: RubricWeights,
+    wnbaWeights: RubricWeights,
     modifier: Modifier = Modifier,
     spoilerFree: Boolean = false
 ) {
@@ -75,7 +76,7 @@ fun FullBreakdownSection(
             HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = breakdownAnnotatedText(game, weights),
+                text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
@@ -83,7 +84,7 @@ fun FullBreakdownSection(
         } else {
             if (canBlur) {
                 Text(
-                    text = breakdownAnnotatedText(game, weights),
+                    text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                     modifier = Modifier.blur(7.dp)
@@ -166,12 +167,12 @@ private fun breakdownFacts(game: Game): List<String> = buildList {
     }
 }
 
-private fun breakdownAnnotatedText(game: Game, weights: RubricWeights) = buildAnnotatedString {
+private fun breakdownAnnotatedText(game: Game, nbaWeights: RubricWeights, wnbaWeights: RubricWeights) = buildAnnotatedString {
     val facts = breakdownFacts(game)
     append(if (facts.isEmpty()) "No standout moments logged" else facts.joinToString(" · "))
     append(" · Watchability ")
     withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")) {
-        append("${game.effectiveScore(weights) ?: 0}/100")
+        append("${game.effectiveScore(nbaWeights, wnbaWeights) ?: 0}/100")
     }
 }
 

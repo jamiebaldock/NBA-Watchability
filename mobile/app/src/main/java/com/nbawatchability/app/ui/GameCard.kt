@@ -78,7 +78,8 @@ private const val TABULAR_NUMS = "tnum"
 fun GameCard(
     game: Game,
     showNumericScore: Boolean,
-    weights: RubricWeights,
+    nbaWeights: RubricWeights,
+    wnbaWeights: RubricWeights,
     modifier: Modifier = Modifier,
     isStarred: Boolean = false,
     onToggleStar: () -> Unit = {},
@@ -119,7 +120,7 @@ fun GameCard(
     // is true (gated below, not by the caller).
     onGameClick: (Game) -> Unit = {}
 ) {
-    val tier = game.effectiveTier(weights)
+    val tier = game.effectiveTier(nbaWeights, wnbaWeights)
 
     Card(
         onClick = { if (game.hasBreakdown) onGameClick(game) },
@@ -167,7 +168,7 @@ fun GameCard(
                     if (tier != null) {
                         TierBadge(
                             tier = tier,
-                            numericScore = if (showNumericScore) game.effectiveScore(weights) else null
+                            numericScore = if (showNumericScore) game.effectiveScore(nbaWeights, wnbaWeights) else null
                         )
                     } else {
                         Spacer(modifier = Modifier.size(0.dp))
@@ -240,7 +241,8 @@ fun GameCard(
                     val breakdownTopPadding = if (game.status == GameStatus.FINAL) 10.dp else 12.dp
                     FullBreakdownSection(
                         game = game,
-                        weights = weights,
+                        nbaWeights = nbaWeights,
+                        wnbaWeights = wnbaWeights,
                         spoilerFree = spoilerFree,
                         modifier = Modifier.padding(top = breakdownTopPadding)
                     )

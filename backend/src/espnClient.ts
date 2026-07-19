@@ -316,6 +316,34 @@ export async function fetchStandings(league: ContentLeague, seasonYear: number):
   return hasEntries ? data : null;
 }
 
+// Recurses arbitrarily deep, unlike fetchStandings' own single-level check -
+// needed because fetchStandingsForSport's MLB caller (level=3 below) nests
+// real per-team entries two levels down (league -> division), not one.
+function groupsHaveEntries(groups: EspnStandingsGroup[]): boolean {
+  return groups.some(
+    (group) => (group.standings?.entries?.length ?? 0) > 0 || (group.children?.length ? groupsHaveEntries(group.children) : false)
+  );
+}
+
+/**
+ * Generic sport-namespace-parameterized sibling of fetchStandings - see
+ * fetchTeamsForSport's comment. Confirmed directly against a real MLB
+ * response (baseball/mlb/standings?season=2026): without &level=3, ESPN
+ * returns just two flat groups (American League / National League, 15 teams
+ * each, no division split at all). &level=3 is what actually produces the
+ * real AL/NL -> East/Central/West nesting (same depth as basketball's
+ * conference -> division), and the division-level entries carry the exact
+ * same wins/losses/winPercent/gamesBehind/streak stat names basketball's
+ * flattenGroups already looks for, so no basketball-side type or logic
+ * changes were needed to reuse it for MLB.
+ */
+export async function fetchStandingsForSport(sportSlug: string, league: string, seasonYear: number): Promise<EspnStandingsRoot | null> {
+  const data = await getJson<EspnStandingsRoot>(
+    `https://site.api.espn.com/apis/v2/sports/${sportSlug}/${league}/standings?season=${seasonYear}&level=3`
+  );
+  return groupsHaveEntries(data.children ?? []) ? data : null;
+}
+
 export interface EspnLeaderEntry {
   displayValue: string;
   athlete: { $ref: string };

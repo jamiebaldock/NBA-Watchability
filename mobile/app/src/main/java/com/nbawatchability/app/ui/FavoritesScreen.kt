@@ -83,7 +83,8 @@ fun FavoritesScreen(
     enabledLeagues: Set<LeagueGroup>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
-    weights: RubricWeights,
+    nbaWeights: RubricWeights,
+    wnbaWeights: RubricWeights,
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
@@ -170,7 +171,8 @@ fun FavoritesScreen(
                     showAllLeagues = showAllLeagues,
                     sortOption = sortOptionUpcoming,
                     showNumericScore = showNumericScore,
-                    weights = weights,
+                    nbaWeights = nbaWeights,
+                    wnbaWeights = wnbaWeights,
                     starredIds = starredIds,
                     onToggleStar = onToggleStar,
                     onWatchHighlights = onWatchHighlights,
@@ -189,7 +191,8 @@ fun FavoritesScreen(
                     showAllLeagues = showAllLeagues,
                     sortOption = sortOptionPast,
                     showNumericScore = showNumericScore,
-                    weights = weights,
+                    nbaWeights = nbaWeights,
+                    wnbaWeights = wnbaWeights,
                     starredIds = starredIds,
                     onToggleStar = onToggleStar,
                     onWatchHighlights = onWatchHighlights,
@@ -229,7 +232,8 @@ private fun FavoriteGamesPage(
     showAllLeagues: Boolean,
     sortOption: SortOption,
     showNumericScore: Boolean,
-    weights: RubricWeights,
+    nbaWeights: RubricWeights,
+    wnbaWeights: RubricWeights,
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
@@ -275,12 +279,12 @@ private fun FavoriteGamesPage(
                 // score to sort by yet.
                 val ordered = when (sortOption) {
                     SortOption.RATING_HIGHEST_FIRST -> {
-                        val (scored, unscored) = visibleGames.partition { it.effectiveScore(weights) != null }
-                        scored.sortedByDescending { it.effectiveScore(weights) } + unscored.sortedByDescending { it.tipoffUtc }
+                        val (scored, unscored) = visibleGames.partition { it.effectiveScore(nbaWeights, wnbaWeights) != null }
+                        scored.sortedByDescending { it.effectiveScore(nbaWeights, wnbaWeights) } + unscored.sortedByDescending { it.tipoffUtc }
                     }
                     SortOption.RATING_LOWEST_FIRST -> {
-                        val (scored, unscored) = visibleGames.partition { it.effectiveScore(weights) != null }
-                        scored.sortedBy { it.effectiveScore(weights) } + unscored.sortedByDescending { it.tipoffUtc }
+                        val (scored, unscored) = visibleGames.partition { it.effectiveScore(nbaWeights, wnbaWeights) != null }
+                        scored.sortedBy { it.effectiveScore(nbaWeights, wnbaWeights) } + unscored.sortedByDescending { it.tipoffUtc }
                     }
                     SortOption.DATE_OLDEST_FIRST -> visibleGames.sortedBy { it.tipoffUtc }
                     SortOption.DATE_NEWEST_FIRST -> visibleGames.sortedByDescending { it.tipoffUtc }
@@ -299,7 +303,8 @@ private fun FavoriteGamesPage(
                         GameCard(
                             game = game,
                             showNumericScore = showNumericScore,
-                            weights = weights,
+                            nbaWeights = nbaWeights,
+                            wnbaWeights = wnbaWeights,
                             isStarred = starredIds.contains(game.id),
                             onToggleStar = { onToggleStar(game) },
                             onWatchHighlights = onWatchHighlights,

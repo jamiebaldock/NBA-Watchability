@@ -6,9 +6,14 @@ import { ContentLeague } from "./espnClient";
 // caller (standingsService/statsService) always falls back a year if the
 // guessed season has no data yet (offseason before the new season's first
 // games), so it doesn't need to be exact about each league's cutover month.
-function guessSeasonYear(league: ContentLeague, now: Date): number {
+// MLB's season (spring training through the World Series) is also entirely
+// within one calendar year, same as WNBA's, so it shares that branch - "mlb"
+// is accepted here (and by resolveSeasonYear below) alongside the
+// basketball-only ContentLeague union rather than needing its own parallel
+// copy of this try-guess-then-fallback logic in standingsService.ts.
+function guessSeasonYear(league: ContentLeague | "mlb", now: Date): number {
   const year = now.getUTCFullYear();
-  if (league === "wnba") return year;
+  if (league === "wnba" || league === "mlb") return year;
   const month = now.getUTCMonth(); // 0-indexed; October = 9
   return month >= 9 ? year + 1 : year;
 }
@@ -19,7 +24,7 @@ function guessSeasonYear(league: ContentLeague, now: Date): number {
  * case and "current season hasn't started yet, show the one that just ended."
  */
 export async function resolveSeasonYear<T>(
-  league: ContentLeague,
+  league: ContentLeague | "mlb",
   now: Date,
   fetchFn: (seasonYear: number) => Promise<T | null>
 ): Promise<{ year: number; data: T } | null> {

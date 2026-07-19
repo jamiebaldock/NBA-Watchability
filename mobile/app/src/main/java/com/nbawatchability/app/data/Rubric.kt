@@ -130,16 +130,17 @@ private object Rubric {
 // sliders simply don't affect MLB tiles yet, and the server's real score is
 // used as-is, same as every other league before soccer's weight system
 // existed.
-fun Game.effectiveScore(weights: RubricWeights): Int? =
+fun Game.effectiveScore(nbaWeights: RubricWeights, wnbaWeights: RubricWeights): Int? =
     if (scoreVisible && score != null) {
         when (league) {
             "mlb" -> score
-            else -> Rubric.computeScore(this, weights)
+            "wnba" -> Rubric.computeScore(this, wnbaWeights)
+            else -> Rubric.computeScore(this, nbaWeights) // "nba" and "summer" - Summer League is NBA-affiliated, not a separate scoring path
         }
     } else null
 
-fun Game.effectiveTier(weights: RubricWeights): Tier? =
-    effectiveScore(weights)?.let { Tier.fromScore(it, league) }
+fun Game.effectiveTier(nbaWeights: RubricWeights, wnbaWeights: RubricWeights): Tier? =
+    effectiveScore(nbaWeights, wnbaWeights)?.let { Tier.fromScore(it, league) }
 
 /**
  * One line of the game-detail popup's rubric-breakdown tab - a labeled
@@ -160,9 +161,10 @@ data class RubricBreakdownEntry(val label: String, val points: Float, val maxPoi
  * total. Empty if the outcome isn't revealed yet (same scoreVisible gate as
  * effectiveScore).
  */
-fun Game.rubricBreakdown(weights: RubricWeights): List<RubricBreakdownEntry> {
+fun Game.rubricBreakdown(nbaWeights: RubricWeights, wnbaWeights: RubricWeights): List<RubricBreakdownEntry> {
     if (!scoreVisible || score == null) return emptyList()
     val isWnba = league == "wnba"
+    val weights = if (isWnba) wnbaWeights else nbaWeights
     return listOf(
         RubricBreakdownEntry("Margin", Rubric.marginPoints(margin, isWnba) * weights.margin, 25f * weights.margin),
         RubricBreakdownEntry(

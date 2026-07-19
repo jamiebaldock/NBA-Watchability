@@ -5,7 +5,7 @@ import { getGamesForDate, getNextScheduledDate, getTeamSchedule } from "./gamesS
 import { getHistory, HistoryResult } from "./historyService";
 import { getNews } from "./newsService";
 import { getSeasonWindow, SeasonWindow } from "./seasonWindowService";
-import { getMlbGamesForDate, getNextMlbScheduledDate, isMlbLeagueGroup } from "./mlbGamesService";
+import { getMlbGamesForDate, getMlbTeamSchedule, getNextMlbScheduledDate, isMlbLeagueGroup } from "./mlbGamesService";
 import { getRoster } from "./rosterService";
 import { getStandings } from "./standingsService";
 import { getStats } from "./statsService";
@@ -54,17 +54,18 @@ function getGamesForDateAnySport(date: string, leagueGroup: LeagueGroup): Promis
 
 /**
  * Backs the Favorites tab's Games page - a single favorited team's own
- * real schedule (past and upcoming), not a whole day's slate. "mlb"/"nfl"/
- * "nhl" are rejected explicitly - no favorite-teams/team-schedule route
- * exists for any of them yet (Games-tab-only first pass, see
- * mlbGamesService.ts's file comment; nfl/nhl have no games pipeline at all).
+ * real schedule (past and upcoming), not a whole day's slate. "nfl"/"nhl"
+ * are still rejected explicitly - neither has any games pipeline at all yet.
+ * "mlb" is dispatched to its own team-schedule pipeline (mlbGamesService.ts's
+ * getMlbTeamSchedule).
  */
 export async function getTeamScheduleForLeagueGroup(teamId: string, leagueGroupRaw = "nba"): Promise<GameJson[]> {
   if (!teamId) throw new BadRequestError("teamId is required");
   const leagueGroup = parseLeagueGroup(leagueGroupRaw);
-  if (leagueGroup === "mlb" || leagueGroup === "nfl" || leagueGroup === "nhl") {
+  if (leagueGroup === "nfl" || leagueGroup === "nhl") {
     throw new BadRequestError(`team schedules aren't available for ${leagueGroup} yet`);
   }
+  if (isMlbLeagueGroup(leagueGroup)) return getMlbTeamSchedule(teamId);
   return getTeamSchedule(teamId, leagueGroup);
 }
 

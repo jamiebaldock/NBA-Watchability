@@ -41,7 +41,8 @@ import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 
 private enum class RubricSport(val label: String) {
-    BASKETBALL("Basketball"),
+    NBA("NBA"),
+    WNBA("WNBA"),
     MLB("MLB"),
     NFL("NFL"),
     NHL("NHL")
@@ -60,15 +61,18 @@ private enum class RubricSport(val label: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RubricWeightsScreen(
-    weights: RubricWeights,
-    onWeightChange: (RubricCategory, Float) -> Unit,
-    onReset: () -> Unit,
+    nbaWeights: RubricWeights,
+    onNbaWeightChange: (RubricCategory, Float) -> Unit,
+    onNbaReset: () -> Unit,
+    wnbaWeights: RubricWeights,
+    onWnbaWeightChange: (RubricCategory, Float) -> Unit,
+    onWnbaReset: () -> Unit,
     mlbWeights: MlbRubricWeights,
     onMlbWeightChange: (MlbRubricCategory, Float) -> Unit,
     onMlbReset: () -> Unit,
     onBack: () -> Unit
 ) {
-    var sport by remember { mutableStateOf(RubricSport.BASKETBALL) }
+    var sport by remember { mutableStateOf(RubricSport.NBA) }
 
     Scaffold(
         containerColor = BackgroundBase,
@@ -115,18 +119,38 @@ fun RubricWeightsScreen(
             )
 
             when (sport) {
-                RubricSport.BASKETBALL -> {
-                    WeightSlider("Margin", weights.margin) { onWeightChange(RubricCategory.MARGIN, it) }
-                    WeightSlider("Clutch finish", weights.clutch) { onWeightChange(RubricCategory.CLUTCH, it) }
-                    WeightSlider("Buzzer-beater", weights.buzzerBeater) { onWeightChange(RubricCategory.BUZZER_BEATER, it) }
-                    WeightSlider("Comeback", weights.comeback) { onWeightChange(RubricCategory.COMEBACK, it) }
-                    WeightSlider("Lead changes", weights.leadChanges) { onWeightChange(RubricCategory.LEAD_CHANGES, it) }
-                    WeightSlider("Overtime", weights.overtime) { onWeightChange(RubricCategory.OVERTIME, it) }
-                    WeightSlider("Star performance", weights.starPerformance) { onWeightChange(RubricCategory.STAR_PERFORMANCE, it) }
-                    WeightSlider("Stakes", weights.stakes) { onWeightChange(RubricCategory.STAKES, it) }
+                RubricSport.NBA -> {
+                    WeightSlider("Margin", nbaWeights.margin) { onNbaWeightChange(RubricCategory.MARGIN, it) }
+                    WeightSlider("Clutch finish", nbaWeights.clutch) { onNbaWeightChange(RubricCategory.CLUTCH, it) }
+                    WeightSlider("Buzzer-beater", nbaWeights.buzzerBeater) { onNbaWeightChange(RubricCategory.BUZZER_BEATER, it) }
+                    WeightSlider("Comeback", nbaWeights.comeback) { onNbaWeightChange(RubricCategory.COMEBACK, it) }
+                    WeightSlider("Lead changes", nbaWeights.leadChanges) { onNbaWeightChange(RubricCategory.LEAD_CHANGES, it) }
+                    WeightSlider("Overtime", nbaWeights.overtime) { onNbaWeightChange(RubricCategory.OVERTIME, it) }
+                    WeightSlider("Star performance", nbaWeights.starPerformance) { onNbaWeightChange(RubricCategory.STAR_PERFORMANCE, it) }
+                    WeightSlider("Stakes", nbaWeights.stakes) { onNbaWeightChange(RubricCategory.STAKES, it) }
 
                     OutlinedButton(
-                        onClick = onReset,
+                        onClick = onNbaReset,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp)
+                    ) {
+                        Text("Reset to default")
+                    }
+                }
+
+                RubricSport.WNBA -> {
+                    WeightSlider("Margin", wnbaWeights.margin) { onWnbaWeightChange(RubricCategory.MARGIN, it) }
+                    WeightSlider("Clutch finish", wnbaWeights.clutch) { onWnbaWeightChange(RubricCategory.CLUTCH, it) }
+                    WeightSlider("Buzzer-beater", wnbaWeights.buzzerBeater) { onWnbaWeightChange(RubricCategory.BUZZER_BEATER, it) }
+                    WeightSlider("Comeback", wnbaWeights.comeback) { onWnbaWeightChange(RubricCategory.COMEBACK, it) }
+                    WeightSlider("Lead changes", wnbaWeights.leadChanges) { onWnbaWeightChange(RubricCategory.LEAD_CHANGES, it) }
+                    WeightSlider("Overtime", wnbaWeights.overtime) { onWnbaWeightChange(RubricCategory.OVERTIME, it) }
+                    WeightSlider("Star performance", wnbaWeights.starPerformance) { onWnbaWeightChange(RubricCategory.STAR_PERFORMANCE, it) }
+                    WeightSlider("Stakes", wnbaWeights.stakes) { onWnbaWeightChange(RubricCategory.STAKES, it) }
+
+                    OutlinedButton(
+                        onClick = onWnbaReset,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 24.dp)
