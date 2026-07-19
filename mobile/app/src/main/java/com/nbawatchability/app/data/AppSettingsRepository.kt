@@ -15,7 +15,6 @@ private val Context.appSettingsDataStore: DataStore<Preferences> by preferencesD
 
 private val SELECTED_LEAGUE_KEY = stringPreferencesKey("selected_league")
 private val SHOW_NUMERIC_SCORE_KEY = booleanPreferencesKey("show_numeric_score")
-private val SHOW_ALL_LEAGUES_IN_STARRED_KEY = booleanPreferencesKey("show_all_leagues_in_starred")
 private val ENABLED_LEAGUES_KEY = stringSetPreferencesKey("enabled_leagues")
 private val BUMP_FAVORITE_TEAM_GAMES_KEY = booleanPreferencesKey("bump_favorite_team_games")
 // Raw BottomNavTab enum name (e.g. "GAMES") - stored as a plain string rather
@@ -34,16 +33,17 @@ private val LIGHT_THEME_KEY = booleanPreferencesKey("light_theme")
 // above (GameDetailTab lives in the ui package).
 private val DEFAULT_GAME_DETAIL_TAB_KEY = stringPreferencesKey("default_game_detail_tab")
 
-// Every league ships enabled by default, including the four not-yet-built
-// placeholders - Settings' "Selected Sports" section is what a user reaches
-// for to hide ones they don't care about, not something they need to opt
-// into first just to see NBA/WNBA in the dropdown as before.
-private val DEFAULT_ENABLED_LEAGUES = LeagueGroup.entries.map { it.apiValue }.toSet()
+// Only the core US sports set ships enabled by default for now - NBA/WNBA
+// (both fully built) plus NHL/MLB/NFL (queued next, still placeholders) -
+// every other LeagueGroup entry (soccer competitions, F1, etc.) stays
+// defined in the enum for later but is hidden from the dropdown and
+// Settings' "Selected Leagues" list until then, per James's call.
+private val DEFAULT_ENABLED_LEAGUES = setOf(LeagueGroup.NBA, LeagueGroup.WNBA, LeagueGroup.NHL, LeagueGroup.MLB, LeagueGroup.NFL)
+    .map { it.apiValue }.toSet()
 
 data class AppSettings(
     val selectedLeague: LeagueGroup = LeagueGroup.NBA,
     val showNumericScore: Boolean = false,
-    val showAllLeaguesInStarred: Boolean = false,
     val enabledLeagues: Set<LeagueGroup> = LeagueGroup.entries.toSet(),
     // Default (false) is "visual marking only" - a favorited team's games
     // still show in whatever order the tab already uses (score/date), just
@@ -84,7 +84,6 @@ class AppSettingsRepository(private val context: Context) {
         AppSettings(
             selectedLeague = LeagueGroup.entries.find { it.apiValue == prefs[SELECTED_LEAGUE_KEY] } ?: LeagueGroup.NBA,
             showNumericScore = prefs[SHOW_NUMERIC_SCORE_KEY] ?: false,
-            showAllLeaguesInStarred = prefs[SHOW_ALL_LEAGUES_IN_STARRED_KEY] ?: false,
             enabledLeagues = LeagueGroup.entries.filter { it.apiValue in enabledApiValues }.toSet(),
             bumpFavoriteTeamGames = prefs[BUMP_FAVORITE_TEAM_GAMES_KEY] ?: false,
             defaultLandingTab = prefs[DEFAULT_LANDING_TAB_KEY] ?: "GAMES",
@@ -103,10 +102,6 @@ class AppSettingsRepository(private val context: Context) {
 
     suspend fun setShowNumericScore(value: Boolean) {
         context.appSettingsDataStore.edit { it[SHOW_NUMERIC_SCORE_KEY] = value }
-    }
-
-    suspend fun setShowAllLeaguesInStarred(value: Boolean) {
-        context.appSettingsDataStore.edit { it[SHOW_ALL_LEAGUES_IN_STARRED_KEY] = value }
     }
 
     suspend fun setEnabledLeagues(leagues: Set<LeagueGroup>) {

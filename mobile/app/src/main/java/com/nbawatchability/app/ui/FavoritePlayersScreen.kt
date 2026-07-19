@@ -57,15 +57,10 @@ import com.nbawatchability.app.ui.theme.TierInstantClassic
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 
-// Same 4-league scope as FavoriteTeamsScreen - /roster only has real data
-// wherever /teams does, since both hit the same ESPN teams-list endpoint
-// for the team-id step.
-private enum class RosterBrowsableLeague(val apiValue: String, val label: String) {
-    NBA("nba", "NBA"),
-    WNBA("wnba", "WNBA"),
-    EPL("epl", "EPL"),
-    LA_LIGA("la-liga", "La Liga")
-}
+// Same scope as FavoriteTeamsScreen.BROWSABLE_LEAGUES - /roster only has
+// real data wherever /teams does, since both hit the same ESPN teams-list
+// endpoint for the team-id step.
+private val ROSTER_BROWSABLE_LEAGUES = listOf(LeagueGroup.NBA, LeagueGroup.WNBA, LeagueGroup.NHL, LeagueGroup.MLB, LeagueGroup.NFL)
 
 /**
  * Search/browse screen for favoriting players - reachable from Settings,
@@ -83,7 +78,7 @@ fun FavoritePlayersScreen(
     onToggleFavoritePlayer: (FavoritePlayer) -> Unit,
     onBack: () -> Unit
 ) {
-    var selectedLeague by rememberSaveable { mutableStateOf(RosterBrowsableLeague.NBA) }
+    var selectedLeague by rememberSaveable { mutableStateOf(LeagueGroup.NBA) }
     var selectedTeam by rememberSaveable { mutableStateOf<Team?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
 
@@ -92,11 +87,11 @@ fun FavoritePlayersScreen(
     val leagueRostersViewModel: LeagueRostersViewModel = viewModel()
 
     LaunchedEffect(selectedLeague) {
-        teamsViewModel.load(LeagueGroup.entries.first { it.apiValue == selectedLeague.apiValue })
+        if (selectedLeague.isSupported) teamsViewModel.load(selectedLeague)
     }
     LaunchedEffect(selectedTeam) {
         selectedTeam?.let { team ->
-            rosterViewModel.load(LeagueGroup.entries.first { it.apiValue == selectedLeague.apiValue }, team.id)
+            rosterViewModel.load(selectedLeague, team.id)
         }
     }
     // Prefetches every team's roster for the selected league as soon as the
@@ -106,7 +101,7 @@ fun FavoritePlayersScreen(
     val teamsState = teamsViewModel.uiState
     LaunchedEffect(selectedLeague, teamsState) {
         if (teamsState is TeamsUiState.Loaded) {
-            leagueRostersViewModel.load(LeagueGroup.entries.first { it.apiValue == selectedLeague.apiValue }, teamsState.data.teams)
+            leagueRostersViewModel.load(selectedLeague, teamsState.data.teams)
         }
     }
 
@@ -130,11 +125,11 @@ fun FavoritePlayersScreen(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    RosterBrowsableLeague.entries.forEach { league ->
+                    ROSTER_BROWSABLE_LEAGUES.forEach { league ->
                         FilterChip(
                             selected = league == selectedLeague,
                             onClick = { selectedLeague = league },
-                            label = { Text(league.label) },
+                            label = { Text(league.shortDisplayName) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = TierWorthYourTime,
                                 selectedLabelColor = BackgroundBase
@@ -156,6 +151,11 @@ fun FavoritePlayersScreen(
                         unfocusedBorderColor = TextMuted
                     )
                 )
+
+                if (!selectedLeague.isSupported) {
+                    EmptyBox("${selectedLeague.displayName} isn't built yet - check back later.")
+                    return@Column
+                }
 
                 when (val state = teamsViewModel.uiState) {
                     is TeamsUiState.Loading -> LoadingBox()

@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Wifi
@@ -57,8 +56,6 @@ import com.nbawatchability.app.ui.theme.TierWorthYourTime
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    showAllLeaguesInStarred: Boolean,
-    onToggleShowAllLeaguesInStarred: () -> Unit,
     onSelectedSportsClick: () -> Unit,
     onRubricWeightsClick: () -> Unit,
     onAboutClick: () -> Unit,
@@ -125,7 +122,7 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.ChecklistRtl, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text(text = "Selected Sports", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                    Text(text = "Selected Leagues", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
                 }
                 Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
             }
@@ -187,31 +184,6 @@ fun SettingsScreen(
                 Switch(
                     checked = bumpFavoriteTeamGames,
                     onCheckedChange = { onToggleBumpFavoriteTeamGames() },
-                    colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime)
-                )
-            }
-
-            HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
-
-            // Starred normally follows the shared league dropdown like every
-            // other tab; this ON state makes it show every league's starred
-            // games combined instead, ignoring that dropdown entirely (see
-            // StarredScreen.kt).
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Default.Public, contentDescription = null, tint = TextSecondary)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(text = "Show all leagues in Starred", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
-                }
-                Switch(
-                    checked = showAllLeaguesInStarred,
-                    onCheckedChange = { onToggleShowAllLeaguesInStarred() },
                     colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime)
                 )
             }

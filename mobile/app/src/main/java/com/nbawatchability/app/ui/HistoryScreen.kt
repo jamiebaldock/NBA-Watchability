@@ -129,6 +129,8 @@ fun HistoryScreen(
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     enabledLeagues: Set<LeagueGroup>,
+    isAllLeaguesSelected: Boolean,
+    onToggleAllLeagues: () -> Unit,
     favoriteTeamNames: Set<String> = emptySet(),
     bumpFavoriteTeamGames: Boolean = false,
     onToggleFavoriteTeam: (Team) -> Unit = {},
@@ -193,7 +195,15 @@ fun HistoryScreen(
         containerColor = BackgroundBase,
         topBar = {
             AppTopBar(
-                leading = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
+                leading = {
+                    TitleLeagueSelector(
+                        selectedLeague = selectedLeague,
+                        onLeagueSelected = onLeagueSelected,
+                        enabledLeagues = enabledLeagues,
+                        isAllLeaguesSelected = isAllLeaguesSelected,
+                        onAllLeaguesSelected = onToggleAllLeagues
+                    )
+                },
                 actions = {
                     SortMenuButton(
                         selected = sortOption,
@@ -261,13 +271,22 @@ fun HistoryScreen(
                 }
 
                 is HistoryUiState.Loaded -> {
+                    // Looked up per-game (leagueGroupOf(it), not the single
+                    // selectedLeague dropdown value) - correct in both
+                    // single-league mode (every game already belongs to
+                    // selectedLeague, so this is a no-op change there) and
+                    // "All Leagues" mode, where a merged list can hold games
+                    // from more than one league at once, each needing its
+                    // own bar.
                     val displayGames = if (selectedPreset is HistoryRangePreset.AllTime) {
-                        val allTimeMinScore = when (selectedLeague) {
-                            LeagueGroup.WNBA -> ALL_TIME_MIN_SCORE_WNBA
-                            LeagueGroup.EPL, LeagueGroup.LA_LIGA -> ALL_TIME_MIN_SCORE_SOCCER
-                            else -> ALL_TIME_MIN_SCORE_NBA
+                        uiState.games.filter { game ->
+                            val allTimeMinScore = when (leagueGroupOf(game)) {
+                                LeagueGroup.WNBA -> ALL_TIME_MIN_SCORE_WNBA
+                                LeagueGroup.EPL, LeagueGroup.LA_LIGA -> ALL_TIME_MIN_SCORE_SOCCER
+                                else -> ALL_TIME_MIN_SCORE_NBA
+                            }
+                            (game.effectiveScore(weights, soccerWeights) ?: 0) >= allTimeMinScore
                         }
-                        uiState.games.filter { (it.effectiveScore(weights, soccerWeights) ?: 0) >= allTimeMinScore }
                     } else {
                         uiState.games
                     }

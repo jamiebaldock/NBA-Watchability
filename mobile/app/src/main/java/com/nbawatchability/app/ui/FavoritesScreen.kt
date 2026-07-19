@@ -31,8 +31,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -82,6 +80,8 @@ fun FavoritesScreen(
     favoriteGamesUiState: FavoriteGamesUiState,
     onFavoriteGamesRetry: () -> Unit,
     selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
     weights: RubricWeights,
@@ -106,9 +106,10 @@ fun FavoritesScreen(
     // Shared between the Upcoming and Past pages rather than duplicated per
     // page - James's call, since it's one scope decision ("my teams
     // everywhere" vs "my teams in the league I'm currently looking at"), not
-    // two independent ones. Defaults on (every league) to match this tab's
-    // behavior before this toggle existed.
-    var showAllLeagues by remember { mutableStateOf(true) }
+    // two independent ones. Defaults off (the real selected league) now that
+    // this is a first-class option on the same dropdown every other tab
+    // uses, rather than its own always-on toggle.
+    var showAllLeagues by remember { mutableStateOf(false) }
     // Each Games page keeps its own independent sort - unlike showAllLeagues
     // above, "oldest first" for Upcoming and "newest first" for Past are
     // both meaningful defaults in their own right, not one shared decision.
@@ -122,7 +123,15 @@ fun FavoritesScreen(
         containerColor = BackgroundBase,
         topBar = {
             AppTopBar(
-                leading = { Text("Favorites", color = TextPrimary) },
+                leading = {
+                    TitleLeagueSelector(
+                        selectedLeague = selectedLeague,
+                        onLeagueSelected = { league -> showAllLeagues = false; onLeagueSelected(league) },
+                        enabledLeagues = enabledLeagues,
+                        isAllLeaguesSelected = showAllLeagues,
+                        onAllLeaguesSelected = { showAllLeagues = true }
+                    )
+                },
                 actions = {
                     // Sort/hashtag only make sense on the two Games pages -
                     // Teams/Players have no sortable list and never show a
@@ -161,7 +170,6 @@ fun FavoritesScreen(
                     selectedLeague = selectedLeague,
                     favoriteTeams = favoriteTeams,
                     showAllLeagues = showAllLeagues,
-                    onToggleShowAllLeagues = { showAllLeagues = it },
                     sortOption = sortOptionUpcoming,
                     showNumericScore = showNumericScore,
                     weights = weights,
@@ -182,7 +190,6 @@ fun FavoritesScreen(
                     selectedLeague = selectedLeague,
                     favoriteTeams = favoriteTeams,
                     showAllLeagues = showAllLeagues,
-                    onToggleShowAllLeagues = { showAllLeagues = it },
                     sortOption = sortOptionPast,
                     showNumericScore = showNumericScore,
                     weights = weights,
@@ -224,7 +231,6 @@ private fun FavoriteGamesPage(
     selectedLeague: LeagueGroup,
     favoriteTeams: List<Team>,
     showAllLeagues: Boolean,
-    onToggleShowAllLeagues: (Boolean) -> Unit,
     sortOption: SortOption,
     showNumericScore: Boolean,
     weights: RubricWeights,
@@ -243,19 +249,6 @@ private fun FavoriteGamesPage(
         is FavoriteGamesUiState.Error -> ErrorBox(uiState.message, onRetry)
         is FavoriteGamesUiState.Loaded -> {
             Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = "Show all leagues", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
-                    Switch(
-                        checked = showAllLeagues,
-                        onCheckedChange = onToggleShowAllLeagues,
-                        colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime),
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-                }
-
                 val namesInSelectedLeague = remember(favoriteTeams, selectedLeague) {
                     favoriteTeams.filter { it.leagueGroup == selectedLeague.apiValue }.map { it.name }.toSet()
                 }
@@ -272,7 +265,7 @@ private fun FavoriteGamesPage(
                             uiState.games.isEmpty() ->
                                 "No games yet for your favorited teams - add a favorite team to see their games here."
                             scopedGames.isEmpty() ->
-                                "No games for your favorited teams in ${selectedLeague.shortDisplayName} right now - turn on \"Show all leagues\" to see the rest."
+                                "No games for your favorited teams in ${selectedLeague.shortDisplayName} right now - pick \"All Leagues\" from the dropdown to see the rest."
                             onlyPast ->
                                 "No past games yet - check the Upcoming Games page to see what's next."
                             else ->

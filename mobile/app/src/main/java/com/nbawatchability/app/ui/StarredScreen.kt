@@ -10,14 +10,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.nbawatchability.app.data.FavoritePlayer
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
@@ -45,16 +41,15 @@ import com.nbawatchability.app.ui.theme.TextSecondary
 
 /**
  * Scoped to [selectedLeague] by default, same as every other tab - but
- * unlike every other tab, this scoping can be turned off entirely (Settings'
- * "Show all leagues in Starred"), since a personal favorites list arguably
- * has less reason to split by league than a live schedule does. When that's
- * on, [showAllLeagues] is true, the top bar shows "All Leagues" instead of
- * the normal tappable league selector, and the full combined [games] list is
- * shown unfiltered - tapping "All Leagues" surfaces a quick explanation +
- * toggle-off rather than sending the user to Settings. Sort order is a local
- * view preference (not persisted) covering all 4 combinations (date/rating
- * x asc/desc) via a single dropdown (SortMenuButton), not two independent
- * toggles.
+ * unlike Games/History, this scoping can be turned off entirely via the
+ * league dropdown's "All Leagues" entry, since a personal favorites list
+ * arguably has less reason to split by league than a live schedule does.
+ * Local, non-persisted state (like Favorites' own showAllLeagues) rather
+ * than a Settings toggle - resets to a real single league every time this
+ * screen is freshly entered. When it's on, the full combined [games] list
+ * is shown unfiltered. Sort order is a local view preference (not
+ * persisted) covering all 4 combinations (date/rating x asc/desc) via a
+ * single dropdown (SortMenuButton), not two independent toggles.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,8 +66,6 @@ fun StarredScreen(
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     enabledLeagues: Set<LeagueGroup>,
-    showAllLeagues: Boolean,
-    onToggleAllLeagues: () -> Unit,
     favoriteTeamNames: Set<String> = emptySet(),
     bumpFavoriteTeamGames: Boolean = false,
     onToggleFavoriteTeam: (Team) -> Unit = {},
@@ -85,7 +78,7 @@ fun StarredScreen(
 ) {
     var sortOption by remember { mutableStateOf(SortOption.DATE_NEWEST_FIRST) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
-    var showAllLeaguesInfo by remember { mutableStateOf(false) }
+    var showAllLeagues by remember { mutableStateOf(false) }
 
     val visibleGames = if (showAllLeagues) games else games.filter { leagueGroupOf(it) == selectedLeague }
 
@@ -94,16 +87,13 @@ fun StarredScreen(
         topBar = {
             AppTopBar(
                 leading = {
-                    if (showAllLeagues) {
-                        Text(
-                            text = "All Leagues",
-                            color = TextPrimary,
-                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 24.sp),
-                            modifier = Modifier.clickable { showAllLeaguesInfo = true }
-                        )
-                    } else {
-                        TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues)
-                    }
+                    TitleLeagueSelector(
+                        selectedLeague = selectedLeague,
+                        onLeagueSelected = { league -> showAllLeagues = false; onLeagueSelected(league) },
+                        enabledLeagues = enabledLeagues,
+                        isAllLeaguesSelected = showAllLeagues,
+                        onAllLeaguesSelected = { showAllLeagues = true }
+                    )
                 },
                 actions = {
                     SortMenuButton(
@@ -197,22 +187,5 @@ fun StarredScreen(
             modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp)
         )
         }
-    }
-
-    if (showAllLeaguesInfo) {
-        AlertDialog(
-            onDismissRequest = { showAllLeaguesInfo = false },
-            title = { Text("All Leagues is turned on") },
-            text = { Text("Starred is showing starred games from every league, ignoring the league dropdown. Turn this off in Settings to go back to filtering by a single league.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    onToggleAllLeagues()
-                    showAllLeaguesInfo = false
-                }) { Text("Turn off") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAllLeaguesInfo = false }) { Text("Close") }
-            }
-        )
     }
 }

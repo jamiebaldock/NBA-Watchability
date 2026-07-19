@@ -66,9 +66,12 @@ class HistoryViewModel : ViewModel() {
     var earliestDate: LocalDate? = null
         private set
 
-    private var leagueGroup: LeagueGroup = LeagueGroup.NBA
+    // More than one entry only when the "All Leagues" dropdown option is
+    // active (AppRoot.kt's HistoryTab) - each league is fetched
+    // independently per preset and merged, see fetch() below.
+    private var leagueGroups: List<LeagueGroup> = listOf(LeagueGroup.NBA)
 
-    // Already-fetched presets' games for the current [leagueGroup] only -
+    // Already-fetched presets' games for the current [leagueGroups] only -
     // cleared on every league switch (below), since a league switch always
     // means an entirely different set of games/date ranges under the exact
     // same preset objects (HistoryRangePreset.ThisSeason is a single shared
@@ -86,24 +89,24 @@ class HistoryViewModel : ViewModel() {
     // finishes, so a failed/cancelled fetch doesn't permanently block retries.
     private val inFlight = mutableMapOf<HistoryRangePreset, Job>()
 
-    fun load(leagueGroup: LeagueGroup, preset: HistoryRangePreset = selectedPreset) {
-        if (leagueGroup != this.leagueGroup) {
+    fun load(leagueGroups: List<LeagueGroup>, preset: HistoryRangePreset = selectedPreset) {
+        if (leagueGroups != this.leagueGroups) {
             // Every in-flight request (explicit or prefetched) belongs to
-            // the league being left - their eventual results are for
+            // the league(s) being left - their eventual results are for
             // presets/date-ranges that no longer mean anything under the
-            // new league, so both the cache and any pending jobs are
+            // new selection, so both the cache and any pending jobs are
             // dropped rather than risking a stale cross-league write later.
             cache.clear()
             inFlight.values.forEach { it.cancel() }
             inFlight.clear()
         }
-        this.leagueGroup = leagueGroup
+        this.leagueGroups = leagueGroups
         selectedPreset = preset
 
         val cached = cache[preset]
         uiState = if (cached != null) HistoryUiState.Loaded(cached) else HistoryUiState.Loading
 
-        fetch(leagueGroup, preset)
+        fetch(leagueGroups, preset)
     }
 
     /**
@@ -122,47 +125,60 @@ class HistoryViewModel : ViewModel() {
      * needed, since a fetch already in flight is shared between whoever
      * started it and whoever else asks for the same preset afterward.
      */
-    fun prefetch(leagueGroup: LeagueGroup, preset: HistoryRangePreset) {
-        if (leagueGroup != this.leagueGroup) return
-        fetch(leagueGroup, preset)
+    fun prefetch(leagueGroups: List<LeagueGroup>, preset: HistoryRangePreset) {
+        if (leagueGroups != this.leagueGroups) return
+        fetch(leagueGroups, preset)
     }
 
-    private fun fetch(leagueGroup: LeagueGroup, preset: HistoryRangePreset) {
+    // Multi-league ("All Leagues") mode only ever offers ThisSeason/AllTime
+    // - each league defines its own named-season boundaries/labels (NBA's
+    // "2024-25" vs WNBA's plain "2024"), so a merged chip list would be
+    // ambiguous at best. ThisSeason and AllTime are both well-defined per
+    // league independently and just get their games concatenated together.
+    private fun fetch(leagueGroups: List<LeagueGroup>, preset: HistoryRangePreset) {
         if (cache.containsKey(preset) || inFlight.containsKey(preset)) return
 
         inFlight[preset] = viewModelScope.launch {
             try {
                 val today = LocalDate.now()
-                val (start, end) = dateRangeFor(preset, today, leagueGroup)
-                val response = NetworkLeagueContentRepository.history(
-                    baseUrl = BACKEND_BASE_URL,
-                    start = start,
-                    end = end,
-                    leagueGroup = leagueGroup
-                )
-                // A stale response for a league the user has since switched
-                // away from - already-cleared cache/inFlight above means
-                // this can only land here if the league changed again
-                // *after* this specific request started; either way, this
-                // result no longer belongs to anything currently shown.
-                if (leagueGroup != this@HistoryViewModel.leagueGroup) return@launch
+                val responses = leagueGroups.map { league ->
+                    val (start, end) = dateRangeFor(preset, today, league)
+                    NetworkLeagueContentRepository.history(
+                        baseUrl = BACKEND_BASE_URL,
+                        start = start,
+                        end = end,
+                        leagueGroup = league
+                    )
+                }
+                // A stale response for a league selection the user has
+                // since switched away from - already-cleared cache/inFlight
+                // above means this can only land here if the selection
+                // changed again *after* this specific request started;
+                // either way, this result no longer belongs to anything
+                // currently shown.
+                if (leagueGroups != this@HistoryViewModel.leagueGroups) return@launch
 
-                cache[preset] = response.games
-                // These describe the league as a whole (every preset's
+                val mergedGames = responses.flatMap { it.games }
+                cache[preset] = mergedGames
+                // These describe the league(s) as a whole (every preset's
                 // response carries the same season list/earliest date), not
                 // just this one preset - kept up to date from any
                 // successful fetch, prefetch included, same as before this
                 // caching change existed.
-                earliestDate = LocalDate.parse(response.earliestDate)
-                presets = listOf(HistoryRangePreset.ThisSeason) +
-                    response.seasons.map { HistoryRangePreset.NamedSeason(it) } +
-                    listOf(HistoryRangePreset.AllTime)
+                earliestDate = responses.minOf { LocalDate.parse(it.earliestDate) }
+                presets = if (leagueGroups.size == 1) {
+                    listOf(HistoryRangePreset.ThisSeason) +
+                        responses.single().seasons.map { HistoryRangePreset.NamedSeason(it) } +
+                        listOf(HistoryRangePreset.AllTime)
+                } else {
+                    listOf(HistoryRangePreset.ThisSeason, HistoryRangePreset.AllTime)
+                }
 
                 if (preset == selectedPreset) {
-                    uiState = HistoryUiState.Loaded(response.games)
+                    uiState = HistoryUiState.Loaded(mergedGames)
                 }
             } catch (e: Exception) {
-                if (preset == selectedPreset && leagueGroup == this@HistoryViewModel.leagueGroup) {
+                if (preset == selectedPreset && leagueGroups == this@HistoryViewModel.leagueGroups) {
                     uiState = HistoryUiState.Error(e.message ?: "Couldn't reach the backend")
                 }
             } finally {
@@ -171,7 +187,7 @@ class HistoryViewModel : ViewModel() {
         }
     }
 
-    fun retry() = load(leagueGroup, selectedPreset)
+    fun retry() = load(leagueGroups, selectedPreset)
 }
 
 private suspend fun dateRangeFor(preset: HistoryRangePreset, today: LocalDate, leagueGroup: LeagueGroup): Pair<LocalDate, LocalDate> =

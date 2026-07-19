@@ -229,8 +229,6 @@ fun AppRoot() {
             // dropdown happens to be sitting on a placeholder league.
             when (selectedTab) {
                 BottomNavTab.SETTINGS -> SettingsScreen(
-                    showAllLeaguesInStarred = appSettingsViewModel.settings.showAllLeaguesInStarred,
-                    onToggleShowAllLeaguesInStarred = appSettingsViewModel::toggleShowAllLeaguesInStarred,
                     onSelectedSportsClick = { showSelectedSports = true },
                     onRubricWeightsClick = { showRubricWeights = true },
                     onAboutClick = { showAbout = true },
@@ -256,6 +254,8 @@ fun AppRoot() {
                 BottomNavTab.FAVORITES -> FavoritesTab(
                     favoritesViewModel = favoritesViewModel,
                     selectedLeague = selectedLeague,
+                    onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                    enabledLeagues = enabledLeagues,
                     showNumericScore = appSettingsViewModel.settings.showNumericScore,
                     onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
                     weights = settingsViewModel.weights,
@@ -312,8 +312,6 @@ fun AppRoot() {
                             enabledLeagues = enabledLeagues,
                             showNumericScore = appSettingsViewModel.settings.showNumericScore,
                             onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
-                            showAllLeagues = appSettingsViewModel.settings.showAllLeaguesInStarred,
-                            onToggleAllLeagues = appSettingsViewModel::toggleShowAllLeaguesInStarred,
                             weights = settingsViewModel.weights,
                             onWatchHighlights = { videoId -> highlightsVideoId = videoId },
                             favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
@@ -415,11 +413,23 @@ private fun GamesTab(
     onGameClick: (com.nbawatchability.app.data.Game) -> Unit
 ) {
     val viewModel: GameListViewModel = viewModel()
+    var showAllLeagues by remember { mutableStateOf(false) }
+    // Only the currently-enabled leagues that actually have a real backend
+    // route - a placeholder (isSupported = false) has nowhere to fetch from,
+    // same gate AppRoot's own ComingSoonTab dispatch uses for a single
+    // league. LeagueGroup.entries.filter (not enabledLeagues.filter)
+    // guarantees a stable, deterministic order every time regardless of
+    // Set iteration order, since this list feeds equality checks below.
+    val leagueGroups = if (showAllLeagues) {
+        LeagueGroup.entries.filter { it in enabledLeagues && it.isSupported }
+    } else {
+        listOf(selectedLeague)
+    }
 
-    // Fires on first composition and again whenever the selected league
-    // changes (a different league picked from the dropdown) - a full fresh
-    // load, not a merge with whatever was showing.
-    LaunchedEffect(selectedLeague) { viewModel.load(selectedLeague) }
+    // Fires on first composition and again whenever the selected league (or
+    // All-Leagues selection, or the enabled-leagues set) changes - a full
+    // fresh load, not a merge with whatever was showing.
+    LaunchedEffect(selectedLeague, showAllLeagues, enabledLeagues) { viewModel.load(leagueGroups) }
 
     // Same refresh() pull-to-refresh already uses - cost-safe to fire more
     // often than a user would manually pull, since ensureHighlightsVideo's
@@ -432,7 +442,7 @@ private fun GamesTab(
 
     when (val state = viewModel.uiState) {
         is ScheduleUiState.Loading -> LoadingScreen()
-        is ScheduleUiState.Error -> ErrorScreen(state.message, onRetry = { viewModel.load(selectedLeague) })
+        is ScheduleUiState.Error -> ErrorScreen(state.message, onRetry = { viewModel.load(leagueGroups) })
         is ScheduleUiState.Loaded -> DayTabsScreen(
             days = state.days,
             today = viewModel.today,
@@ -444,8 +454,10 @@ private fun GamesTab(
             onRefresh = viewModel::refresh,
             weights = weights,
             selectedLeague = selectedLeague,
-            onLeagueSelected = onLeagueSelected,
+            onLeagueSelected = { league -> showAllLeagues = false; onLeagueSelected(league) },
             enabledLeagues = enabledLeagues,
+            isAllLeaguesSelected = showAllLeagues,
+            onToggleAllLeagues = { showAllLeagues = !showAllLeagues },
             starredIds = starredIds,
             onToggleStar = onToggleStar,
             onWatchHighlights = onWatchHighlights,
@@ -480,8 +492,6 @@ private fun StarredTab(
     enabledLeagues: Set<LeagueGroup>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
-    showAllLeagues: Boolean,
-    onToggleAllLeagues: () -> Unit,
     weights: RubricWeights,
     onWatchHighlights: (String) -> Unit,
     favoriteTeamNames: Set<String>,
@@ -519,8 +529,6 @@ private fun StarredTab(
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
         enabledLeagues = enabledLeagues,
-        showAllLeagues = showAllLeagues,
-        onToggleAllLeagues = onToggleAllLeagues,
         favoriteTeamNames = favoriteTeamNames,
         bumpFavoriteTeamGames = bumpFavoriteTeamGames,
         onToggleFavoriteTeam = onToggleFavoriteTeam,
@@ -556,13 +564,20 @@ private fun HistoryTab(
     onGameClick: (com.nbawatchability.app.data.Game) -> Unit
 ) {
     val viewModel: HistoryViewModel = viewModel()
+    var showAllLeagues by remember { mutableStateOf(false) }
+    val leagueGroups = if (showAllLeagues) {
+        LeagueGroup.entries.filter { it in enabledLeagues && it.isSupported }
+    } else {
+        listOf(selectedLeague)
+    }
+
     // Both leagues have their own backfill now - always resets to "This
     // season" on a league switch (rather than reusing whatever preset was
     // selected before), since a preset like a named NBA season ("2024-25")
     // isn't valid for WNBA (whose season labels are plain years) and vice
     // versa.
-    LaunchedEffect(selectedLeague) {
-        viewModel.load(selectedLeague, HistoryRangePreset.ThisSeason)
+    LaunchedEffect(selectedLeague, showAllLeagues, enabledLeagues) {
+        viewModel.load(leagueGroups, HistoryRangePreset.ThisSeason)
     }
 
     HistoryScreen(
@@ -570,8 +585,8 @@ private fun HistoryTab(
         presets = viewModel.presets,
         selectedPreset = viewModel.selectedPreset,
         earliestDate = viewModel.earliestDate,
-        onPresetSelected = { viewModel.load(selectedLeague, it) },
-        onPrefetch = { viewModel.prefetch(selectedLeague, it) },
+        onPresetSelected = { viewModel.load(leagueGroups, it) },
+        onPrefetch = { viewModel.prefetch(leagueGroups, it) },
         onRetry = viewModel::retry,
         showNumericScore = showNumericScore,
         onToggleNumericScore = onToggleNumericScore,
@@ -580,8 +595,10 @@ private fun HistoryTab(
         onToggleStar = onToggleStar,
         onWatchHighlights = onWatchHighlights,
         selectedLeague = selectedLeague,
-        onLeagueSelected = onLeagueSelected,
+        onLeagueSelected = { league -> showAllLeagues = false; onLeagueSelected(league) },
         enabledLeagues = enabledLeagues,
+        isAllLeaguesSelected = showAllLeagues,
+        onToggleAllLeagues = { showAllLeagues = !showAllLeagues },
         favoriteTeamNames = favoriteTeamNames,
         bumpFavoriteTeamGames = bumpFavoriteTeamGames,
         onToggleFavoriteTeam = onToggleFavoriteTeam,
@@ -599,6 +616,8 @@ private fun HistoryTab(
 private fun FavoritesTab(
     favoritesViewModel: FavoritesViewModel,
     selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
     weights: RubricWeights,
@@ -622,6 +641,8 @@ private fun FavoritesTab(
         favoriteGamesUiState = favoriteGamesViewModel.uiState,
         onFavoriteGamesRetry = { favoriteGamesViewModel.retry(favoritesViewModel.favoriteTeams) },
         selectedLeague = selectedLeague,
+        onLeagueSelected = onLeagueSelected,
+        enabledLeagues = enabledLeagues,
         showNumericScore = showNumericScore,
         onToggleNumericScore = onToggleNumericScore,
         weights = weights,

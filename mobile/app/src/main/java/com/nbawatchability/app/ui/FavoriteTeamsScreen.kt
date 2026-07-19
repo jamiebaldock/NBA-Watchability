@@ -55,15 +55,12 @@ import com.nbawatchability.app.ui.theme.TierInstantClassic
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 
-// Only the four leagues /teams actually has real data for - a placeholder
-// league (NBL, UFC, etc.) has no backend route for this yet, same scope
-// line every other tab already draws.
-private enum class BrowsableLeague(val apiValue: String, val label: String) {
-    NBA("nba", "NBA"),
-    WNBA("wnba", "WNBA"),
-    EPL("epl", "EPL"),
-    LA_LIGA("la-liga", "La Liga")
-}
+// Same core set as Settings' "Selected Leagues" (NBA/WNBA/NHL/MLB/NFL) -
+// but /teams only actually has real data for NBA/WNBA today, so picking one
+// of the still-isSupported=false leagues below shows the same "not built
+// yet" message as ComingSoonTab rather than firing a network call the
+// backend has no route for.
+private val BROWSABLE_LEAGUES = listOf(LeagueGroup.NBA, LeagueGroup.WNBA, LeagueGroup.NHL, LeagueGroup.MLB, LeagueGroup.NFL)
 
 /**
  * Search/browse screen for favoriting teams - reachable from Settings. Has
@@ -86,12 +83,12 @@ fun FavoriteTeamsScreen(
     onToggleFavoriteTeam: (Team) -> Unit,
     onBack: () -> Unit
 ) {
-    var selectedLeague by rememberSaveable { mutableStateOf(BrowsableLeague.NBA) }
+    var selectedLeague by rememberSaveable { mutableStateOf(LeagueGroup.NBA) }
     var query by rememberSaveable { mutableStateOf("") }
     val viewModel: TeamsViewModel = viewModel()
 
     LaunchedEffect(selectedLeague) {
-        viewModel.load(LeagueGroup.entries.first { it.apiValue == selectedLeague.apiValue })
+        if (selectedLeague.isSupported) viewModel.load(selectedLeague)
     }
 
     Scaffold(
@@ -112,11 +109,11 @@ fun FavoriteTeamsScreen(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                BrowsableLeague.entries.forEach { league ->
+                BROWSABLE_LEAGUES.forEach { league ->
                     FilterChip(
                         selected = league == selectedLeague,
                         onClick = { selectedLeague = league },
-                        label = { Text(league.label) },
+                        label = { Text(league.shortDisplayName) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = TierWorthYourTime,
                             selectedLabelColor = BackgroundBase
@@ -138,6 +135,23 @@ fun FavoriteTeamsScreen(
                     unfocusedBorderColor = TextMuted
                 )
             )
+
+            if (!selectedLeague.isSupported) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "${selectedLeague.displayName} isn't built yet - check back later.",
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                return@Column
+            }
 
             when (val state = viewModel.uiState) {
                 is TeamsUiState.Loading -> Column(

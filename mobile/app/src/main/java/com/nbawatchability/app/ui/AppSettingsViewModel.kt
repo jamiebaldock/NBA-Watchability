@@ -43,10 +43,6 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch { repository.setShowNumericScore(!settings.showNumericScore) }
     }
 
-    fun toggleShowAllLeaguesInStarred() {
-        viewModelScope.launch { repository.setShowAllLeaguesInStarred(!settings.showAllLeaguesInStarred) }
-    }
-
     fun toggleBumpFavoriteTeamGames() {
         viewModelScope.launch { repository.setBumpFavoriteTeamGames(!settings.bumpFavoriteTeamGames) }
     }

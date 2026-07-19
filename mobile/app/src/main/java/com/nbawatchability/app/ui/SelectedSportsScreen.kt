@@ -36,10 +36,17 @@ import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 
+// The core US sports set only, for now - every other LeagueGroup entry
+// (soccer competitions, F1, etc.) stays defined in the enum for later but is
+// hidden from this list and the dropdowns until it's actually built out,
+// per James's call. NHL/MLB/NFL are still isSupported = false placeholders
+// (AppRoot.kt's ComingSoonTab) but are queued next, unlike the rest.
+private val VISIBLE_LEAGUES = listOf(LeagueGroup.NBA, LeagueGroup.WNBA, LeagueGroup.NHL, LeagueGroup.MLB, LeagueGroup.NFL)
+
 /**
  * Controls which leagues actually list in every tab's league dropdown
- * (TitleLeagueSelector) - includes every LeagueGroup entry, even the
- * not-yet-built placeholders, since this is purely about dropdown
+ * (TitleLeagueSelector) - restricted to [VISIBLE_LEAGUES] (see its own doc),
+ * not every LeagueGroup entry, since this is purely about dropdown
  * visibility, not data availability; selecting a placeholder league
  * elsewhere in the app just shows a "coming soon" state (AppRoot.kt's
  * ComingSoonTab), it doesn't crash. AppSettingsViewModel.toggleLeagueEnabled
@@ -59,7 +66,7 @@ fun SelectedSportsScreen(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { Text("Selected Sports", color = TextPrimary) },
+                title = { Text("Selected Leagues", color = TextPrimary) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -76,13 +83,11 @@ fun SelectedSportsScreen(
                 .padding(horizontal = 16.dp)
         ) {
             // Compact row sizing (smaller logo, tighter padding, a scaled-down
-            // Switch) - with ~21 leagues now listed here, the original
-            // 16.dp-padded/full-size-Switch row made this screen a long
-            // scroll for little reason; Switch.scale keeps the full tap
-            // target's visual footprint down without touching its actual
-            // touch-target logic (Material3 still enforces a minimum
-            // interactive size under the hood).
-            LeagueGroup.entries.forEachIndexed { index, league ->
+            // Switch) - Switch.scale keeps the full tap target's visual
+            // footprint down without touching its actual touch-target logic
+            // (Material3 still enforces a minimum interactive size under the
+            // hood).
+            VISIBLE_LEAGUES.forEachIndexed { index, league ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -100,7 +105,7 @@ fun SelectedSportsScreen(
                         modifier = Modifier.scale(0.75f)
                     )
                 }
-                if (index != LeagueGroup.entries.lastIndex) {
+                if (index != VISIBLE_LEAGUES.lastIndex) {
                     HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
                 }
             }

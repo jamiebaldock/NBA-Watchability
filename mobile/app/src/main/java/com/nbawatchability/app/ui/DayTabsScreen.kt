@@ -83,6 +83,8 @@ fun DayTabsScreen(
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     enabledLeagues: Set<LeagueGroup>,
+    isAllLeaguesSelected: Boolean,
+    onToggleAllLeagues: () -> Unit,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
@@ -147,7 +149,15 @@ fun DayTabsScreen(
         containerColor = BackgroundBase,
         topBar = {
             AppTopBar(
-                leading = { TitleLeagueSelector(selectedLeague, onLeagueSelected, enabledLeagues) },
+                leading = {
+                    TitleLeagueSelector(
+                        selectedLeague = selectedLeague,
+                        onLeagueSelected = onLeagueSelected,
+                        enabledLeagues = enabledLeagues,
+                        isAllLeaguesSelected = isAllLeaguesSelected,
+                        onAllLeaguesSelected = onToggleAllLeagues
+                    )
+                },
                 actions = {
                     // Only shown for leagues with a full-season range loaded
                     // (currently WNBA) - a calendar has nothing useful to

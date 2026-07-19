@@ -55,10 +55,13 @@ class GameListViewModel : ViewModel() {
     var selectedDayIndex by mutableStateOf(0)
         private set
 
-    // Which league's slate is currently loaded - set by load(), reused by
+    // Which league(s)' slate is currently loaded - set by load(), reused by
     // refresh()/fetchGamesForLocalDate() so callers don't need to keep
-    // threading it through on every pull-to-refresh.
-    private var currentLeagueGroup: LeagueGroup = LeagueGroup.NBA
+    // threading it through on every pull-to-refresh. More than one entry
+    // only when the "All Leagues" dropdown option is active (AppRoot.kt's
+    // GamesTab) - each league is fetched/chunked independently and merged,
+    // see fetchScheduleChunked below.
+    private var currentLeagueGroups: List<LeagueGroup> = listOf(LeagueGroup.NBA)
 
     // Center of the currently-loaded +/-7 day window - only used when
     // [seasonRange] is null. Starts at "today" but moves when jumpToDate()
@@ -88,15 +91,23 @@ class GameListViewModel : ViewModel() {
     val datesWithGames: Set<LocalDate>
         get() = (uiState as? ScheduleUiState.Loaded)?.days?.filter { it.games.isNotEmpty() }?.map { it.date }?.toSet().orEmpty()
 
-    /** Full reload for [leagueGroup] - called on first composition and again whenever the league selection changes. */
-    fun load(leagueGroup: LeagueGroup) {
-        currentLeagueGroup = leagueGroup
+    /**
+     * Full reload for [leagueGroups] - called on first composition and
+     * again whenever the league selection changes (a single-element list
+     * for a normal league pick, more than one when "All Leagues" is
+     * active). The season-range/calendar-picker fast path (below) only
+     * applies to a single league - merging multiple leagues' own season
+     * ranges isn't well-defined, so multi-league mode always falls back to
+     * the fixed +/-[DISPLAY_RANGE_DAYS] window instead.
+     */
+    fun load(leagueGroups: List<LeagueGroup>) {
+        currentLeagueGroups = leagueGroups
         windowCenter = today
         seasonRange = null
         uiState = ScheduleUiState.Loading
         viewModelScope.launch {
             uiState = try {
-                seasonRange = NetworkGameRepository.seasonWindow(BACKEND_BASE_URL, leagueGroup)
+                seasonRange = leagueGroups.singleOrNull()?.let { NetworkGameRepository.seasonWindow(BACKEND_BASE_URL, it) }
                 val days = fetchSchedule()
                 selectedDayIndex = days.indexOfFirst { it.date == today }.coerceAtLeast(0)
                 ScheduleUiState.Loaded(days)
@@ -133,11 +144,12 @@ class GameListViewModel : ViewModel() {
         jumpError = null
         viewModelScope.launch {
             try {
-                val nextDate = NetworkGameRepository.nextGameDate(
-                    baseUrl = BACKEND_BASE_URL,
-                    after = fromDate,
-                    leagueGroup = currentLeagueGroup
-                )
+                // Nearest next game across every currently-loaded league,
+                // not just the first - a multi-league "All Leagues" jump
+                // should land on whichever league's next game comes first.
+                val nextDate = currentLeagueGroups.mapNotNull { league ->
+                    NetworkGameRepository.nextGameDate(baseUrl = BACKEND_BASE_URL, after = fromDate, leagueGroup = league)
+                }.minOrNull()
                 if (nextDate == null) {
                     jumpError = "No upcoming games found yet"
                 } else {
@@ -260,34 +272,42 @@ class GameListViewModel : ViewModel() {
         val fetched = fetchScheduleChunked(
             start.minusDays(QUERY_BUFFER_DAYS),
             end.plusDays(QUERY_BUFFER_DAYS),
-            currentLeagueGroup
+            currentLeagueGroups
         )
         return rebucketByLocalDate(fetched, start, end)
     }
 
-    private suspend fun fetchScheduleChunked(start: LocalDate, end: LocalDate, leagueGroup: LeagueGroup): List<DayGames> {
+    // Merges every league in [leagueGroups] into one flat DayGames list -
+    // rebucketByLocalDate below flattens every league's games together
+    // per date anyway, so there's no need to keep each league's chunks
+    // separate past this point.
+    private suspend fun fetchScheduleChunked(start: LocalDate, end: LocalDate, leagueGroups: List<LeagueGroup>): List<DayGames> {
         val merged = mutableListOf<DayGames>()
-        var chunkStart = start
-        while (!chunkStart.isAfter(end)) {
-            val chunkEnd = minOf(chunkStart.plusDays(MAX_FETCH_CHUNK_DAYS - 1), end)
-            merged += NetworkGameRepository.schedule(
-                baseUrl = BACKEND_BASE_URL,
-                start = chunkStart,
-                end = chunkEnd,
-                leagueGroup = leagueGroup
-            )
-            chunkStart = chunkEnd.plusDays(1)
+        for (leagueGroup in leagueGroups) {
+            var chunkStart = start
+            while (!chunkStart.isAfter(end)) {
+                val chunkEnd = minOf(chunkStart.plusDays(MAX_FETCH_CHUNK_DAYS - 1), end)
+                merged += NetworkGameRepository.schedule(
+                    baseUrl = BACKEND_BASE_URL,
+                    start = chunkStart,
+                    end = chunkEnd,
+                    leagueGroup = leagueGroup
+                )
+                chunkStart = chunkEnd.plusDays(1)
+            }
         }
         return merged
     }
 
     private suspend fun fetchGamesForLocalDate(date: LocalDate): List<Game> {
-        val fetched = NetworkGameRepository.schedule(
-            baseUrl = BACKEND_BASE_URL,
-            start = date.minusDays(QUERY_BUFFER_DAYS),
-            end = date.plusDays(QUERY_BUFFER_DAYS),
-            leagueGroup = currentLeagueGroup
-        )
+        val fetched = currentLeagueGroups.flatMap { leagueGroup ->
+            NetworkGameRepository.schedule(
+                baseUrl = BACKEND_BASE_URL,
+                start = date.minusDays(QUERY_BUFFER_DAYS),
+                end = date.plusDays(QUERY_BUFFER_DAYS),
+                leagueGroup = leagueGroup
+            )
+        }
         return fetched.flatMap { it.games }
             .filter { localDateOf(it) == date }
             .sortedBy { OffsetDateTime.parse(it.tipoffUtc) }

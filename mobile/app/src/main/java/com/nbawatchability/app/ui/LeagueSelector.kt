@@ -29,29 +29,47 @@ import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 
 /**
  * A tab's top-bar title: a tappable league logo + name - shared by every
- * tab's top bar (Games, Starred, History, Leaders, News), not just Games,
- * so the league can be switched from wherever the user happens to be.
- * [enabledLeagues] (Settings' "Selected Sports") controls which leagues
- * actually list in the dropdown - filtered against LeagueGroup.entries
- * (not iterated directly from the Set) so the list always renders in a
- * stable, consistent order regardless of Set iteration order.
+ * tab's top bar (Games, Starred, History, Favorites, Leaders, News), not
+ * just Games, so the league can be switched from wherever the user happens
+ * to be. [enabledLeagues] (Settings' "Selected Leagues") controls which
+ * leagues actually list in the dropdown - filtered against
+ * LeagueGroup.entries (not iterated directly from the Set) so the list
+ * always renders in a stable, consistent order regardless of Set iteration
+ * order.
+ *
+ * [onAllLeaguesSelected] being non-null is what turns on the "All Leagues"
+ * option - only Games, History, Favorites, and Starred pass it (each
+ * merges every enabled league's own tiles into one combined list when
+ * picked); Leaders and News never do, since a merged standings/stats table
+ * or a single news feed genuinely doesn't make sense the same way a list of
+ * tiles does. [isAllLeaguesSelected] then just controls this composable's
+ * own leading label/icon - the real merge behavior lives entirely in
+ * whichever caller supplied [onAllLeaguesSelected].
  */
 @Composable
-fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGroup) -> Unit, enabledLeagues: Set<LeagueGroup>) {
+fun TitleLeagueSelector(
+    selectedLeague: LeagueGroup,
+    onLeagueSelected: (LeagueGroup) -> Unit,
+    enabledLeagues: Set<LeagueGroup>,
+    isAllLeaguesSelected: Boolean = false,
+    onAllLeaguesSelected: (() -> Unit)? = null
+) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.clickable { expanded = true }
         ) {
-            AsyncImage(
-                model = themeAwareLogoUrl(selectedLeague.logoUrl),
-                contentDescription = null,
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
+            if (!isAllLeaguesSelected) {
+                AsyncImage(
+                    model = themeAwareLogoUrl(selectedLeague.logoUrl),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
             Text(
-                text = selectedLeague.shortDisplayName,
+                text = if (isAllLeaguesSelected) "All Leagues" else selectedLeague.shortDisplayName,
                 color = TextPrimary,
                 style = MaterialTheme.typography.titleLarge.copy(fontSize = 24.sp)
             )
@@ -63,6 +81,20 @@ fun TitleLeagueSelector(selectedLeague: LeagueGroup, onLeagueSelected: (LeagueGr
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (onAllLeaguesSelected != null) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "All Leagues",
+                            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp)
+                        )
+                    },
+                    onClick = {
+                        onAllLeaguesSelected()
+                        expanded = false
+                    }
+                )
+            }
             LeagueGroup.entries.filter { it in enabledLeagues }.forEach { league ->
                 DropdownMenuItem(
                     text = {
