@@ -31,7 +31,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.RubricWeights
-import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextSecondary
@@ -64,8 +63,7 @@ fun FullBreakdownSection(
     game: Game,
     weights: RubricWeights,
     modifier: Modifier = Modifier,
-    spoilerFree: Boolean = false,
-    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT
+    spoilerFree: Boolean = false
 ) {
     var revealed by remember(game.id) { mutableStateOf(spoilerFree) }
 
@@ -77,7 +75,7 @@ fun FullBreakdownSection(
             HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = breakdownAnnotatedText(game, weights, soccerWeights),
+                text = breakdownAnnotatedText(game, weights),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
@@ -85,7 +83,7 @@ fun FullBreakdownSection(
         } else {
             if (canBlur) {
                 Text(
-                    text = breakdownAnnotatedText(game, weights, soccerWeights),
+                    text = breakdownAnnotatedText(game, weights),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                     modifier = Modifier.blur(7.dp)
@@ -168,12 +166,12 @@ private fun breakdownFacts(game: Game): List<String> = buildList {
     }
 }
 
-private fun breakdownAnnotatedText(game: Game, weights: RubricWeights, soccerWeights: SoccerRubricWeights) = buildAnnotatedString {
+private fun breakdownAnnotatedText(game: Game, weights: RubricWeights) = buildAnnotatedString {
     val facts = breakdownFacts(game)
     append(if (facts.isEmpty()) "No standout moments logged" else facts.joinToString(" · "))
     append(" · Watchability ")
     withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")) {
-        append("${game.effectiveScore(weights, soccerWeights) ?: 0}/100")
+        append("${game.effectiveScore(weights) ?: 0}/100")
     }
 }
 

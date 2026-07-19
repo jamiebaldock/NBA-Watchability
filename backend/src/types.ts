@@ -8,32 +8,27 @@ export type StarPerformance = "historic" | "great" | "good" | null;
 // Which mutually-exclusive slate the client is currently viewing (settings
 // toggle + top-left dropdown). Distinct from espnClient.ts's League - a
 // LeagueGroup determines which underlying ESPN leagues get unioned together
-// for a request (gamesService.ts's LEAGUE_GROUPS), never both at once. "epl"/
-// "la-liga"/"fifa-world" are soccer, routed to an entirely separate ESPN
-// client/mapper/rubric (soccerEspnClient.ts/soccerGameMapper.ts/
-// soccerRubric.ts) - see SPORT_FOR_LEAGUE_GROUP below for the dispatch
-// point. "fifa-world" (the FIFA World Cup) is Games-tab-only by design
-// (James's call) - no standings/stats route exists for any soccer
-// leagueGroup yet, and History is deliberately not wired up for this one
-// given the tournament's ~2-day remaining shelf life when it was added.
-export type LeagueGroup = "nba" | "wnba" | "epl" | "la-liga" | "fifa-world";
+// for a request (gamesService.ts's LEAGUE_GROUPS), never both at once.
+// "mlb" is Games-tab-only for now (James's explicit call) - see
+// mlbGamesService.ts's file comment for exactly what's not wired up yet
+// (team schedules, season-window/History, per-game rubric-input persistence
+// beyond score/tier).
+export type LeagueGroup = "nba" | "wnba" | "mlb";
 
-export type Sport = "basketball" | "soccer";
+export type Sport = "basketball" | "baseball";
 
 // The single choke point every sport-dispatching call site (httpHandler.ts's
 // getSchedule/getNextGameDateForLeagueGroup/getSeasonWindowForLeagueGroup,
 // gamesService.ts's highlights-eligibility guard) checks before deciding
-// whether to run the basketball pipeline (gamesService.ts/gameMapper.ts/
-// rubric.ts) or the soccer one (soccerGamesService.ts/soccerGameMapper.ts/
-// soccerRubric.ts) for a given leagueGroup - adding a third sport later means
-// adding one entry here, not hunting down every place that currently assumes
-// only two.
+// which per-sport pipeline (gamesService.ts/gameMapper.ts/rubric.ts for
+// basketball, mlbGamesService.ts/mlbGameMapper.ts/mlbRubric.ts for baseball)
+// to run for a given leagueGroup - adding another sport later means adding
+// one entry here, not hunting down every place that currently assumes only
+// two.
 export const SPORT_FOR_LEAGUE_GROUP: Record<LeagueGroup, Sport> = {
   nba: "basketball",
   wnba: "basketball",
-  epl: "soccer",
-  "la-liga": "soccer",
-  "fifa-world": "soccer"
+  mlb: "baseball"
 };
 
 export interface GameJson {
@@ -48,7 +43,7 @@ export interface GameJson {
   hl?: string;
   stt: GameStatus;
   utc: string;
-  lg: "nba" | "wnba" | "summer" | "soccer";
+  lg: "nba" | "wnba" | "summer" | "mlb";
   cl?: string;
   q?: number;
   clk?: string;
@@ -82,25 +77,6 @@ export interface GameJson {
   score?: number;
   score_visible: boolean;
   yt?: string;
-  // Soccer-only rubric-input facts (client-side weight-adjusted recompute
-  // needs these the same way basketball's m/cb/lc/ot/c5/lcf/fp/bz/st already
-  // let a device recompute that sport's score locally). `m`/`cb` above are
-  // reused as-is for soccer (both already mean "final margin"/"largest
-  // deficit overcome" in spoiler-safe derived-fact form, same as basketball)
-  // rather than duplicated under new names.
-  tg?: number;
-  ldg?: boolean;
-  mgp?: number;
-  cst?: number;
-  rc?: boolean;
-  sv?: number;
-  fkg?: boolean;
-  pm?: boolean;
-  // Knockout-tournament-only (World Cup) - absent for every EPL/La Liga
-  // game, which never has extra time or a shootout. See soccerRubric.ts's
-  // extraTimePoints/shootoutPoints.
-  et?: boolean;
-  pk?: boolean;
 }
 
 export interface StandoutPerformerJson {
@@ -183,8 +159,7 @@ export interface PlayerJson {
   id: string;
   name: string;
   // Real headshot photo URL - only ESPN's basketball roster endpoint carries
-  // one (confirmed absent for EPL/La Liga via 3 separate checks); undefined
-  // here means "no photo available," not "not yet fetched."
+  // one; undefined here means "no photo available," not "not yet fetched."
   headshot?: string;
 }
 

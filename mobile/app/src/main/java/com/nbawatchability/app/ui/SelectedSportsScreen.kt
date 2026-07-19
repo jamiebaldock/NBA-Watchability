@@ -37,10 +37,11 @@ import com.nbawatchability.app.ui.theme.TierWorthYourTime
 import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 
 // The core US sports set only, for now - every other LeagueGroup entry
-// (soccer competitions, F1, etc.) stays defined in the enum for later but is
-// hidden from this list and the dropdowns until it's actually built out,
-// per James's call. NHL/MLB/NFL are still isSupported = false placeholders
-// (AppRoot.kt's ComingSoonTab) but are queued next, unlike the rest.
+// (F1, cricket, other basketball/soccer leagues, etc.) stays defined in the
+// enum for later but is hidden from this list and the dropdowns until it's
+// actually built out, per James's call. NHL/NFL are still isSupported =
+// false placeholders (AppRoot.kt's ComingSoonTab) but are queued next,
+// unlike the rest.
 private val VISIBLE_LEAGUES = listOf(LeagueGroup.NBA, LeagueGroup.WNBA, LeagueGroup.NHL, LeagueGroup.MLB, LeagueGroup.NFL)
 
 /**

@@ -70,11 +70,11 @@ const WNBA_TEAM_ABBREVIATIONS: Record<string, string> = {
  * filter ever changes.
  */
 // leagueGroup is typed as the full LeagueGroup (not just "nba"|"wnba") so
-// this compiles for any caller widened to soccer's leagueGroup values too -
-// in practice this is only ever a fallback for historical-backfill rows
-// missing a logo, and no soccer backfill exists yet (Games-tab-only scope),
-// so an unrecognized group just falls through to undefined rather than
-// needing its own static team map yet.
+// this compiles for any caller widened to another sport's leagueGroup
+// values too (e.g. MLB) - in practice this is only ever a fallback for
+// historical-backfill rows missing a logo, so an unrecognized group just
+// falls through to undefined rather than needing its own static team map
+// yet.
 export function teamLogoUrl(displayName: string, leagueGroup: string = "nba"): string | undefined {
   if (leagueGroup === "wnba") {
     const abbr = WNBA_TEAM_ABBREVIATIONS[displayName];

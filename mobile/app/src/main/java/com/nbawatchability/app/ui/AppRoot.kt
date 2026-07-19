@@ -48,7 +48,6 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
-import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.SurfaceCardElevated
@@ -114,7 +113,6 @@ fun AppRoot() {
     // tradeoff for not needing a custom Saver just for this one overlay.
     var showGameDetail by remember { mutableStateOf<com.nbawatchability.app.data.Game?>(null) }
     val settingsViewModel: RubricSettingsViewModel = viewModel()
-    val soccerSettingsViewModel: SoccerRubricSettingsViewModel = viewModel()
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
     val starredGamesViewModel: StarredGamesViewModel = viewModel()
     val favoritesViewModel: FavoritesViewModel = viewModel()
@@ -158,9 +156,6 @@ fun AppRoot() {
             weights = settingsViewModel.weights,
             onWeightChange = settingsViewModel::updateWeight,
             onReset = settingsViewModel::resetToDefaults,
-            soccerWeights = soccerSettingsViewModel.weights,
-            onSoccerWeightChange = soccerSettingsViewModel::updateWeight,
-            onSoccerReset = soccerSettingsViewModel::resetToDefaults,
             onBack = { showRubricWeights = false }
         )
         return
@@ -206,7 +201,6 @@ fun AppRoot() {
         GameDetailScreen(
             game = game,
             weights = settingsViewModel.weights,
-            soccerWeights = soccerSettingsViewModel.weights,
             defaultTab = GameDetailTab.entries.find { it.name == appSettingsViewModel.settings.defaultGameDetailTab } ?: GameDetailTab.BREAKDOWN,
             onBack = { showGameDetail = null }
         )
@@ -259,7 +253,6 @@ fun AppRoot() {
                     showNumericScore = appSettingsViewModel.settings.showNumericScore,
                     onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
                     weights = settingsViewModel.weights,
-                    soccerWeights = soccerSettingsViewModel.weights,
                     starredIds = starredGamesViewModel.starredIds,
                     onToggleStar = starredGamesViewModel::toggleStar,
                     onWatchHighlights = { videoId -> highlightsVideoId = videoId },
@@ -292,7 +285,6 @@ fun AppRoot() {
                             onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
                             minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
-                            soccerWeights = soccerSettingsViewModel.weights,
                             onGameClick = { showGameDetail = it }
                         )
                         BottomNavTab.LEADERS -> LeadersTab(
@@ -321,7 +313,6 @@ fun AppRoot() {
                             onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
                             minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
-                            soccerWeights = soccerSettingsViewModel.weights,
                             onGameClick = { showGameDetail = it }
                         )
                         BottomNavTab.HISTORY -> HistoryTab(
@@ -342,7 +333,6 @@ fun AppRoot() {
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
                             minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
                             showScoresByDefault = appSettingsViewModel.settings.historyShowScoresByDefault,
-                            soccerWeights = soccerSettingsViewModel.weights,
                             onGameClick = { showGameDetail = it }
                         )
                         else -> {} // unreachable: SETTINGS/FAVORITES handled above
@@ -409,7 +399,6 @@ private fun GamesTab(
     onToggleFavoritePlayer: (com.nbawatchability.app.data.FavoritePlayer) -> Unit,
     minTierFilterEnabled: Boolean,
     minTierFilter: Tier,
-    soccerWeights: SoccerRubricWeights,
     onGameClick: (com.nbawatchability.app.data.Game) -> Unit
 ) {
     val viewModel: GameListViewModel = viewModel()
@@ -478,7 +467,6 @@ private fun GamesTab(
             onToggleFavoritePlayer = onToggleFavoritePlayer,
             minTierFilterEnabled = minTierFilterEnabled,
             minTierFilter = minTierFilter,
-            soccerWeights = soccerWeights,
             onGameClick = onGameClick
         )
     }
@@ -501,7 +489,6 @@ private fun StarredTab(
     onToggleFavoritePlayer: (com.nbawatchability.app.data.FavoritePlayer) -> Unit,
     minTierFilterEnabled: Boolean,
     minTierFilter: Tier,
-    soccerWeights: SoccerRubricWeights,
     onGameClick: (com.nbawatchability.app.data.Game) -> Unit
 ) {
     // Fires on first composition and again whenever the starred set changes
@@ -536,7 +523,6 @@ private fun StarredTab(
         onToggleFavoritePlayer = onToggleFavoritePlayer,
         minTierFilterEnabled = minTierFilterEnabled,
         minTierFilter = minTierFilter,
-        soccerWeights = soccerWeights,
         onGameClick = onGameClick
     )
 }
@@ -560,7 +546,6 @@ private fun HistoryTab(
     minTierFilterEnabled: Boolean,
     minTierFilter: Tier,
     showScoresByDefault: Boolean,
-    soccerWeights: SoccerRubricWeights,
     onGameClick: (com.nbawatchability.app.data.Game) -> Unit
 ) {
     val viewModel: HistoryViewModel = viewModel()
@@ -607,7 +592,6 @@ private fun HistoryTab(
         minTierFilterEnabled = minTierFilterEnabled,
         minTierFilter = minTierFilter,
         showScoresByDefault = showScoresByDefault,
-        soccerWeights = soccerWeights,
         onGameClick = onGameClick
     )
 }
@@ -621,7 +605,6 @@ private fun FavoritesTab(
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
     weights: RubricWeights,
-    soccerWeights: SoccerRubricWeights,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
@@ -646,7 +629,6 @@ private fun FavoritesTab(
         showNumericScore = showNumericScore,
         onToggleNumericScore = onToggleNumericScore,
         weights = weights,
-        soccerWeights = soccerWeights,
         starredIds = starredIds,
         onToggleStar = onToggleStar,
         onWatchHighlights = onWatchHighlights,

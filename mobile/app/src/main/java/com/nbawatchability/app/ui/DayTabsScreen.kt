@@ -45,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.DayGames
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
-import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.data.bumpFavoriteTeamGames
@@ -105,7 +104,6 @@ fun DayTabsScreen(
     onToggleFavoritePlayer: (com.nbawatchability.app.data.FavoritePlayer) -> Unit = {},
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
-    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT,
     onGameClick: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
@@ -244,7 +242,6 @@ fun DayTabsScreen(
                         onToggleFavoritePlayer = onToggleFavoritePlayer,
                         minTierFilterEnabled = minTierFilterEnabled,
                         minTierFilter = minTierFilter,
-                        soccerWeights = soccerWeights,
                         onGameClick = onGameClick
                     )
                 }
@@ -347,7 +344,6 @@ private fun DayGamesList(
     onToggleFavoritePlayer: (com.nbawatchability.app.data.FavoritePlayer) -> Unit = {},
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
-    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT,
     onGameClick: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
     if (games.isEmpty()) {
@@ -386,16 +382,16 @@ private fun DayGamesList(
     // score to sort by yet.
     val orderedGames = when (sortOption) {
         SortOption.RATING_HIGHEST_FIRST -> {
-            val (scored, unscored) = games.partition { it.effectiveScore(weights, soccerWeights) != null }
-            scored.sortedByDescending { it.effectiveScore(weights, soccerWeights) } + unscored.sortedByDescending { it.tipoffUtc }
+            val (scored, unscored) = games.partition { it.effectiveScore(weights) != null }
+            scored.sortedByDescending { it.effectiveScore(weights) } + unscored.sortedByDescending { it.tipoffUtc }
         }
         SortOption.RATING_LOWEST_FIRST -> {
-            val (scored, unscored) = games.partition { it.effectiveScore(weights, soccerWeights) != null }
-            scored.sortedBy { it.effectiveScore(weights, soccerWeights) } + unscored.sortedByDescending { it.tipoffUtc }
+            val (scored, unscored) = games.partition { it.effectiveScore(weights) != null }
+            scored.sortedBy { it.effectiveScore(weights) } + unscored.sortedByDescending { it.tipoffUtc }
         }
         SortOption.DATE_OLDEST_FIRST -> games.sortedBy { it.tipoffUtc }
         SortOption.DATE_NEWEST_FIRST -> games.sortedByDescending { it.tipoffUtc }
-    }.filterByMinTier(minTierFilterEnabled, minTierFilter, weights, soccerWeights)
+    }.filterByMinTier(minTierFilterEnabled, minTierFilter, weights)
         .bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
     val listState = rememberLazyListState()
@@ -422,7 +418,6 @@ private fun DayGamesList(
                 onToggleFavoriteTeam = onToggleFavoriteTeam,
                 favoritePlayerNames = favoritePlayerNames,
                 onToggleFavoritePlayer = onToggleFavoritePlayer,
-                soccerWeights = soccerWeights,
                 onGameClick = onGameClick
             )
         }

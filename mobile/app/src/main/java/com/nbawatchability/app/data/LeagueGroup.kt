@@ -30,35 +30,11 @@ enum class LeagueGroup(
 ) {
     NBA("nba", "NBA", "https://a.espncdn.com/i/teamlogos/leagues/500/nba.png"),
     WNBA("wnba", "WNBA", "https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png"),
-    // The default crest is a dark purple lion that reads poorly against this
-    // app's near-black surfaces - ESPN's own "-dark" variant (a white
-    // version, built for exactly this) is used instead, verified directly
-    // against ESPN's asset set rather than assumed.
-    //
-    // isSupported = true: Games and History are both live (real ESPN
-    // fixtures/backfill, scored via soccerRubric.ts) as of the soccer-
-    // pipeline work - Leaders/News aren't built out for this league yet
-    // (product decision) but degrade gracefully (empty results, not
-    // crashes) rather than needing their own isSupported flag.
-    EPL("epl", "English Premier League", "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/23.png", shortDisplayName = "EPL"),
-    LA_LIGA("la-liga", "La Liga", "https://a.espncdn.com/i/leaguelogos/soccer/500/15.png"),
-    // Games-tab-only (James's explicit call) - live current-schedule tiles
-    // with the tournament rubric only, no Standings/Stats/History route for
-    // this leagueGroup. Default crest's black "26" numerals and "FIFA"
-    // wordmark are illegible here - "-dark" drops the numerals and keeps
-    // the gold trophy fully visible (its own color already reads fine
-    // against dark surfaces); the wordmark stays black and small, same
-    // tradeoff as Primeira Liga's "-dark" variant elsewhere in this enum.
-    FIFA_WORLD_CUP(
-        "fifa-world",
-        "FIFA World Cup",
-        "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/4.png",
-        shortDisplayName = "World Cup"
-    ),
     NBL("nbl", "NBL", "https://a.espncdn.com/i/teamlogos/leagues/500/nbl.png", isSupported = false),
     UFC("ufc", "UFC", "https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png", isSupported = false),
-    // Same dark-crest-on-dark-background problem as EPL - ESPN's default
-    // logo (id 2) is solid black, illegible here, so the "-dark" (white)
+    // Same dark-crest-on-dark-background problem as several other soccer
+    // placeholders below - ESPN's default logo (id 2) is solid black,
+    // illegible here, so the "-dark" (white)
     // variant is used instead. ESPN's own API slug for this competition is
     // "uefa.champions" (for whenever it's actually wired up) - apiValue
     // here is just a short display code like the other placeholders, not
@@ -114,7 +90,13 @@ enum class LeagueGroup(
         isSupported = false,
         shortDisplayName = "F1"
     ),
-    MLB("mlb", "MLB", "https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png", isSupported = false),
+    // isSupported = true: Games is live (real ESPN fixtures, scored via
+    // mlbRubric.ts's own independent scale) as of the MLB Games-tab-only
+    // first pass - Standings/Team-schedule (Favorites)/season-window/History
+    // aren't wired up yet (backend/src/mlbGamesService.ts's file comment)
+    // but degrade gracefully (empty results, not crashes) rather than
+    // needing their own isSupported flag.
+    MLB("mlb", "MLB", "https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png"),
     // Default crest's grey/slate mark and wordmark are low-contrast on dark
     // surfaces - the "-dark" variant recolors both white, confirmed by
     // direct visual check (not just assumed from the "-dark" name).
@@ -129,10 +111,11 @@ enum class LeagueGroup(
         shortDisplayName = "UEL"
     ),
     // Crest is mostly-black-on-white in both variants (not a light/dark
-    // swap situation like EPL) - kept as the default since its bright
-    // silver border and white wordmark still read as a recognizable
-    // outline against dark surfaces even though the shield's black fill
-    // blends in; the "-dark" variant's border is a duller grey, worse.
+    // swap situation like the soccer placeholders above) - kept as the
+    // default since its bright silver border and white wordmark still read
+    // as a recognizable outline against dark surfaces even though the
+    // shield's black fill blends in; the "-dark" variant's border is a
+    // duller grey, worse.
     NHL("nhl", "NHL", "https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png", isSupported = false),
     // Navy wordmark is dim but legible (not solid black) - "-dark" here is
     // an older sponsor-name variant of the same crest, no real contrast

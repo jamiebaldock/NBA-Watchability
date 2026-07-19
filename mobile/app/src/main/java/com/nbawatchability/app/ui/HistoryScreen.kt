@@ -33,7 +33,6 @@ import com.nbawatchability.app.data.FavoritePlayer
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
-import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.data.bumpFavoriteTeamGames
@@ -66,21 +65,6 @@ private val earliestDateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
 // more WNBA seasons get backfilled and the pool grows past single digits.
 private const val ALL_TIME_MIN_SCORE_NBA = 90
 private const val ALL_TIME_MIN_SCORE_WNBA = 75
-
-// Shared across EPL and La Liga (not split like NBA/WNBA) - both leagues
-// run through the exact same soccerRubric.ts scale/calibration, and their
-// real backfilled score distributions land close enough together (p95: 62
-// vs 63, p99: 80 vs 80.8 out of the 760-match-each 2024-25+2025-26
-// backfill) that a per-league split isn't warranted. Grounded the same way
-// as WNBA's bar above - reusing NBA's literal 90 would leave EPL down to a
-// single qualifying match (1 of 760) - but landed on 85 rather than 90:
-// it's the 99.3rd percentile of the full 1,520-game combined backfill (10
-// games total, a healthier 4 EPL + 6 La Liga split) and, conveniently,
-// exactly Tier.fromScore's own instant_classic cutoff - "All-time" for
-// soccer reads as "every real Instant Classic in the backfill," a bar
-// that's self-documenting rather than an arbitrary number tuned to hit a
-// target count.
-private const val ALL_TIME_MIN_SCORE_SOCCER = 85
 
 /**
  * "Which old games are actually worth going back to watch" - surfaces the
@@ -139,7 +123,6 @@ fun HistoryScreen(
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
     showScoresByDefault: Boolean = false,
-    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT,
     onGameClick: (Game) -> Unit = {},
     onPrefetch: (HistoryRangePreset) -> Unit = {}
 ) {
@@ -282,10 +265,9 @@ fun HistoryScreen(
                         uiState.games.filter { game ->
                             val allTimeMinScore = when (leagueGroupOf(game)) {
                                 LeagueGroup.WNBA -> ALL_TIME_MIN_SCORE_WNBA
-                                LeagueGroup.EPL, LeagueGroup.LA_LIGA -> ALL_TIME_MIN_SCORE_SOCCER
                                 else -> ALL_TIME_MIN_SCORE_NBA
                             }
-                            (game.effectiveScore(weights, soccerWeights) ?: 0) >= allTimeMinScore
+                            (game.effectiveScore(weights) ?: 0) >= allTimeMinScore
                         }
                     } else {
                         uiState.games
@@ -312,11 +294,11 @@ fun HistoryScreen(
                         // every History game already has a score, so unlike
                         // Starred there's no unscored tail to fall back to.
                         val ordered = when (sortOption) {
-                            SortOption.RATING_HIGHEST_FIRST -> displayGames.sortedByDescending { it.effectiveScore(weights, soccerWeights) }
-                            SortOption.RATING_LOWEST_FIRST -> displayGames.sortedBy { it.effectiveScore(weights, soccerWeights) }
+                            SortOption.RATING_HIGHEST_FIRST -> displayGames.sortedByDescending { it.effectiveScore(weights) }
+                            SortOption.RATING_LOWEST_FIRST -> displayGames.sortedBy { it.effectiveScore(weights) }
                             SortOption.DATE_OLDEST_FIRST -> displayGames.sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
                             SortOption.DATE_NEWEST_FIRST -> displayGames.sortedByDescending { OffsetDateTime.parse(it.tipoffUtc) }
-                        }.filterByMinTier(minTierFilterEnabled, minTierFilter, weights, soccerWeights)
+                        }.filterByMinTier(minTierFilterEnabled, minTierFilter, weights)
                             .bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
                         val listState = rememberLazyListState()
@@ -349,7 +331,6 @@ fun HistoryScreen(
                                     onToggleFavoriteTeam = onToggleFavoriteTeam,
                                     favoritePlayerNames = favoritePlayerNames,
                                     onToggleFavoritePlayer = onToggleFavoritePlayer,
-                                    soccerWeights = soccerWeights,
                                     onGameClick = onGameClick
                                 )
                             }

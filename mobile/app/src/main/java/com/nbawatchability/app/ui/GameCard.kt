@@ -52,7 +52,6 @@ import com.nbawatchability.app.data.FavoritePlayer
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.GameStatus
 import com.nbawatchability.app.data.RubricWeights
-import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.data.StandoutPerformer
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.Tier
@@ -114,14 +113,13 @@ fun GameCard(
     // Long-press quick-add/remove shortcut on a standout-performer name,
     // mirroring onToggleFavoriteTeam above - same no-op default reasoning.
     onToggleFavoritePlayer: (FavoritePlayer) -> Unit = {},
-    soccerWeights: SoccerRubricWeights = SoccerRubricWeights.DEFAULT,
     // Opens the game-detail popup - a no-op default so a tap on an upcoming/
     // live tile (no rubric breakdown or real top-performer stats yet) does
     // nothing, same as today's behavior; only invoked when game.hasBreakdown
     // is true (gated below, not by the caller).
     onGameClick: (Game) -> Unit = {}
 ) {
-    val tier = game.effectiveTier(weights, soccerWeights)
+    val tier = game.effectiveTier(weights)
 
     Card(
         onClick = { if (game.hasBreakdown) onGameClick(game) },
@@ -169,7 +167,7 @@ fun GameCard(
                     if (tier != null) {
                         TierBadge(
                             tier = tier,
-                            numericScore = if (showNumericScore) game.effectiveScore(weights, soccerWeights) else null
+                            numericScore = if (showNumericScore) game.effectiveScore(weights) else null
                         )
                     } else {
                         Spacer(modifier = Modifier.size(0.dp))
@@ -244,7 +242,6 @@ fun GameCard(
                         game = game,
                         weights = weights,
                         spoilerFree = spoilerFree,
-                        soccerWeights = soccerWeights,
                         modifier = Modifier.padding(top = breakdownTopPadding)
                     )
                 }

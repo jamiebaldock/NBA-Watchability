@@ -12,8 +12,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -23,34 +21,22 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.RubricCategory
 import com.nbawatchability.app.data.RubricWeights
-import com.nbawatchability.app.data.SoccerRubricCategory
-import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
-import com.nbawatchability.app.ui.theme.TierWorthYourTime
-
-private enum class RubricSport { BASKETBALL, SOCCER }
 
 /**
  * Reached from Settings, same pattern as About - frees the main Settings
- * screen from these sliders' worth of scroll. Basketball and soccer each
- * get their own independent weight set (their rubric dimensions don't
- * overlap - see RubricWeights vs SoccerRubricWeights), switched via a
- * top chip pair rather than two separate screens, since only one sport's
- * sliders are ever relevant to look at together. Stakes is the one
- * dimension both sports share conceptually, so it's shown once, below
- * whichever sport-specific set is currently selected, rather than
- * duplicated per sport.
+ * screen from these sliders' worth of scroll. Single-sport for now
+ * (basketball only - soccer support and its weight set were removed, see
+ * archive/soccer/, and MLB weight customization hasn't been built yet) -
+ * this used to switch between a basketball and soccer slider set via a top
+ * chip pair (RubricSport enum); that switcher may need to come back once a
+ * second sport has its own customizable weights again.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,13 +44,8 @@ fun RubricWeightsScreen(
     weights: RubricWeights,
     onWeightChange: (RubricCategory, Float) -> Unit,
     onReset: () -> Unit,
-    soccerWeights: SoccerRubricWeights,
-    onSoccerWeightChange: (SoccerRubricCategory, Float) -> Unit,
-    onSoccerReset: () -> Unit,
     onBack: () -> Unit
 ) {
-    var sport by rememberSaveable { mutableStateOf(RubricSport.BASKETBALL) }
-
     Scaffold(
         containerColor = BackgroundBase,
         topBar = {
@@ -85,30 +66,6 @@ fun RubricWeightsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    selected = sport == RubricSport.BASKETBALL,
-                    onClick = { sport = RubricSport.BASKETBALL },
-                    label = { Text("Basketball") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = TierWorthYourTime,
-                        selectedLabelColor = BackgroundBase
-                    )
-                )
-                FilterChip(
-                    selected = sport == RubricSport.SOCCER,
-                    onClick = { sport = RubricSport.SOCCER },
-                    label = { Text("Soccer") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = TierWorthYourTime,
-                        selectedLabelColor = BackgroundBase
-                    )
-                )
-            }
-
             Text(
                 text = "Scale how much each factor contributes to a game's score. 1.00x is the default.",
                 style = MaterialTheme.typography.bodySmall,
@@ -116,41 +73,22 @@ fun RubricWeightsScreen(
                 modifier = Modifier.padding(top = 16.dp, bottom = 16.dp)
             )
 
-            if (sport == RubricSport.BASKETBALL) {
-                WeightSlider("Margin", weights.margin) { onWeightChange(RubricCategory.MARGIN, it) }
-                WeightSlider("Clutch finish", weights.clutch) { onWeightChange(RubricCategory.CLUTCH, it) }
-                WeightSlider("Buzzer-beater", weights.buzzerBeater) { onWeightChange(RubricCategory.BUZZER_BEATER, it) }
-                WeightSlider("Comeback", weights.comeback) { onWeightChange(RubricCategory.COMEBACK, it) }
-                WeightSlider("Lead changes", weights.leadChanges) { onWeightChange(RubricCategory.LEAD_CHANGES, it) }
-                WeightSlider("Overtime", weights.overtime) { onWeightChange(RubricCategory.OVERTIME, it) }
-                WeightSlider("Star performance", weights.starPerformance) { onWeightChange(RubricCategory.STAR_PERFORMANCE, it) }
-            } else {
-                WeightSlider("Margin", soccerWeights.margin) { onSoccerWeightChange(SoccerRubricCategory.MARGIN, it) }
-                WeightSlider("Total goals", soccerWeights.totalGoals) { onSoccerWeightChange(SoccerRubricCategory.TOTAL_GOALS, it) }
-                WeightSlider("Comeback", soccerWeights.comeback) { onSoccerWeightChange(SoccerRubricCategory.COMEBACK, it) }
-                WeightSlider("Late drama", soccerWeights.lateDrama) { onSoccerWeightChange(SoccerRubricCategory.LATE_DRAMA, it) }
-                WeightSlider("Star performance", soccerWeights.star) { onSoccerWeightChange(SoccerRubricCategory.STAR, it) }
-                WeightSlider("Chances created", soccerWeights.chances) { onSoccerWeightChange(SoccerRubricCategory.CHANCES, it) }
-                WeightSlider("Red card", soccerWeights.redCard) { onSoccerWeightChange(SoccerRubricCategory.RED_CARD, it) }
-                WeightSlider("Goalkeeper saves", soccerWeights.saves) { onSoccerWeightChange(SoccerRubricCategory.SAVES, it) }
-                WeightSlider("Free-kick goal", soccerWeights.freeKickGoal) { onSoccerWeightChange(SoccerRubricCategory.FREE_KICK_GOAL, it) }
-                WeightSlider("Penalty miss", soccerWeights.penaltyMiss) { onSoccerWeightChange(SoccerRubricCategory.PENALTY_MISS, it) }
-                WeightSlider("Extra time", soccerWeights.extraTime) { onSoccerWeightChange(SoccerRubricCategory.EXTRA_TIME, it) }
-                WeightSlider("Penalty shootout", soccerWeights.shootout) { onSoccerWeightChange(SoccerRubricCategory.SHOOTOUT, it) }
-            }
-
-            // Shared across both sports (RubricWeights.stakes, not
-            // duplicated per sport) - shown once regardless of which sport
-            // chip is selected.
+            WeightSlider("Margin", weights.margin) { onWeightChange(RubricCategory.MARGIN, it) }
+            WeightSlider("Clutch finish", weights.clutch) { onWeightChange(RubricCategory.CLUTCH, it) }
+            WeightSlider("Buzzer-beater", weights.buzzerBeater) { onWeightChange(RubricCategory.BUZZER_BEATER, it) }
+            WeightSlider("Comeback", weights.comeback) { onWeightChange(RubricCategory.COMEBACK, it) }
+            WeightSlider("Lead changes", weights.leadChanges) { onWeightChange(RubricCategory.LEAD_CHANGES, it) }
+            WeightSlider("Overtime", weights.overtime) { onWeightChange(RubricCategory.OVERTIME, it) }
+            WeightSlider("Star performance", weights.starPerformance) { onWeightChange(RubricCategory.STAR_PERFORMANCE, it) }
             WeightSlider("Stakes", weights.stakes) { onWeightChange(RubricCategory.STAKES, it) }
 
             OutlinedButton(
-                onClick = { if (sport == RubricSport.BASKETBALL) onReset() else onSoccerReset() },
+                onClick = onReset,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 24.dp)
             ) {
-                Text(if (sport == RubricSport.BASKETBALL) "Reset basketball to default" else "Reset soccer to default")
+                Text("Reset to default")
             }
         }
     }

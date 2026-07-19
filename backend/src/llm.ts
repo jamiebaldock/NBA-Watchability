@@ -74,7 +74,7 @@ export interface MatchupContext {
   homeRecord?: string;
   notes?: string; // e.g. "Both teams fighting for the final play-in spot"
   // Shown in the prompt as "{league} matchup:" - defaults to "NBA" (every
-  // call site before soccer existed omitted this, so this keeps their
+  // call site before this field existed omitted it, so this keeps their
   // prompts byte-identical) rather than something generic like "basketball",
   // since a real league name gives the model better context than a sport
   // name alone.

@@ -36,10 +36,23 @@ enum class Tier(val label: String, val emoji: String) {
     companion object {
         // Same rubric-to-tier mapping as the backend (spec section 2, point 2) — kept
         // identical so client and server never disagree on badge/tier for a given score.
-        fun fromScore(score: Int): Tier = when {
-            score >= 85 -> INSTANT_CLASSIC
-            score >= 65 -> WORTH_YOUR_TIME
-            score >= 45 -> SOLID
+        // MLB uses its own independent scale (backend/src/mlbRubric.ts's tierForMlbScore -
+        // James's explicit call, not normalized to this 45/65/85 scale the way WNBA's
+        // rubric was), so [league] must be passed through rather than assuming every
+        // sport's score lands on the same bands.
+        fun fromScore(score: Int, league: String = "nba"): Tier =
+            if (league == "mlb") mlbTierFromScore(score)
+            else when {
+                score >= 85 -> INSTANT_CLASSIC
+                score >= 65 -> WORTH_YOUR_TIME
+                score >= 45 -> SOLID
+                else -> SKIPPABLE
+            }
+
+        private fun mlbTierFromScore(score: Int): Tier = when {
+            score >= 60 -> INSTANT_CLASSIC
+            score >= 35 -> WORTH_YOUR_TIME
+            score >= 20 -> SOLID
             else -> SKIPPABLE
         }
     }
@@ -84,21 +97,6 @@ data class Game(
     @SerialName("st") val starPerformance: String? = null,
     @SerialName("sop") val standoutPerformers: List<StandoutPerformer>? = null,
     @SerialName("sk") val stakes: Int? = null,
-    // Soccer-only rubric-input facts - m/cb above are reused as-is (same
-    // concept as basketball's final margin/largest deficit overcome), these
-    // 8 have no basketball equivalent. Absent/null on every basketball Game.
-    @SerialName("tg") val totalGoals: Int? = null,
-    @SerialName("ldg") val lateDecisiveGoal: Boolean = false,
-    @SerialName("mgp") val maxGoalsByPlayer: Int? = null,
-    @SerialName("cst") val combinedShotsOnTarget: Int? = null,
-    @SerialName("rc") val anyRedCard: Boolean = false,
-    @SerialName("sv") val maxSavesByKeeper: Int? = null,
-    @SerialName("fkg") val anyFreeKickGoal: Boolean = false,
-    @SerialName("pm") val anyPenaltyMissed: Boolean = false,
-    // Knockout-tournament-only (World Cup) - absent/false on every EPL/La
-    // Liga game, which never has extra time or a shootout.
-    @SerialName("et") val wentToExtraTime: Boolean = false,
-    @SerialName("pk") val decidedByShootout: Boolean = false,
     @SerialName("hook") val hook: String,
     @SerialName("pitch") val pitch: String? = null,
     @SerialName("score") val score: Int? = null,
@@ -109,7 +107,7 @@ data class Game(
 
     val isSummerLeague: Boolean get() = league == "summer"
 
-    val tier: Tier? get() = if (scoreVisible && score != null) Tier.fromScore(score) else null
+    val tier: Tier? get() = if (scoreVisible && score != null) Tier.fromScore(score, league) else null
 
     // Breakdown facts (comeback, lead changes, etc.) are drama already resolved
     // by the game, so gate them on the same score-visibility rule as the tier.

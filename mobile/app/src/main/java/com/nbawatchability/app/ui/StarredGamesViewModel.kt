@@ -106,20 +106,11 @@ class StarredGamesViewModel(application: Application) : AndroidViewModel(applica
 // leagues" is off, and GameCard.kt's favorite-team long-press quick-add
 // uses it to tag which league a team belongs to for the per-league cap.
 //
-// game.league is only ever "nba"/"wnba"/"summer"/"soccer" - it can't tell
-// EPL and La Liga apart on its own, so a soccer game falls back to
-// competitionLabel (e.g. "La Liga - Regular Season"/"EPL - Regular
-// Season" - soccerGamesService.ts always generates this from the same
-// LEAGUE_DISPLAY_NAME map, so the prefix match is reliable, not guessing
-// off free text). Previously this always returned LeagueGroup.NBA for any
-// non-WNBA game, which silently miscategorized every EPL/La Liga starred
-// game (refreshLiveData's groupBy below queried them against the NBA
-// schedule endpoint, where they could never be found, so a starred
-// soccer game's live score/tier never actually refreshed).
+// game.league is only ever "nba"/"wnba"/"summer"/"mlb" now (soccer support
+// was removed - see archive/soccer/).
 fun leagueGroupOf(game: Game): LeagueGroup = when {
     game.league == "wnba" -> LeagueGroup.WNBA
-    game.league == "soccer" && game.competitionLabel?.startsWith("La Liga") == true -> LeagueGroup.LA_LIGA
-    game.league == "soccer" -> LeagueGroup.EPL
+    game.league == "mlb" -> LeagueGroup.MLB
     else -> LeagueGroup.NBA
 }
 

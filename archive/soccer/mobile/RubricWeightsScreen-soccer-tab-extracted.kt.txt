@@ -1,0 +1,59 @@
+// Extracted from mobile/app/src/main/java/com/nbawatchability/app/ui/RubricWeightsScreen.kt on
+// 2026-07-20. This was the "Soccer" segmented-button tab and its ~12 weight sliders in the
+// Rubric Weights settings screen, alongside a "Basketball" tab (the RubricSport enum switcher).
+// Not standalone-compilable: depends on SoccerRubricCategory/SoccerRubricWeights (also archived,
+// see SoccerRubricWeights.kt in this folder) and the WeightSlider composable that stayed in the
+// live RubricWeightsScreen.kt. A future reuse needs the RubricSport enum switcher UI rebuilt
+// around this (the live file collapsed it away when soccer was removed, since basketball became
+// the only sport with weight customization).
+
+private enum class RubricSport { BASKETBALL, SOCCER }
+
+// --- Sport switcher chips (in the composable's Column, above the sliders) ---
+Row(
+    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+    horizontalArrangement = Arrangement.spacedBy(8.dp)
+) {
+    FilterChip(
+        selected = sport == RubricSport.BASKETBALL,
+        onClick = { sport = RubricSport.BASKETBALL },
+        label = { Text("Basketball") },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = TierWorthYourTime,
+            selectedLabelColor = BackgroundBase
+        )
+    )
+    FilterChip(
+        selected = sport == RubricSport.SOCCER,
+        onClick = { sport = RubricSport.SOCCER },
+        label = { Text("Soccer") },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = TierWorthYourTime,
+            selectedLabelColor = BackgroundBase
+        )
+    )
+}
+
+// --- Soccer slider block (the `else` branch of `if (sport == RubricSport.BASKETBALL)`) ---
+WeightSlider("Margin", soccerWeights.margin) { onSoccerWeightChange(SoccerRubricCategory.MARGIN, it) }
+WeightSlider("Total goals", soccerWeights.totalGoals) { onSoccerWeightChange(SoccerRubricCategory.TOTAL_GOALS, it) }
+WeightSlider("Comeback", soccerWeights.comeback) { onSoccerWeightChange(SoccerRubricCategory.COMEBACK, it) }
+WeightSlider("Late drama", soccerWeights.lateDrama) { onSoccerWeightChange(SoccerRubricCategory.LATE_DRAMA, it) }
+WeightSlider("Star performance", soccerWeights.star) { onSoccerWeightChange(SoccerRubricCategory.STAR, it) }
+WeightSlider("Chances created", soccerWeights.chances) { onSoccerWeightChange(SoccerRubricCategory.CHANCES, it) }
+WeightSlider("Red card", soccerWeights.redCard) { onSoccerWeightChange(SoccerRubricCategory.RED_CARD, it) }
+WeightSlider("Goalkeeper saves", soccerWeights.saves) { onSoccerWeightChange(SoccerRubricCategory.SAVES, it) }
+WeightSlider("Free-kick goal", soccerWeights.freeKickGoal) { onSoccerWeightChange(SoccerRubricCategory.FREE_KICK_GOAL, it) }
+WeightSlider("Penalty miss", soccerWeights.penaltyMiss) { onSoccerWeightChange(SoccerRubricCategory.PENALTY_MISS, it) }
+WeightSlider("Extra time", soccerWeights.extraTime) { onSoccerWeightChange(SoccerRubricCategory.EXTRA_TIME, it) }
+WeightSlider("Penalty shootout", soccerWeights.shootout) { onSoccerWeightChange(SoccerRubricCategory.SHOOTOUT, it) }
+
+// --- Reset button (was conditional on `sport`) ---
+OutlinedButton(
+    onClick = { if (sport == RubricSport.BASKETBALL) onReset() else onSoccerReset() },
+    modifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 24.dp)
+) {
+    Text(if (sport == RubricSport.BASKETBALL) "Reset basketball to default" else "Reset soccer to default")
+}

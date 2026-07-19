@@ -2,7 +2,7 @@ import { ContentLeague, EspnStandingsEntry, EspnStandingsGroup, fetchStandings }
 import { loadLeagueCache, saveLeagueCache, todayKey } from "./leagueCache";
 import { resolveSeasonYear } from "./seasonYear";
 import { preferDarkLogoVariant } from "./teamLogos";
-import { LeagueGroup, StandingsGroupJson, StandingsResponseJson, StandingsTeamJson } from "./types";
+import { LeagueGroup, SPORT_FOR_LEAGUE_GROUP, StandingsGroupJson, StandingsResponseJson, StandingsTeamJson } from "./types";
 
 function statValueByName(entry: EspnStandingsEntry, name: string): string {
   return entry.stats.find((s) => s.name === name)?.displayValue ?? "-";
@@ -60,6 +60,17 @@ function flattenGroups(groups: EspnStandingsGroup[]): StandingsGroupJson[] {
 
 /** Cached once per calendar day per league group - standings don't change fast enough to justify a fresh ESPN fetch on every app open. */
 export async function getStandings(leagueGroup: LeagueGroup): Promise<StandingsResponseJson> {
+  // No Standings route built for MLB yet (Games-tab-only first pass, see
+  // mlbGamesService.ts's file comment) - fetchStandings' URL is
+  // basketball-namespaced and 404s/throws for any other sport's slug
+  // (unlike ESPN's teams/roster endpoints, which tolerate an unrecognized
+  // league and just come back empty), so this has to short-circuit before
+  // ever building that request, same reasoning as newsService.ts's own
+  // early return.
+  if (SPORT_FOR_LEAGUE_GROUP[leagueGroup] !== "basketball") {
+    return { season: "", groups: [] };
+  }
+
   const league = leagueGroup as ContentLeague;
   const now = new Date();
   const dateKey = todayKey(now);

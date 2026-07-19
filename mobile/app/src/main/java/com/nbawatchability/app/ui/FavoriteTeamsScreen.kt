@@ -70,7 +70,7 @@ private val BROWSABLE_LEAGUES = listOf(LeagueGroup.NBA, LeagueGroup.WNBA, League
  * MAX_FAVORITE_TEAMS *per league* (enforced by FavoritesViewModel.
  * toggleFavoriteTeam, which surfaces a Toast if this screen's tap would
  * exceed it) - so up to MAX_FAVORITE_TEAMS in NBA and MAX_FAVORITE_TEAMS in
- * EPL simultaneously, not MAX_FAVORITE_TEAMS total. The team passed to
+ * WNBA simultaneously, not MAX_FAVORITE_TEAMS total. The team passed to
  * onToggleFavoriteTeam is tagged with [selectedLeague] right here (the
  * backend's /teams response has no leagueGroup field of its own), since
  * this chip is the only place that actually knows which league a team on

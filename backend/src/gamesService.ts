@@ -36,11 +36,11 @@ function hasReachedPreviewGate(tipoffUtc: string, now: Date = new Date()): boole
 // store with no risk of collision.
 //
 // The two basketball-sport LeagueGroup values - narrower than LeagueGroup
-// itself now that "epl"/"la-liga" (soccer, an entirely separate ESPN client/
-// mapper/rubric) are members of that type too. Every function in this file
-// only ever handles basketball, so they're typed against this narrower alias
+// itself now that "mlb" (baseball, an entirely separate ESPN client/mapper/
+// rubric) is a member of that type too. Every function in this file only
+// ever handles basketball, so they're typed against this narrower alias
 // rather than LeagueGroup - the sport dispatch (SPORT_FOR_LEAGUE_GROUP,
-// types.ts) happens one layer up, in httpHandler.ts, before a soccer
+// types.ts) happens one layer up, in httpHandler.ts, before an MLB
 // leagueGroup would ever reach here.
 export type BasketballLeagueGroup = "nba" | "wnba";
 

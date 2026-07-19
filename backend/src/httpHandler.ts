@@ -1,11 +1,11 @@
 import { dateStringsBetween } from "./dateRange";
-import { currentSoccerSeasonStartDate, earliestGameDate, getMostRecentFinalsEnd } from "./gameStore";
+import { earliestGameDate, getMostRecentFinalsEnd } from "./gameStore";
 import { getGameDetail } from "./gameDetailService";
 import { getGamesForDate, getNextScheduledDate, getTeamSchedule } from "./gamesService";
 import { getHistory, HistoryResult } from "./historyService";
 import { getNews } from "./newsService";
 import { getSeasonWindow, SeasonWindow } from "./seasonWindowService";
-import { getNextSoccerScheduledDate, getSoccerGamesForDate, getSoccerTeamSchedule, isSoccerLeagueGroup } from "./soccerGamesService";
+import { getMlbGamesForDate, getNextMlbScheduledDate, isMlbLeagueGroup } from "./mlbGamesService";
 import { getRoster } from "./rosterService";
 import { getStandings } from "./standingsService";
 import { getStats } from "./statsService";
@@ -39,31 +39,26 @@ export class BadRequestError extends Error {}
 function parseLeagueGroup(raw: string): LeagueGroup {
   if (raw === "" || raw === "nba") return "nba";
   if (raw === "wnba") return "wnba";
-  if (raw === "epl") return "epl";
-  if (raw === "la-liga") return "la-liga";
-  if (raw === "fifa-world") return "fifa-world";
-  throw new BadRequestError('leagueGroup must be one of "nba", "wnba", "epl", "la-liga", "fifa-world"');
+  if (raw === "mlb") return "mlb";
+  throw new BadRequestError('leagueGroup must be one of "nba", "wnba", "mlb"');
 }
 
-/** Dispatches to the basketball or soccer live-schedule pipeline (types.ts's SPORT_FOR_LEAGUE_GROUP) - the one choke point where a request's leagueGroup decides which sport's data layer actually runs. */
+/** Dispatches to the basketball or MLB live-schedule pipeline (types.ts's SPORT_FOR_LEAGUE_GROUP) - the one choke point where a request's leagueGroup decides which sport's data layer actually runs. */
 function getGamesForDateAnySport(date: string, leagueGroup: LeagueGroup): Promise<GameJson[]> {
-  if (isSoccerLeagueGroup(leagueGroup)) return getSoccerGamesForDate(date, leagueGroup);
+  if (isMlbLeagueGroup(leagueGroup)) return getMlbGamesForDate(date);
   return getGamesForDate(date, leagueGroup);
 }
 
 /**
  * Backs the Favorites tab's Games page - a single favorited team's own
- * real schedule (past and upcoming), not a whole day's slate. "fifa-world"
- * never reaches here in practice (no favorite-teams route exists for
- * national teams - teamsService.ts's getTeams already returns an empty
- * list for it), but is still rejected explicitly rather than silently
- * mis-dispatched to the soccer club pipeline with a nonsense team id.
+ * real schedule (past and upcoming), not a whole day's slate. "mlb" is
+ * rejected explicitly - no favorite-teams/team-schedule route exists for it
+ * yet (Games-tab-only first pass, see mlbGamesService.ts's file comment).
  */
 export async function getTeamScheduleForLeagueGroup(teamId: string, leagueGroupRaw = "nba"): Promise<GameJson[]> {
   if (!teamId) throw new BadRequestError("teamId is required");
   const leagueGroup = parseLeagueGroup(leagueGroupRaw);
-  if (leagueGroup === "fifa-world") throw new BadRequestError("team schedules aren't available for fifa-world");
-  if (isSoccerLeagueGroup(leagueGroup)) return getSoccerTeamSchedule(teamId, leagueGroup);
+  if (leagueGroup === "mlb") throw new BadRequestError("team schedules aren't available for mlb yet");
   return getTeamSchedule(teamId, leagueGroup);
 }
 
@@ -92,8 +87,8 @@ export interface NextGameDateResult {
 export async function getNextGameDateForLeagueGroup(afterRaw: string, leagueGroupRaw = "nba"): Promise<NextGameDateResult> {
   if (!DATE_RE.test(afterRaw)) throw new BadRequestError("after must be YYYY-MM-DD");
   const leagueGroup = parseLeagueGroup(leagueGroupRaw);
-  const date = isSoccerLeagueGroup(leagueGroup)
-    ? await getNextSoccerScheduledDate(afterRaw, leagueGroup)
+  const date = isMlbLeagueGroup(leagueGroup)
+    ? await getNextMlbScheduledDate(afterRaw)
     : await getNextScheduledDate(afterRaw, leagueGroup);
   return { date: date ?? null };
 }
@@ -119,18 +114,9 @@ export interface CurrentSeasonStartResult {
  * part of the season that already ended). Falls back to Jan 1 of the
  * current year if no Finals game is on record yet - shouldn't happen
  * against a populated store, but degrades gracefully rather than erroring.
- *
- * Soccer has no Finals/playoff stage at all, so this whole Finals-anchored
- * rule doesn't apply - dispatched to currentSoccerSeasonStartDate's own
- * Aug-1 convention before any of it runs, rather than falling through to
- * the Jan-1 fallback (which would be wrong for a sport whose season
- * genuinely crosses a calendar-year boundary starting mid-year).
  */
 export function getCurrentSeasonStartForLeagueGroup(leagueGroupRaw = "nba"): CurrentSeasonStartResult {
   const leagueGroup = parseLeagueGroup(leagueGroupRaw);
-  if (isSoccerLeagueGroup(leagueGroup)) {
-    return { date: currentSoccerSeasonStartDate(leagueGroup) };
-  }
   const finalsEnd = getMostRecentFinalsEnd(leagueGroup);
   if (!finalsEnd) {
     return { date: `${new Date().getUTCFullYear()}-01-01` };

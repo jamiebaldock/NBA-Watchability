@@ -57,7 +57,7 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
      * correctly regardless of which one triggered it.
      *
      * The cap is per-league (per James' request), not global - up to
-     * MAX_FAVORITE_TEAMS in NBA *and* MAX_FAVORITE_TEAMS in EPL *and* ...,
+     * MAX_FAVORITE_TEAMS in NBA *and* MAX_FAVORITE_TEAMS in WNBA *and* ...,
      * counted by matching [team]'s own leagueGroup against every other
      * currently-favorited team's, not the total list size.
      */
@@ -77,7 +77,7 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
     /**
      * Same per-league cap shape as toggleFavoriteTeam above (James' request
      * to match the teams cap change) - up to MAX_FAVORITE_PLAYERS in NBA
-     * *and* MAX_FAVORITE_PLAYERS in EPL *and* ..., counted by matching
+     * *and* MAX_FAVORITE_PLAYERS in WNBA *and* ..., counted by matching
      * [player]'s own leagueGroup against every other currently-favorited
      * player's, not the total list size.
      */

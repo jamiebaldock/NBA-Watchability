@@ -14,7 +14,7 @@ data class Team(
     // last (with a default) so every existing positional Team(name, logo)
     // call site keeps compiling unchanged.
     val id: String = "",
-    // LeagueGroup's own apiValue (e.g. "nba", "epl") - stored as a plain
+    // LeagueGroup's own apiValue (e.g. "nba", "mlb") - stored as a plain
     // string rather than the LeagueGroup type itself (which isn't
     // @Serializable), same reasoning as AppSettingsRepository's enum-as-
     // string keys. Null on any Team favorited before this field existed;
@@ -34,8 +34,8 @@ data class TeamsResponse(
 data class Player(
     val id: String,
     val name: String,
-    // Real ESPN headshot photo URL - only ever present for NBA/WNBA (EPL/La
-    // Liga rosters have no equivalent field, confirmed absent server-side).
+    // Real ESPN headshot photo URL - only ever present for NBA/WNBA (MLB
+    // rosters have no equivalent field wired up yet).
     val headshot: String? = null
 )
 
@@ -62,8 +62,9 @@ data class FavoritePlayer(
     val leagueGroup: String? = null,
     // Snapshotted from Player.headshot at favorite-time, same reasoning as
     // Team.logo - avoids a network round-trip just to render the Favorites
-    // tab's Players page. Null for EPL/La Liga players, and for anyone
-    // favorited via the standout-performance callout (GameCard.kt), which
-    // has no roster headshot data available at that point.
+    // tab's Players page. Null for MLB players (no roster headshot field
+    // wired up yet), and for anyone favorited via the standout-performance
+    // callout (GameCard.kt), which has no roster headshot data available at
+    // that point.
     val headshot: String? = null
 )

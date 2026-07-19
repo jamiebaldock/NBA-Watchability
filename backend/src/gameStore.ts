@@ -22,14 +22,13 @@ import Database from "better-sqlite3";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { League } from "./espnClient";
-import { SoccerLeague } from "./soccerEspnClient";
 import { GameStatus, LeagueGroup, SPORT_FOR_LEAGUE_GROUP, StandoutPerformerJson, StarPerformance } from "./types";
 
 // A game row's own "league" column is one specific ESPN league (basketball's
-// "nba"/"nba-summer-*"/"wnba", or soccer's "eng.1"/"esp.1") - broader than
-// the mutually-exclusive LeagueGroup a request is scoped to, narrower than
-// "any string", so a typo'd league name still fails to compile.
-export type AnyLeague = League | SoccerLeague;
+// "nba"/"nba-summer-*"/"wnba", or MLB's single "mlb") - broader than the
+// mutually-exclusive LeagueGroup a request is scoped to, narrower than "any
+// string", so a typo'd league name still fails to compile.
+export type AnyLeague = League | "mlb";
 
 const DATA_DIR = process.env.DATA_DIR ?? join(__dirname, "..", "data");
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
@@ -125,34 +124,11 @@ ensureColumn("games", "season_stage_label", "TEXT");
 // team whose individual line cleared the per-league "good"-or-better bar,
 // not just the single best - backs the favorite-player callout, which
 // needs to check a specific person's line against a game that might not
-// even be a highly-rated one overall. Set once at finalization for both
-// basketball (gameMapper.ts's findStandoutPerformers) and soccer
-// (soccerGameMapper.ts's findStandoutScorers); never populated by the
-// historical backfill scripts (predate this column), so older rows are
+// even be a highly-rated one overall. Set once at finalization by
+// basketball (gameMapper.ts's findStandoutPerformers); never populated by
+// the historical backfill scripts (predate this column), so older rows are
 // simply NULL/empty rather than retroactively enriched.
 ensureColumn("games", "standout_performers", "TEXT");
-// Soccer's own rubric-input facts, set once at finalization by
-// setSoccerFinalRubric - the soccer analogue of the basketball-shaped
-// final_margin/largest_deficit_overcome/etc. columns above, which soccer
-// rows never populate (soccer reuses final_margin/largest_deficit_overcome
-// directly instead of duplicating those two, since the concept is identical
-// in both sports; these 6 have no basketball equivalent). Lets a device
-// recompute a weight-adjusted soccer score locally, the same way the
-// basketball columns already do - see mobile's Rubric.kt.
-ensureColumn("games", "total_goals", "INTEGER");
-ensureColumn("games", "late_decisive_goal", "INTEGER");
-ensureColumn("games", "max_goals_by_player", "INTEGER");
-ensureColumn("games", "combined_shots_on_target", "INTEGER");
-ensureColumn("games", "any_red_card", "INTEGER");
-ensureColumn("games", "max_saves_by_keeper", "INTEGER");
-ensureColumn("games", "any_free_kick_goal", "INTEGER");
-ensureColumn("games", "any_penalty_missed", "INTEGER");
-// Knockout-tournament-only facts (World Cup) - NULL for every domestic
-// EPL/La Liga row, same "not applicable" convention as the basketball-only
-// columns are for a soccer row. See soccerRubric.ts's extraTimePoints/
-// shootoutPoints for the rubric bonus these back.
-ensureColumn("games", "went_to_extra_time", "INTEGER");
-ensureColumn("games", "decided_by_shootout", "INTEGER");
 
 function now(): string {
   return new Date().toISOString();
@@ -208,16 +184,6 @@ export interface GameRow {
   ytFoundAt: string | null;
   ytCheckCount: number;
   seasonStageLabel: string | null;
-  totalGoals: number | null;
-  lateDecisiveGoal: number | null;
-  maxGoalsByPlayer: number | null;
-  combinedShotsOnTarget: number | null;
-  anyRedCard: number | null;
-  maxSavesByKeeper: number | null;
-  anyFreeKickGoal: number | null;
-  anyPenaltyMissed: number | null;
-  wentToExtraTime: number | null;
-  decidedByShootout: number | null;
 }
 
 /** Creates the row if this eventId has never been seen before; a no-op otherwise - never touches an existing row's already-collected fields. */
@@ -296,16 +262,6 @@ interface RawGameRow {
   yt_found_at: string | null;
   yt_check_count: number;
   season_stage_label: string | null;
-  total_goals: number | null;
-  late_decisive_goal: number | null;
-  max_goals_by_player: number | null;
-  combined_shots_on_target: number | null;
-  any_red_card: number | null;
-  max_saves_by_keeper: number | null;
-  any_free_kick_goal: number | null;
-  any_penalty_missed: number | null;
-  went_to_extra_time: number | null;
-  decided_by_shootout: number | null;
 }
 
 function parseStandoutPerformers(raw: string | null): StandoutPerformerJson[] {
@@ -347,16 +303,6 @@ function mapRow(raw: RawGameRow): GameRow {
     ytFoundAt: raw.yt_found_at,
     ytCheckCount: raw.yt_check_count,
     seasonStageLabel: raw.season_stage_label,
-    totalGoals: raw.total_goals,
-    lateDecisiveGoal: raw.late_decisive_goal,
-    maxGoalsByPlayer: raw.max_goals_by_player,
-    combinedShotsOnTarget: raw.combined_shots_on_target,
-    anyRedCard: raw.any_red_card,
-    maxSavesByKeeper: raw.max_saves_by_keeper,
-    anyFreeKickGoal: raw.any_free_kick_goal,
-    anyPenaltyMissed: raw.any_penalty_missed,
-    wentToExtraTime: raw.went_to_extra_time,
-    decidedByShootout: raw.decided_by_shootout,
   };
 }
 
@@ -482,53 +428,34 @@ export function setFinalRubric(eventId: string, rubric: FinalRubric, finalAt: st
   });
 }
 
-export interface SoccerFinalResult {
+export interface MlbFinalResult {
   awayScore: number;
   homeScore: number;
   score: number;
   tier: string;
   standoutPerformers: StandoutPerformerJson[];
   // Reuses the basketball-shaped final_margin/largest_deficit_overcome
-  // columns directly (same concept in both sports); the remaining 6 have no
-  // basketball equivalent and get their own columns above.
+  // columns directly (same concept in every sport in this codebase).
   finalMargin: number;
   largestDeficitOvercome: number;
-  totalGoals: number;
-  lateDecisiveGoal: boolean;
-  maxGoalsByPlayer: number;
-  combinedShotsOnTarget?: number;
-  anyRedCard?: boolean;
-  maxSavesByKeeper?: number;
-  anyFreeKickGoal?: boolean;
-  anyPenaltyMissed?: boolean;
-  // Knockout-tournament-only (World Cup) - undefined for a domestic
-  // EPL/La Liga row, same as the 5 fields above are for basketball.
-  wentToExtraTime?: boolean;
-  decidedByShootout?: boolean;
 }
 
 /**
- * Soccer's equivalent of setFinalRubric - touches soccer's own rubric-input
- * facts (away/home score, the soccerRubric.ts total, its tier, standout
- * scorers, and the 10 facts a client-side weight-adjusted recompute needs -
- * see soccerRubric.ts's SoccerRubricInputs). Deliberately doesn't touch the
- * remaining basketball-only rubric columns (lead changes, overtime periods,
- * star performance tier, clutch booleans) - those simply stay NULL for a
- * soccer row, which every reader already treats as "not applicable"/
- * "unknown" rather than a special case to guard against. Same
- * "never overwrite" WHERE-guard as setFinalRubric.
+ * MLB's equivalent of setFinalRubric - deliberately narrower
+ * (mlbGamesService.ts's first-pass scope, see its file comment): only
+ * touches the columns every sport already shares (score/tier/standout
+ * performers/margin/comeback), not sport-specific rubric-input columns -
+ * there's no client-side weight-adjusted recompute for MLB yet, so there's
+ * nothing else to persist for that purpose. Same "never overwrite"
+ * WHERE-guard as every other final-rubric setter.
  */
-export function setSoccerFinalRubric(eventId: string, result: SoccerFinalResult, finalAt: string | null = now()): void {
+export function setMlbFinalRubric(eventId: string, result: MlbFinalResult, finalAt: string | null = now()): void {
   db.prepare(
     `UPDATE games SET
        status='final', final_at=@finalAt,
        away_score=@awayScore, home_score=@homeScore, score=@score, tier=@tier,
        standout_performers=@standoutPerformers,
        final_margin=@finalMargin, largest_deficit_overcome=@largestDeficitOvercome,
-       total_goals=@totalGoals, late_decisive_goal=@lateDecisiveGoal, max_goals_by_player=@maxGoalsByPlayer,
-       combined_shots_on_target=@combinedShotsOnTarget, any_red_card=@anyRedCard,
-       max_saves_by_keeper=@maxSavesByKeeper, any_free_kick_goal=@anyFreeKickGoal, any_penalty_missed=@anyPenaltyMissed,
-       went_to_extra_time=@wentToExtraTime, decided_by_shootout=@decidedByShootout,
        updated_at=@updatedAt
      WHERE event_id=@eventId AND score IS NULL`
   ).run({
@@ -541,16 +468,6 @@ export function setSoccerFinalRubric(eventId: string, result: SoccerFinalResult,
     standoutPerformers: JSON.stringify(result.standoutPerformers),
     finalMargin: result.finalMargin,
     largestDeficitOvercome: result.largestDeficitOvercome,
-    totalGoals: result.totalGoals,
-    lateDecisiveGoal: result.lateDecisiveGoal ? 1 : 0,
-    maxGoalsByPlayer: result.maxGoalsByPlayer,
-    combinedShotsOnTarget: result.combinedShotsOnTarget ?? null,
-    anyRedCard: result.anyRedCard === undefined ? null : result.anyRedCard ? 1 : 0,
-    maxSavesByKeeper: result.maxSavesByKeeper ?? null,
-    anyFreeKickGoal: result.anyFreeKickGoal === undefined ? null : result.anyFreeKickGoal ? 1 : 0,
-    anyPenaltyMissed: result.anyPenaltyMissed === undefined ? null : result.anyPenaltyMissed ? 1 : 0,
-    wentToExtraTime: result.wentToExtraTime === undefined ? null : result.wentToExtraTime ? 1 : 0,
-    decidedByShootout: result.decidedByShootout === undefined ? null : result.decidedByShootout ? 1 : 0,
     updatedAt: now()
   });
 }
@@ -708,12 +625,12 @@ export function getFinalGamesMissingHighlights(): GameRow[] {
   return raws
     .map(mapRow)
     .filter((row) => new Date(row.tipoffUtc).getTime() >= cutoffTime)
-    // No soccer YouTube channel is configured (youtubeClient.ts's search is
-    // NBA/WNBA-channel-only) - without this guard, soccer rows would sit
-    // here forever "missing highlights" and gamesService.ts's demand-driven
-    // check would eventually search the *NBA* channel for an EPL matchup
-    // (checkGameHighlights's HighlightsLeague derivation has no soccer
-    // branch), wasting real search.list quota on a near-certain miss.
+    // No MLB YouTube channel is configured (youtubeClient.ts's search is
+    // NBA/WNBA-channel-only) - without this guard, MLB rows would sit here
+    // forever "missing highlights" and gamesService.ts's demand-driven check
+    // would eventually search the *NBA* channel for an MLB matchup
+    // (checkGameHighlights's HighlightsLeague derivation has no MLB branch),
+    // wasting real search.list quota on a near-certain miss.
     .filter((row) => SPORT_FOR_LEAGUE_GROUP[row.leagueGroup] === "basketball");
 }
 
@@ -803,61 +720,6 @@ function upcomingSeasonLabel(finalsEndTipoff: string, leagueGroup: LeagueGroup):
   return `${finalsYear}-${String((finalsYear + 1) % 100).padStart(2, "0")}`;
 }
 
-// Soccer has no Finals/playoff stage to anchor a season boundary on (a
-// domestic league season just ends when the last matchday is played, no
-// separate bracket) - so unlike basketball's Finals-based rule below, this
-// is a plain calendar-month cutoff, good enough since neither league's real
-// fixtures ever land in the Jun-Jul off-season gap this straddles. Both
-// eng.1 and esp.1 share the same Aug-May convention (confirmed against real
-// ESPN data - e.g. esp.1's own season.slug reads "2024-25-laliga" for an
-// August 2024 kickoff), so one function covers both leagueGroups.
-const SOCCER_SEASON_START_MONTH = 7; // August, 0-indexed
-
-function soccerSeasonStartYear(date: Date): number {
-  const year = date.getUTCFullYear();
-  return date.getUTCMonth() >= SOCCER_SEASON_START_MONTH ? year : year - 1;
-}
-
-function soccerSeasonLabelForTipoff(tipoffUtc: string): string {
-  const startYear = soccerSeasonStartYear(new Date(tipoffUtc));
-  return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
-}
-
-/**
- * The latest already-final match on record for [leagueGroup] - soccer's
- * analogue of getMostRecentFinalsEnd. A domestic league has no Finals/
- * playoff stage, but its literal last matchday plays the exact same role:
- * the real-world marker of "the previous season is over."
- */
-function getMostRecentSoccerGameEnd(leagueGroup: LeagueGroup): string | undefined {
-  const row = db.prepare(`SELECT MAX(tipoff_utc) as end FROM games WHERE league_group = ? AND score IS NOT NULL`).get(
-    leagueGroup
-  ) as { end: string | null };
-  return row.end ?? undefined;
-}
-
-/**
- * The day after the most recently completed match - soccer's equivalent of
- * getMostRecentFinalsEnd-anchored "This season", backing /current-season-start
- * for EPL/La Liga. Deliberately NOT "Aug 1 of soccerSeasonStartYear(now)" -
- * that plain calendar rule is correct for labeling a single game's own
- * season (soccerSeasonLabelForTipoff above), but wrong here: during the
- * Jun-Jul off-season gap, it would point "This season" backward at the
- * season that just finished (re-showing months of already-seen games)
- * instead of forward at the empty gap before the next one kicks off - the
- * same distinction basketball's Finals-anchored rule exists to make for
- * Summer League/preseason. Falls back to a plain Aug-1 guess only if the
- * store has no final soccer game for this leagueGroup yet (shouldn't
- * happen against a populated store).
- */
-export function currentSoccerSeasonStartDate(leagueGroup: LeagueGroup, now: Date = new Date()): string {
-  const lastGameEnd = getMostRecentSoccerGameEnd(leagueGroup);
-  if (!lastGameEnd) return `${soccerSeasonStartYear(now)}-08-01`;
-  const dayAfter = new Date(lastGameEnd);
-  dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
-  return dayAfter.toISOString().slice(0, 10);
-}
-
 // NBA's "ends in" convention (a season runs Oct 1 - Sep 30, labeled by its
 // start year - e.g. a 2024-10-22 tipoff and a 2025-04-15 tipoff both label
 // "2024-25") doesn't apply to WNBA, which never spans a year boundary - a
@@ -871,15 +733,12 @@ export function currentSoccerSeasonStartDate(leagueGroup: LeagueGroup, now: Date
 // label instead of the one that just ended). [finalsEnd] can be passed in
 // by callers that already know it (e.g. looping over many rows) to avoid
 // re-querying it on every call; callers that don't have it yet get a
-// fresh lookup. Soccer leagueGroups are dispatched to their own
-// Finals-free convention above before any of this basketball-specific
-// logic runs.
+// fresh lookup.
 export function seasonLabelForTipoff(
   tipoffUtc: string,
   leagueGroup: LeagueGroup,
   finalsEnd: string | undefined = getMostRecentFinalsEnd(leagueGroup)
 ): string {
-  if (SPORT_FOR_LEAGUE_GROUP[leagueGroup] === "soccer") return soccerSeasonLabelForTipoff(tipoffUtc);
   if (finalsEnd && tipoffUtc > finalsEnd) {
     return upcomingSeasonLabel(finalsEnd, leagueGroup);
   }
@@ -892,12 +751,10 @@ export function seasonLabelForTipoff(
 
 // The nominal start date a seasonLabelForTipoff-style label itself begins
 // on - the inverse of that function's own math (WNBA: Jan 1 of the label's
-// year; NBA: Oct 1 of the label's start year; soccer: Aug 1 of the label's
-// start year, no Finals-boundary concept to worry about).
+// year; NBA: Oct 1 of the label's start year).
 function seasonStartDateForLabel(label: string, leagueGroup: LeagueGroup): string {
   if (leagueGroup === "wnba") return `${label}-01-01T00:00:00.000Z`;
   const startYear = label.slice(0, 4);
-  if (SPORT_FOR_LEAGUE_GROUP[leagueGroup] === "soccer") return `${startYear}-08-01T00:00:00.000Z`;
   return `${startYear}-10-01T00:00:00.000Z`;
 }
 
@@ -906,13 +763,10 @@ function seasonStartDateForLabel(label: string, leagueGroup: LeagueGroup): strin
  * [leagueGroup], newest first - backs the History tab's per-season filter
  * chips, so a newly-backfilled season shows up automatically with no code
  * change. Scoped by league_group (not the narrower "league" column, which
- * for NBA holds "nba"/"nba-summer-las-vegas"/etc separately, and for soccer
- * holds "eng.1"/"esp.1" rather than the leagueGroup string itself) - NBA
- * Summer League rows are additionally excluded by league name, since those
- * belong to the "This season" (current in-progress period) bucket the
- * client computes separately, not to a named season block. No equivalent
- * exclusion exists (or is needed) for soccer - eng.1/esp.1 never mix in a
- * non-season competition under the same league_group.
+ * for NBA holds "nba"/"nba-summer-las-vegas"/etc separately) - NBA Summer
+ * League rows are additionally excluded by league name, since those belong
+ * to the "This season" (current in-progress period) bucket the client
+ * computes separately, not to a named season block.
  *
  * The newest label is dropped entirely when it'd be redundant with "This
  * season": that only happens when the label represents a season that
@@ -940,23 +794,6 @@ export function getSeasonLabels(leagueGroup: LeagueGroup): string[] {
     .reverse();
 
   if (labels.length === 0) return labels;
-
-  // Soccer has no Finals to anchor the same dedup rule on, but its version
-  // is actually simpler: there's no "gap" to check for real games in at
-  // all, since a soccer leagueGroup's "This season" is just [Aug 1, today].
-  // The newest label is redundant with that exactly when its own nominal
-  // start hasn't arrived yet - e.g. right now, both eng.1 and esp.1 only
-  // have a couple of real-but-still-upcoming 2026-27 fixtures on record
-  // (touched while verifying the Games tab), which would otherwise leak in
-  // as a selectable-but-permanently-empty "2026-27" chip alongside "This
-  // season". Once that season's nominal start date actually arrives, this
-  // stops dropping it on its own - no different from how NBA's equivalent
-  // check already stops firing once real games land in its own gap.
-  if (SPORT_FOR_LEAGUE_GROUP[leagueGroup] === "soccer") {
-    const newestStartTime = new Date(seasonStartDateForLabel(labels[0], leagueGroup)).getTime();
-    if (newestStartTime > Date.now()) labels.shift();
-    return labels;
-  }
 
   if (finalsEnd) {
     const newestStartTime = new Date(seasonStartDateForLabel(labels[0], leagueGroup)).getTime();

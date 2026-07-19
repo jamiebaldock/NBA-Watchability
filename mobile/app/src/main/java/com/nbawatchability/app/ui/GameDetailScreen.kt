@@ -45,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.RubricWeights
-import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.data.rubricBreakdown
 import com.nbawatchability.app.ui.theme.BackgroundBase
@@ -73,7 +72,6 @@ private val headToHeadDateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
 fun GameDetailScreen(
     game: Game,
     weights: RubricWeights,
-    soccerWeights: SoccerRubricWeights,
     defaultTab: GameDetailTab,
     onBack: () -> Unit
 ) {
@@ -97,7 +95,7 @@ fun GameDetailScreen(
                 },
                 actions = {
                     IconButton(onClick = {
-                        val shareText = buildShareText(game, weights, soccerWeights)
+                        val shareText = buildShareText(game, weights)
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_TEXT, shareText)
@@ -157,7 +155,7 @@ fun GameDetailScreen(
                 }
 
                 when (selectedTab) {
-                    GameDetailTab.BREAKDOWN -> BreakdownTab(game, weights, soccerWeights)
+                    GameDetailTab.BREAKDOWN -> BreakdownTab(game, weights)
                     GameDetailTab.TOP_PERFORMERS -> TopPerformersTab(viewModel)
                 }
 
@@ -170,8 +168,8 @@ fun GameDetailScreen(
     }
 }
 
-private fun buildShareText(game: Game, weights: RubricWeights, soccerWeights: SoccerRubricWeights): String {
-    val score = game.effectiveScore(weights, soccerWeights)
+private fun buildShareText(game: Game, weights: RubricWeights): String {
+    val score = game.effectiveScore(weights)
     val tier = game.tier
     return buildString {
         append("${game.away} @ ${game.home}")
@@ -185,9 +183,9 @@ private fun buildShareText(game: Game, weights: RubricWeights, soccerWeights: So
 }
 
 @Composable
-private fun BreakdownTab(game: Game, weights: RubricWeights, soccerWeights: SoccerRubricWeights) {
-    val entries = remember(game.id, weights, soccerWeights) { game.rubricBreakdown(weights, soccerWeights) }
-    val total = game.effectiveScore(weights, soccerWeights) ?: 0
+private fun BreakdownTab(game: Game, weights: RubricWeights) {
+    val entries = remember(game.id, weights) { game.rubricBreakdown(weights) }
+    val total = game.effectiveScore(weights) ?: 0
 
     Column {
         entries.forEach { entry ->

@@ -3,8 +3,6 @@
 // as teamsService.ts: no existing pipeline hands us "every player on a team,"
 // only whichever players happened to log a stat line in a specific game.
 import { fetchRoster, League } from "./espnClient";
-import { fetchSoccerRoster, SoccerLeague } from "./soccerEspnClient";
-import { isSoccerLeagueGroup, SOCCER_LEAGUE_FOR_GROUP } from "./soccerGamesService";
 import { loadLeagueCache, saveLeagueCache, todayKey } from "./leagueCache";
 import { LeagueGroup, RosterResponseJson } from "./types";
 
@@ -20,11 +18,7 @@ export async function getRoster(leagueGroup: LeagueGroup, teamId: string): Promi
   if (cached) return cached;
 
   let players: RosterResponseJson["players"];
-  if (isSoccerLeagueGroup(leagueGroup)) {
-    const league: SoccerLeague = SOCCER_LEAGUE_FOR_GROUP[leagueGroup];
-    const athletes = await fetchSoccerRoster(teamId, league);
-    players = athletes.map((a) => ({ id: a.id, name: a.displayName }));
-  } else if (leagueGroup === "nba" || leagueGroup === "wnba") {
+  if (leagueGroup === "nba" || leagueGroup === "wnba") {
     const league = BASKETBALL_LEAGUE_FOR_GROUP[leagueGroup];
     const athletes = await fetchRoster(teamId, league);
     players = athletes.map((a) => ({ id: a.id, name: a.displayName, headshot: a.headshot?.href }));

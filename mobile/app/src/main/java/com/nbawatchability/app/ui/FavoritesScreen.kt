@@ -52,7 +52,6 @@ import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.GameStatus
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.RubricWeights
-import com.nbawatchability.app.data.SoccerRubricWeights
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.BackgroundBase
@@ -85,7 +84,6 @@ fun FavoritesScreen(
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
     weights: RubricWeights,
-    soccerWeights: SoccerRubricWeights,
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
@@ -173,7 +171,6 @@ fun FavoritesScreen(
                     sortOption = sortOptionUpcoming,
                     showNumericScore = showNumericScore,
                     weights = weights,
-                    soccerWeights = soccerWeights,
                     starredIds = starredIds,
                     onToggleStar = onToggleStar,
                     onWatchHighlights = onWatchHighlights,
@@ -193,7 +190,6 @@ fun FavoritesScreen(
                     sortOption = sortOptionPast,
                     showNumericScore = showNumericScore,
                     weights = weights,
-                    soccerWeights = soccerWeights,
                     starredIds = starredIds,
                     onToggleStar = onToggleStar,
                     onWatchHighlights = onWatchHighlights,
@@ -234,7 +230,6 @@ private fun FavoriteGamesPage(
     sortOption: SortOption,
     showNumericScore: Boolean,
     weights: RubricWeights,
-    soccerWeights: SoccerRubricWeights,
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
@@ -280,12 +275,12 @@ private fun FavoriteGamesPage(
                 // score to sort by yet.
                 val ordered = when (sortOption) {
                     SortOption.RATING_HIGHEST_FIRST -> {
-                        val (scored, unscored) = visibleGames.partition { it.effectiveScore(weights, soccerWeights) != null }
-                        scored.sortedByDescending { it.effectiveScore(weights, soccerWeights) } + unscored.sortedByDescending { it.tipoffUtc }
+                        val (scored, unscored) = visibleGames.partition { it.effectiveScore(weights) != null }
+                        scored.sortedByDescending { it.effectiveScore(weights) } + unscored.sortedByDescending { it.tipoffUtc }
                     }
                     SortOption.RATING_LOWEST_FIRST -> {
-                        val (scored, unscored) = visibleGames.partition { it.effectiveScore(weights, soccerWeights) != null }
-                        scored.sortedBy { it.effectiveScore(weights, soccerWeights) } + unscored.sortedByDescending { it.tipoffUtc }
+                        val (scored, unscored) = visibleGames.partition { it.effectiveScore(weights) != null }
+                        scored.sortedBy { it.effectiveScore(weights) } + unscored.sortedByDescending { it.tipoffUtc }
                     }
                     SortOption.DATE_OLDEST_FIRST -> visibleGames.sortedBy { it.tipoffUtc }
                     SortOption.DATE_NEWEST_FIRST -> visibleGames.sortedByDescending { it.tipoffUtc }
@@ -313,7 +308,6 @@ private fun FavoriteGamesPage(
                             onToggleFavoriteTeam = onToggleFavoriteTeam,
                             favoritePlayerNames = favoritePlayerNames,
                             onToggleFavoritePlayer = onToggleFavoritePlayer,
-                            soccerWeights = soccerWeights,
                             onGameClick = onGameClick
                         )
                     }
@@ -511,8 +505,8 @@ private fun FavoritePlayersLeagueGroup(leagueLabel: String, players: List<Favori
 
 /**
  * A real headshot photo when [headshotUrl] is present (NBA/WNBA only); a
- * tinted initials circle otherwise (EPL/La Liga, or any player favorited
- * before this field existed) - never a broken-image icon.
+ * tinted initials circle otherwise (MLB, or any player favorited before
+ * this field existed) - never a broken-image icon.
  */
 @Composable
 private fun PlayerAvatar(name: String, headshotUrl: String?) {

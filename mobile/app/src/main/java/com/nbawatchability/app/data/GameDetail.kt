@@ -28,7 +28,7 @@ data class HeadToHeadGame(
     val homeScore: Int
 )
 
-/** Best-effort context, not a true "clinches playoff spot" computation - see backend/src/types.ts's TeamStandingsContextJson doc comment for why. Empty (all fields null) whenever the league doesn't have real standings data yet (e.g. soccer today). */
+/** Best-effort context, not a true "clinches playoff spot" computation - see backend/src/types.ts's TeamStandingsContextJson doc comment for why. Empty (all fields null) whenever the league doesn't have real standings data yet (e.g. MLB today). */
 @Serializable
 data class TeamStandingsContext(
     val rank: Int? = null,

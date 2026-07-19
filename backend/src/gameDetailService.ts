@@ -8,11 +8,8 @@
 // action, not something every tile needs computed up front, unlike the
 // score/tier/highlights pipeline that runs for every game once, ever.
 import { EspnBoxscoreTeamPlayers, fetchSummary, League } from "./espnClient";
-import { EspnSoccerKeyEvent, fetchSoccerSummary } from "./soccerEspnClient";
-import { parseGoals } from "./soccerGameMapper";
 import { getGame, getHeadToHead } from "./gameStore";
 import { getStandings } from "./standingsService";
-import { isSoccerLeagueGroup, SOCCER_LEAGUE_FOR_GROUP } from "./soccerGamesService";
 import { GameDetailResponseJson, LeagueGroup, TeamStandingsContextJson, TopPerformerJson } from "./types";
 
 const BASKETBALL_STAT_CATEGORIES = ["PTS", "REB", "AST"] as const;
@@ -44,37 +41,6 @@ function basketballTopPerformers(playersBoxscore: EspnBoxscoreTeamPlayers[] | un
     .map(({ name, team, line }) => ({ name, team, line }));
 }
 
-/** Every scorer, plus their assist provider where ESPN's keyEvents attributes one - not a full box score, just who actually contributed to a goal. */
-function soccerTopPerformers(keyEvents: EspnSoccerKeyEvent[] | undefined): TopPerformerJson[] {
-  if (!keyEvents) return [];
-  const goals = parseGoals(keyEvents);
-  const performers: TopPerformerJson[] = [];
-
-  const goalsByScorer: Record<string, { team: string; count: number }> = {};
-  for (const g of goals) {
-    if (g.ownGoal || !g.scorer) continue;
-    const key = g.scorer;
-    goalsByScorer[key] = { team: g.team, count: (goalsByScorer[key]?.count ?? 0) + 1 };
-  }
-  for (const [name, { team, count }] of Object.entries(goalsByScorer)) {
-    performers.push({ name, team, line: count === 1 ? "1 goal" : `${count} goals` });
-  }
-
-  const assistsByPlayer: Record<string, { team: string; count: number }> = {};
-  for (const event of keyEvents) {
-    if (!event.scoringPlay) continue;
-    const assister = event.participants?.[1]?.athlete?.displayName;
-    if (!assister) continue;
-    const team = event.team?.displayName ?? "";
-    assistsByPlayer[assister] = { team, count: (assistsByPlayer[assister]?.count ?? 0) + 1 };
-  }
-  for (const [name, { team, count }] of Object.entries(assistsByPlayer)) {
-    performers.push({ name, team, line: count === 1 ? "1 assist" : `${count} assists` });
-  }
-
-  return performers;
-}
-
 /** Best-effort rank/record lookup - matches Game's full team display name against standings' shortDisplayName by suffix (e.g. "Boston Celtics" ends with "Celtics"), since those are the two name shapes this app already has for the same team. */
 async function standingsContextFor(leagueGroup: LeagueGroup, teamName: string): Promise<TeamStandingsContextJson> {
   const standings = await getStandings(leagueGroup);
@@ -95,8 +61,12 @@ export async function getGameDetail(eventId: string): Promise<GameDetailResponse
   }
 
   const [topPerformers, awayStandings, homeStandings] = await Promise.all([
-    isSoccerLeagueGroup(row.leagueGroup)
-      ? fetchSoccerSummary(eventId, SOCCER_LEAGUE_FOR_GROUP[row.leagueGroup]).then((s) => soccerTopPerformers(s.keyEvents))
+    row.leagueGroup === "mlb"
+      // No top-performers breakdown built for MLB yet (Games-tab-only first
+      // pass) - fetchSummary's URL is basketball-namespaced and would 404
+      // for an MLB eventId, so this short-circuits to the same empty result
+      // basketballTopPerformers already returns for a missing boxscore.
+      ? Promise.resolve([])
       : fetchSummary(eventId, row.league as League).then((s) => basketballTopPerformers(s.boxscore?.players)),
     standingsContextFor(row.leagueGroup, row.away),
     standingsContextFor(row.leagueGroup, row.home),

@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 
 /**
  * Flipping the app's chrome to light isn't enough on its own - a handful of
- * team/league crests (Toronto Tempo, the EPL crest, several other soccer
+ * team/league crests (Toronto Tempo, several soccer/other placeholder
  * competition logos in LeagueGroup.kt) are only white/light-colored because
  * they were deliberately swapped to ESPN's "-dark" asset variant specifically
  * to read against this app's near-black surfaces (see the per-league
