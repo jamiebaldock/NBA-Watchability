@@ -1,13 +1,13 @@
 package com.nbawatchability.app.ui
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Visibility
@@ -20,6 +20,7 @@ import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -91,14 +92,37 @@ fun NavChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Mod
  * purely the visual shell and tap-to-select interaction, not a pager
  * itself, so it fits equally well behind a HorizontalPager (History,
  * Favorites, Leaders) or nothing at all.
+ *
+ * Auto-scrolls so the selected chip is never left out of view - a LazyRow
+ * (not a plain scrollable Row, which never moves itself in response to an
+ * external selection change, only a direct user drag) synced to whichever
+ * item is selected via the same (selectedIndex - 1)-as-first-visible
+ * targeting formula DayTabsScreen's CenteringDayTabRow already uses for
+ * Games' day-tab strip. That row needs its own fixed viewport-third-width
+ * chip sizing (a real WNBA season is ~140 days, too many to size chips by
+ * natural content width cheaply) so it stays a separate implementation
+ * sharing only the [NavChip] visual - but the actual bug this fixes (a
+ * chip near the end of a wider row, e.g. Favorites' "Players", getting cut
+ * off after a swipe) only ever affected this component, which had no
+ * scroll-sync logic here at all before.
  */
 @Composable
 fun <T> NavChipRow(items: List<T>, selected: T, onSelected: (T) -> Unit, label: (T) -> String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+    val listState = rememberLazyListState()
+    val selectedIndex = items.indexOf(selected)
+
+    LaunchedEffect(selectedIndex, items) {
+        if (selectedIndex < 0 || items.isEmpty()) return@LaunchedEffect
+        listState.animateScrollToItem((selectedIndex - 1).coerceIn(0, items.size - 1))
+    }
+
+    LazyRow(
+        state = listState,
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items.forEach { item ->
+        itemsIndexed(items, key = { _, item -> label(item) }) { _, item ->
             NavChip(label = label(item), selected = item == selected, onClick = { onSelected(item) })
         }
     }
