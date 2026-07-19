@@ -151,8 +151,14 @@ let loggedMissingApiKey = false;
  * found on either attempt feeds gameStore's learned-lag tracking via its
  * own yt_published_at (the video's real upload time), not via when this
  * check happened to fire.
+ *
+ * Exported so mlbGamesService.ts's (currently dormant, not yet wired into
+ * any live poller/request path) MLB highlights search can reuse the exact
+ * same fixed-delay/retry schedule rather than a separately-tuned one -
+ * James's explicit call to keep the algorithm identical across sports, not
+ * a coincidence of this being sport-agnostic already.
  */
-function isDueForHighlightsCheck(row: GameRow, now: number): boolean {
+export function isDueForHighlightsCheck(row: GameRow, now: number): boolean {
   if (row.ytVideoId) return false;
   if (row.ytCheckCount >= MAX_HIGHLIGHTS_CHECKS) return false;
   if (row.ytLastCheckedAt && now - new Date(row.ytLastCheckedAt).getTime() < YT_MIN_CHECK_SPACING_MS) return false;

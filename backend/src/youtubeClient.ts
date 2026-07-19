@@ -1,15 +1,25 @@
 // Matches a finished game to its official "FULL GAME HIGHLIGHTS" video on
 // the league's own YouTube channel. Channel IDs confirmed via the canonical
-// link on youtube.com/@NBA and youtube.com/@WNBA respectively (not to be
-// confused with unofficial reuploader channels/playlists that reuse the
-// same "FULL GAME HIGHLIGHTS" phrase).
+// externalId on youtube.com/@NBA, youtube.com/@WNBA, and youtube.com/@MLB
+// respectively (not to be confused with unofficial reuploader channels/
+// playlists that reuse the same "FULL GAME HIGHLIGHTS" phrase).
 const NBA_YOUTUBE_CHANNEL_ID = "UCWJ2lWNubArHWmf3FIHbfcQ";
 const WNBA_YOUTUBE_CHANNEL_ID = "UCO9a_ryN_l7DIDS-VIt-zmw";
+// MLB's real current title format ("GIANTS vs. MARINERS: Official Full Game
+// Highlights (July 19) | 2026 MLB Season" - confirmed directly against the
+// channel's live uploads, not assumed) still contains both team nicknames
+// and the literal phrase "FULL GAME HIGHLIGHTS" as substrings once
+// uppercased ("OFFICIAL FULL GAME HIGHLIGHTS" contains "FULL GAME
+// HIGHLIGHTS"), so the existing match predicate below needs no MLB-specific
+// branch - only the channel id differs.
+const MLB_YOUTUBE_CHANNEL_ID = "UCoLrcjPV5PbUrUyXq5mjc_A";
 
-export type HighlightsLeague = "nba" | "wnba";
+export type HighlightsLeague = "nba" | "wnba" | "mlb";
 
 function channelIdFor(league: HighlightsLeague): string {
-  return league === "wnba" ? WNBA_YOUTUBE_CHANNEL_ID : NBA_YOUTUBE_CHANNEL_ID;
+  if (league === "wnba") return WNBA_YOUTUBE_CHANNEL_ID;
+  if (league === "mlb") return MLB_YOUTUBE_CHANNEL_ID;
+  return NBA_YOUTUBE_CHANNEL_ID;
 }
 
 // search.list has its own dedicated daily quota bucket (separate from the
@@ -24,13 +34,18 @@ const YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
 // batch without threatening the search quota.
 const YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos";
 
-// Real full-game-highlights reels from both channels run well under this
-// (observed 9-15 min in the regular season, but Summer League reels have
-// been confirmed as long as 15:38 - higher-scoring, sloppier games run
+// Real full-game-highlights reels from the NBA/WNBA channels run well under
+// this (observed 9-15 min in the regular season, but Summer League reels
+// have been confirmed as long as 15:38 - higher-scoring, sloppier games run
 // longer highlight packages) - a plain broadcast replay, condensed classic,
 // or unrelated long-form video matching the team names on text alone would
 // blow past this, so it still catches false positives text matching alone
 // can't, without rejecting genuine highlights videos that run a bit long.
+// Reused as-is for MLB (not independently verified against real MLB reel
+// durations - a baseball highlights package is typically similarly
+// condensed regardless of the sport's longer raw game length, but this cap
+// is worth revisiting against real data once MLB search is actually wired
+// in and producing matches).
 const MAX_HIGHLIGHTS_SECONDS = 20 * 60;
 
 interface YoutubeSearchItem {

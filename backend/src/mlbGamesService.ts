@@ -13,13 +13,36 @@
 // window (seasonWindowService.ts's getMlbSeasonWindow) are both wired up.
 // Can be widened the same way soccer was once weight-adjusted recompute is
 // actually wanted.
+//
+// Highlights search (checkPendingMlbHighlights below) is built and verified
+// against real ESPN/YouTube data but deliberately NOT called from anywhere -
+// not highlightsPoller.ts, not processMlbEvent below - per James's explicit
+// call to have it ready without actually going live yet. Wiring it in later
+// is a one-line change: import checkPendingMlbHighlights into
+// highlightsPoller.ts's pollOnce() alongside the existing
+// checkPendingHighlights() call.
 import { toEspnDate } from "./espnClient";
-import { GameRow, getGame, setMlbFinalRubric, setPreview, setSeasonStageLabel, updateStatus, upsertBaseEntry } from "./gameStore";
+import {
+  GameRow,
+  canSpendSearchQuota,
+  getFinalMlbGamesMissingHighlights,
+  getGame,
+  markHighlightsChecked,
+  recordSearchQuotaSpend,
+  setHighlights,
+  setMlbFinalRubric,
+  setPreview,
+  setSeasonStageLabel,
+  updateStatus,
+  upsertBaseEntry
+} from "./gameStore";
+import { isDueForHighlightsCheck } from "./gamesService";
 import { mapMlbEspnState, mapMlbEventToGame } from "./mlbGameMapper";
 import { EspnMlbEvent, fetchMlbCalendarDates, fetchMlbScoreboard, fetchMlbSummary, fetchMlbTeamSchedule } from "./mlbEspnClient";
 import { generateHookAndStakes } from "./llm";
 import { computeMlbWatchabilityScore, tierForMlbScore } from "./mlbRubric";
 import { GameJson } from "./types";
+import { isYoutubeSearchConfigured, searchHighlightsVideo } from "./youtubeClient";
 
 export function isMlbLeagueGroup(leagueGroup: string): leagueGroup is "mlb" {
   return leagueGroup === "mlb";
@@ -211,4 +234,79 @@ export async function getNextMlbScheduledDate(afterDate: string): Promise<string
     if (games.length > 0) return date;
   }
   return undefined;
+}
+
+/**
+ * Searches for and records one MLB game's highlights match - the MLB
+ * analogue of gamesService.ts's checkGameHighlights, sharing every piece of
+ * that function's design (the same daily-budget guard via
+ * canSpendSearchQuota, the same "always mark checked, win or miss" bookkeeping
+ * via markHighlightsChecked, the same real-upload-timestamp persistence via
+ * setHighlights) - only the channel searched (youtubeClient.ts's
+ * HighlightsLeague "mlb" branch, MLB's real channel id UCoLrcjPV5PbUrUyXq5mjc_A,
+ * confirmed directly against youtube.com/@MLB) differs. Not called from
+ * anywhere yet - see this file's header comment.
+ */
+async function checkMlbGameHighlights(row: GameRow): Promise<void> {
+  if (!canSpendSearchQuota()) {
+    console.warn(`checkMlbGameHighlights: daily search budget spent, deferring ${row.away} @ ${row.home}`);
+    return;
+  }
+
+  console.log(`checkMlbGameHighlights: searching for ${row.away} @ ${row.home} (${row.eventId})`);
+  recordSearchQuotaSpend();
+  const match = await searchHighlightsVideo("mlb", row.away, row.home, row.tipoffUtc);
+  markHighlightsChecked(row.eventId, new Date().toISOString());
+  if (match) {
+    setHighlights(row.eventId, match.videoId, match.publishedAt);
+    console.log(`checkMlbGameHighlights: matched "${match.title}" (${match.videoId})`);
+  } else {
+    console.log(`checkMlbGameHighlights: no match for ${row.away} @ ${row.home} (${row.eventId})`);
+  }
+}
+
+// Same bound as gamesService.ts's MAX_CHECKS_PER_POLL, same reasoning
+// (defense in depth against a big backlog spending the daily budget in one
+// tick) - kept as MLB's own constant rather than importing basketball's so
+// this file doesn't reach into gamesService.ts's private module state for a
+// value that's allowed to diverge later even though it starts identical.
+const MAX_MLB_CHECKS_PER_POLL = 20;
+
+/**
+ * MLB analogue of gamesService.ts's checkPendingHighlights - reuses the
+ * exact same isDueForHighlightsCheck (imported from gamesService.ts) so the
+ * fixed 15-min-then-30-min two-check schedule is identical to basketball's,
+ * per James's explicit call to keep the algorithm the same rather than
+ * tuning a separate one for MLB.
+ *
+ * The "learning" half of that request is already satisfied for free, with
+ * no MLB-specific code needed: gameStore.ts's getLagPercentiles(league,
+ * leagueGroup) is fully generic and will compute a real per-league median
+ * upload lag for MLB the moment 5+ real matches exist (MIN_LAG_SAMPLES),
+ * fed by the same yt_published_at/final_at columns setHighlights/
+ * setMlbFinalRubric already populate. It's informational-only rather than
+ * gating when checks fire - exactly like basketball's own copy - because an
+ * earlier version of this idea for basketball was found to be
+ * self-reinforcing (a check that never looks before its own current
+ * estimate can mechanically never discover a shorter true delay, only ever
+ * confirm or raise its guess - see gamesService.ts's YT_FIRST_CHECK_DELAY_MS
+ * comment for the full explanation). Narrowing the estimate over time still
+ * happens automatically; it just isn't trusted to decide *when* to look,
+ * for the same reason it isn't trusted for basketball.
+ *
+ * Not called from highlightsPoller.ts or anywhere else yet - built,
+ * verified against real ESPN/YouTube data, ready to wire in.
+ */
+export async function checkPendingMlbHighlights(): Promise<void> {
+  if (!isYoutubeSearchConfigured()) return;
+
+  const now = Date.now();
+  let checksThisPoll = 0;
+  for (const row of getFinalMlbGamesMissingHighlights()) {
+    if (checksThisPoll >= MAX_MLB_CHECKS_PER_POLL) break;
+    if (isDueForHighlightsCheck(row, now)) {
+      await checkMlbGameHighlights(row);
+      checksThisPoll++;
+    }
+  }
 }

@@ -635,6 +635,22 @@ export function getFinalGamesMissingHighlights(): GameRow[] {
 }
 
 /**
+ * MLB analogue of getFinalGamesMissingHighlights above - same recent-games-
+ * only scope (RECENT_GAMES_WINDOW_MS), kept as its own separate function
+ * rather than widening the basketball one so MLB highlights search stays
+ * fully opt-in: nothing in the live poller (highlightsPoller.ts) or any
+ * demand-driven request path calls this yet - see mlbGamesService.ts's
+ * checkPendingMlbHighlights, which is built, real-data-verified, and ready
+ * to wire in, but deliberately not called from anywhere yet (James's
+ * explicit call - built and sitting there, not live).
+ */
+export function getFinalMlbGamesMissingHighlights(): GameRow[] {
+  const cutoffTime = Date.now() - RECENT_GAMES_WINDOW_MS;
+  const raws = db.prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL AND league_group='mlb'`).all() as RawGameRow[];
+  return raws.map(mapRow).filter((row) => new Date(row.tipoffUtc).getTime() >= cutoffTime);
+}
+
+/**
  * Rows still missing season_stage_label - backs migrateStageLabels.ts's
  * one-off enrichment pass for rows written before that column existed.
  * Summer League variants are excluded: deriveCompetitionLabel only accepts
