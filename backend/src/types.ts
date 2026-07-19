@@ -13,9 +13,9 @@ export type StarPerformance = "historic" | "great" | "good" | null;
 // mlbGamesService.ts's file comment for exactly what's not wired up yet
 // (team schedules, season-window/History, per-game rubric-input persistence
 // beyond score/tier).
-export type LeagueGroup = "nba" | "wnba" | "mlb";
+export type LeagueGroup = "nba" | "wnba" | "mlb" | "nfl" | "nhl";
 
-export type Sport = "basketball" | "baseball";
+export type Sport = "basketball" | "baseball" | "football" | "hockey";
 
 // The single choke point every sport-dispatching call site (httpHandler.ts's
 // getSchedule/getNextGameDateForLeagueGroup/getSeasonWindowForLeagueGroup,
@@ -28,7 +28,9 @@ export type Sport = "basketball" | "baseball";
 export const SPORT_FOR_LEAGUE_GROUP: Record<LeagueGroup, Sport> = {
   nba: "basketball",
   wnba: "basketball",
-  mlb: "baseball"
+  mlb: "baseball",
+  nfl: "football",
+  nhl: "hockey"
 };
 
 export interface GameJson {

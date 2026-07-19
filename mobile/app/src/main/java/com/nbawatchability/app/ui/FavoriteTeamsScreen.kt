@@ -55,11 +55,11 @@ import com.nbawatchability.app.ui.theme.TierInstantClassic
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 
-// Same core set as Settings' "Selected Leagues" (NBA/WNBA/NHL/MLB/NFL) -
-// but /teams only actually has real data for NBA/WNBA today, so picking one
-// of the still-isSupported=false leagues below shows the same "not built
-// yet" message as ComingSoonTab rather than firing a network call the
-// backend has no route for.
+// Same core set as Settings' "Selected Leagues" (NBA/WNBA/NHL/MLB/NFL).
+// Team-browsing here does NOT depend on LeagueGroup.isSupported - that flag
+// gates the Games/Starred/History/Leaders/News tabs, which is a broader gate
+// than this screen needs. The backend has real /teams data for all five of
+// these leagues, so every one of them always attempts to load teams.
 private val BROWSABLE_LEAGUES = listOf(LeagueGroup.NBA, LeagueGroup.WNBA, LeagueGroup.NHL, LeagueGroup.MLB, LeagueGroup.NFL)
 
 /**
@@ -88,7 +88,7 @@ fun FavoriteTeamsScreen(
     val viewModel: TeamsViewModel = viewModel()
 
     LaunchedEffect(selectedLeague) {
-        if (selectedLeague.isSupported) viewModel.load(selectedLeague)
+        viewModel.load(selectedLeague)
     }
 
     Scaffold(
@@ -135,23 +135,6 @@ fun FavoriteTeamsScreen(
                     unfocusedBorderColor = TextMuted
                 )
             )
-
-            if (!selectedLeague.isSupported) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "${selectedLeague.displayName} isn't built yet - check back later.",
-                        color = TextSecondary,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(24.dp),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-                return@Column
-            }
 
             when (val state = viewModel.uiState) {
                 is TeamsUiState.Loading -> Column(

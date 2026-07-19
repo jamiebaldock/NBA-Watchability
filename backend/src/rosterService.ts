@@ -2,7 +2,7 @@
 // search/browse screen (league -> team -> player drill-down). Same reasoning
 // as teamsService.ts: no existing pipeline hands us "every player on a team,"
 // only whichever players happened to log a stat line in a specific game.
-import { fetchRoster, League } from "./espnClient";
+import { fetchRoster, fetchRosterForSport, League } from "./espnClient";
 import { loadLeagueCache, saveLeagueCache, todayKey } from "./leagueCache";
 import { LeagueGroup, RosterResponseJson } from "./types";
 
@@ -21,6 +21,12 @@ export async function getRoster(leagueGroup: LeagueGroup, teamId: string): Promi
   if (leagueGroup === "nba" || leagueGroup === "wnba") {
     const league = BASKETBALL_LEAGUE_FOR_GROUP[leagueGroup];
     const athletes = await fetchRoster(teamId, league);
+    players = athletes.map((a) => ({ id: a.id, name: a.displayName, headshot: a.headshot?.href }));
+  } else if (leagueGroup === "mlb") {
+    // MLB only - NFL/NHL rosters are explicitly out of scope for this pass
+    // (no favorite-players route built for them yet), same "empty list"
+    // placeholder behavior as before.
+    const athletes = await fetchRosterForSport("baseball", "mlb", teamId);
     players = athletes.map((a) => ({ id: a.id, name: a.displayName, headshot: a.headshot?.href }));
   } else {
     // Same "no real backend route yet" placeholder-league behavior as

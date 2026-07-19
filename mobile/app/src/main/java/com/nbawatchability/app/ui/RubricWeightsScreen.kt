@@ -12,6 +12,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -21,22 +23,39 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.nbawatchability.app.data.MlbRubricCategory
+import com.nbawatchability.app.data.MlbRubricWeights
 import com.nbawatchability.app.data.RubricCategory
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
+import com.nbawatchability.app.ui.theme.TierWorthYourTime
+
+private enum class RubricSport(val label: String) {
+    BASKETBALL("Basketball"),
+    MLB("MLB"),
+    NFL("NFL"),
+    NHL("NHL")
+}
 
 /**
  * Reached from Settings, same pattern as About - frees the main Settings
- * screen from these sliders' worth of scroll. Single-sport for now
- * (basketball only - soccer support and its weight set were removed, see
- * archive/soccer/, and MLB weight customization hasn't been built yet) -
- * this used to switch between a basketball and soccer slider set via a top
- * chip pair (RubricSport enum); that switcher may need to come back once a
- * second sport has its own customizable weights again.
+ * screen from these sliders' worth of scroll. Sport switcher mirrors the
+ * pattern soccer used to have here (see archive/soccer/mobile/
+ * RubricWeightsScreen-soccer-tab-extracted.kt.txt) before soccer support was
+ * removed - now driving Basketball (real, unchanged), MLB (real, its own
+ * calibrated rubric from backend/src/mlbRubric.ts), and NFL/NHL (inert
+ * "coming soon" placeholders - those leagues only have team names browsable
+ * today, no scoring rubric to customize yet).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,8 +63,13 @@ fun RubricWeightsScreen(
     weights: RubricWeights,
     onWeightChange: (RubricCategory, Float) -> Unit,
     onReset: () -> Unit,
+    mlbWeights: MlbRubricWeights,
+    onMlbWeightChange: (MlbRubricCategory, Float) -> Unit,
+    onMlbReset: () -> Unit,
     onBack: () -> Unit
 ) {
+    var sport by remember { mutableStateOf(RubricSport.BASKETBALL) }
+
     Scaffold(
         containerColor = BackgroundBase,
         topBar = {
@@ -66,6 +90,23 @@ fun RubricWeightsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                RubricSport.entries.forEach { entry ->
+                    FilterChip(
+                        selected = sport == entry,
+                        onClick = { sport = entry },
+                        label = { Text(entry.label) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = TierWorthYourTime,
+                            selectedLabelColor = BackgroundBase
+                        )
+                    )
+                }
+            }
+
             Text(
                 text = "Scale how much each factor contributes to a game's score. 1.00x is the default.",
                 style = MaterialTheme.typography.bodySmall,
@@ -73,24 +114,71 @@ fun RubricWeightsScreen(
                 modifier = Modifier.padding(top = 16.dp, bottom = 16.dp)
             )
 
-            WeightSlider("Margin", weights.margin) { onWeightChange(RubricCategory.MARGIN, it) }
-            WeightSlider("Clutch finish", weights.clutch) { onWeightChange(RubricCategory.CLUTCH, it) }
-            WeightSlider("Buzzer-beater", weights.buzzerBeater) { onWeightChange(RubricCategory.BUZZER_BEATER, it) }
-            WeightSlider("Comeback", weights.comeback) { onWeightChange(RubricCategory.COMEBACK, it) }
-            WeightSlider("Lead changes", weights.leadChanges) { onWeightChange(RubricCategory.LEAD_CHANGES, it) }
-            WeightSlider("Overtime", weights.overtime) { onWeightChange(RubricCategory.OVERTIME, it) }
-            WeightSlider("Star performance", weights.starPerformance) { onWeightChange(RubricCategory.STAR_PERFORMANCE, it) }
-            WeightSlider("Stakes", weights.stakes) { onWeightChange(RubricCategory.STAKES, it) }
+            when (sport) {
+                RubricSport.BASKETBALL -> {
+                    WeightSlider("Margin", weights.margin) { onWeightChange(RubricCategory.MARGIN, it) }
+                    WeightSlider("Clutch finish", weights.clutch) { onWeightChange(RubricCategory.CLUTCH, it) }
+                    WeightSlider("Buzzer-beater", weights.buzzerBeater) { onWeightChange(RubricCategory.BUZZER_BEATER, it) }
+                    WeightSlider("Comeback", weights.comeback) { onWeightChange(RubricCategory.COMEBACK, it) }
+                    WeightSlider("Lead changes", weights.leadChanges) { onWeightChange(RubricCategory.LEAD_CHANGES, it) }
+                    WeightSlider("Overtime", weights.overtime) { onWeightChange(RubricCategory.OVERTIME, it) }
+                    WeightSlider("Star performance", weights.starPerformance) { onWeightChange(RubricCategory.STAR_PERFORMANCE, it) }
+                    WeightSlider("Stakes", weights.stakes) { onWeightChange(RubricCategory.STAKES, it) }
 
-            OutlinedButton(
-                onClick = onReset,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 24.dp)
-            ) {
-                Text("Reset to default")
+                    OutlinedButton(
+                        onClick = onReset,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp)
+                    ) {
+                        Text("Reset to default")
+                    }
+                }
+
+                RubricSport.MLB -> {
+                    WeightSlider("Margin", mlbWeights.margin) { onMlbWeightChange(MlbRubricCategory.MARGIN, it) }
+                    WeightSlider("Walk-off", mlbWeights.walkOff) { onMlbWeightChange(MlbRubricCategory.WALK_OFF, it) }
+                    WeightSlider("Comeback", mlbWeights.comeback) { onMlbWeightChange(MlbRubricCategory.COMEBACK, it) }
+                    WeightSlider("Extra innings", mlbWeights.extraInnings) { onMlbWeightChange(MlbRubricCategory.EXTRA_INNINGS, it) }
+                    WeightSlider("Total runs", mlbWeights.totalRuns) { onMlbWeightChange(MlbRubricCategory.TOTAL_RUNS, it) }
+                    WeightSlider("Combined home runs", mlbWeights.combinedHomeRuns) { onMlbWeightChange(MlbRubricCategory.COMBINED_HOME_RUNS, it) }
+                    WeightSlider("Star home run", mlbWeights.starHomeRun) { onMlbWeightChange(MlbRubricCategory.STAR_HOME_RUN, it) }
+                    WeightSlider("Pitching dominance", mlbWeights.pitchingDominance) { onMlbWeightChange(MlbRubricCategory.PITCHING_DOMINANCE, it) }
+                    WeightSlider("Blown save", mlbWeights.blownSave) { onMlbWeightChange(MlbRubricCategory.BLOWN_SAVE, it) }
+                    WeightSlider("Errors", mlbWeights.errors) { onMlbWeightChange(MlbRubricCategory.ERRORS, it) }
+                    WeightSlider("Stakes", mlbWeights.stakes) { onMlbWeightChange(MlbRubricCategory.STAKES, it) }
+
+                    OutlinedButton(
+                        onClick = onMlbReset,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp)
+                    ) {
+                        Text("Reset to default")
+                    }
+                }
+
+                RubricSport.NFL, RubricSport.NHL -> {
+                    ComingSoonPlaceholder(sport.label)
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun ComingSoonPlaceholder(sportLabel: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "$sportLabel weight customization is coming soon.",
+            color = TextSecondary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            style = MaterialTheme.typography.titleMedium
+        )
     }
 }
 

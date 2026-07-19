@@ -9,7 +9,7 @@
 import { EspnEvent, League, fetchCalendarDates, fetchScoreboard, toEspnDate } from "./espnClient";
 import { BasketballLeagueGroup, LEAGUE_GROUPS } from "./gamesService";
 import { loadLeagueCache, saveLeagueCache, todayKey } from "./leagueCache";
-import { LeagueGroup } from "./types";
+import { LeagueGroup, SPORT_FOR_LEAGUE_GROUP } from "./types";
 
 export interface SeasonWindow {
   start: string;
@@ -62,20 +62,24 @@ async function getBasketballSeasonWindow(leagueGroup: BasketballLeagueGroup): Pr
 
 /** Cached once per calendar day per league group - same reasoning as standings/stats (ESPN's schedule doesn't change meaningfully more often than that). */
 export async function getSeasonWindow(leagueGroup: LeagueGroup): Promise<SeasonWindow | null> {
-  // MLB has no full-season browse/calendar-picker route yet (Games-tab-only
-  // first pass, see mlbGamesService.ts's file comment) - null here is the
+  // Only basketball leagues have a full-season browse/calendar-picker route
+  // built (Games-tab-only first pass for MLB, no games pipeline at all yet
+  // for NFL/NHL - see mlbGamesService.ts's file comment) - null here is the
   // same "nothing to show yet" signal GameListViewModel.kt's own comment
   // says this endpoint is already expected to return gracefully, not an
   // error state. Checked before the cache/basketball fallback below, which
   // would otherwise crash indexing LEAGUE_GROUPS with a leagueGroup it
   // doesn't recognize.
-  if (leagueGroup === "mlb") return null;
+  if (SPORT_FOR_LEAGUE_GROUP[leagueGroup] !== "basketball") return null;
 
   const dateKey = todayKey(new Date());
   const cached = loadLeagueCache<SeasonWindow>("seasonWindow", leagueGroup, dateKey);
   if (cached) return cached;
 
-  const window = await getBasketballSeasonWindow(leagueGroup);
+  // Safe cast: the SPORT_FOR_LEAGUE_GROUP guard above already ruled out
+  // every non-basketball LeagueGroup ("basketball" sport implies "nba" |
+  // "wnba", the only two LeagueGroup values that map to it).
+  const window = await getBasketballSeasonWindow(leagueGroup as BasketballLeagueGroup);
   if (!window) return null;
 
   saveLeagueCache("seasonWindow", leagueGroup, dateKey, window);

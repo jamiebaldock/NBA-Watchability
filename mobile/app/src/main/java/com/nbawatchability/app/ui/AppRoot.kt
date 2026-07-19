@@ -113,6 +113,7 @@ fun AppRoot() {
     // tradeoff for not needing a custom Saver just for this one overlay.
     var showGameDetail by remember { mutableStateOf<com.nbawatchability.app.data.Game?>(null) }
     val settingsViewModel: RubricSettingsViewModel = viewModel()
+    val mlbSettingsViewModel: MlbRubricSettingsViewModel = viewModel()
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
     val starredGamesViewModel: StarredGamesViewModel = viewModel()
     val favoritesViewModel: FavoritesViewModel = viewModel()
@@ -156,6 +157,9 @@ fun AppRoot() {
             weights = settingsViewModel.weights,
             onWeightChange = settingsViewModel::updateWeight,
             onReset = settingsViewModel::resetToDefaults,
+            mlbWeights = mlbSettingsViewModel.weights,
+            onMlbWeightChange = mlbSettingsViewModel::updateWeight,
+            onMlbReset = mlbSettingsViewModel::resetToDefaults,
             onBack = { showRubricWeights = false }
         )
         return

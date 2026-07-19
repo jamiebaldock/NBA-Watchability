@@ -40,25 +40,31 @@ function parseLeagueGroup(raw: string): LeagueGroup {
   if (raw === "" || raw === "nba") return "nba";
   if (raw === "wnba") return "wnba";
   if (raw === "mlb") return "mlb";
-  throw new BadRequestError('leagueGroup must be one of "nba", "wnba", "mlb"');
+  if (raw === "nfl") return "nfl";
+  if (raw === "nhl") return "nhl";
+  throw new BadRequestError('leagueGroup must be one of "nba", "wnba", "mlb", "nfl", "nhl"');
 }
 
-/** Dispatches to the basketball or MLB live-schedule pipeline (types.ts's SPORT_FOR_LEAGUE_GROUP) - the one choke point where a request's leagueGroup decides which sport's data layer actually runs. */
+/** Dispatches to the basketball or MLB live-schedule pipeline (types.ts's SPORT_FOR_LEAGUE_GROUP) - the one choke point where a request's leagueGroup decides which sport's data layer actually runs. NFL/NHL have no games pipeline at all yet, so they short-circuit to an empty slate before ever reaching the basketball-only getGamesForDate. */
 function getGamesForDateAnySport(date: string, leagueGroup: LeagueGroup): Promise<GameJson[]> {
+  if (leagueGroup === "nfl" || leagueGroup === "nhl") return Promise.resolve([]);
   if (isMlbLeagueGroup(leagueGroup)) return getMlbGamesForDate(date);
   return getGamesForDate(date, leagueGroup);
 }
 
 /**
  * Backs the Favorites tab's Games page - a single favorited team's own
- * real schedule (past and upcoming), not a whole day's slate. "mlb" is
- * rejected explicitly - no favorite-teams/team-schedule route exists for it
- * yet (Games-tab-only first pass, see mlbGamesService.ts's file comment).
+ * real schedule (past and upcoming), not a whole day's slate. "mlb"/"nfl"/
+ * "nhl" are rejected explicitly - no favorite-teams/team-schedule route
+ * exists for any of them yet (Games-tab-only first pass, see
+ * mlbGamesService.ts's file comment; nfl/nhl have no games pipeline at all).
  */
 export async function getTeamScheduleForLeagueGroup(teamId: string, leagueGroupRaw = "nba"): Promise<GameJson[]> {
   if (!teamId) throw new BadRequestError("teamId is required");
   const leagueGroup = parseLeagueGroup(leagueGroupRaw);
-  if (leagueGroup === "mlb") throw new BadRequestError("team schedules aren't available for mlb yet");
+  if (leagueGroup === "mlb" || leagueGroup === "nfl" || leagueGroup === "nhl") {
+    throw new BadRequestError(`team schedules aren't available for ${leagueGroup} yet`);
+  }
   return getTeamSchedule(teamId, leagueGroup);
 }
 
@@ -87,6 +93,10 @@ export interface NextGameDateResult {
 export async function getNextGameDateForLeagueGroup(afterRaw: string, leagueGroupRaw = "nba"): Promise<NextGameDateResult> {
   if (!DATE_RE.test(afterRaw)) throw new BadRequestError("after must be YYYY-MM-DD");
   const leagueGroup = parseLeagueGroup(leagueGroupRaw);
+  // NFL/NHL have no games pipeline at all yet - avoid falling through to
+  // either the MLB or basketball-only branch below (same reasoning as
+  // getGamesForDateAnySport).
+  if (leagueGroup === "nfl" || leagueGroup === "nhl") return { date: null };
   const date = isMlbLeagueGroup(leagueGroup)
     ? await getNextMlbScheduledDate(afterRaw)
     : await getNextScheduledDate(afterRaw, leagueGroup);

@@ -214,6 +214,47 @@ export async function fetchRoster(teamId: string, league: League): Promise<EspnR
 }
 
 /**
+ * Generic sport-namespace-parameterized sibling of fetchTeams - basketball's
+ * fetchTeams/basePath stay untouched (closed League union, basketball-only
+ * URL namespace); this hits ESPN's same teams-list endpoint shape but for
+ * any sport/league slug pair (e.g. "baseball"/"mlb", "football"/"nfl",
+ * "hockey"/"nhl"), backing MLB/NFL/NHL's favorite-teams search/browse screen.
+ */
+export async function fetchTeamsForSport(sportSlug: string, league: string): Promise<EspnTeam[]> {
+  const data = await getJson<{ sports: Array<{ leagues: Array<{ teams: Array<{ team: EspnTeam }> }> }> }>(
+    `https://site.api.espn.com/apis/site/v2/sports/${sportSlug}/${league}/teams?limit=100`
+  );
+  return (data.sports?.[0]?.leagues?.[0]?.teams ?? []).map((t) => t.team);
+}
+
+// MLB's roster endpoint (confirmed directly against a real response) nests
+// athletes inside position groups (athletes: [{ position, items: [...] }])
+// rather than the flat array basketball's fetchRoster returns - this union
+// lets fetchRosterForSport handle either shape without assuming which one
+// a given sport uses.
+interface EspnRosterGroup {
+  position?: string;
+  items?: EspnRosterAthlete[];
+}
+
+function isRosterGroup(entry: EspnRosterAthlete | EspnRosterGroup): entry is EspnRosterGroup {
+  return Array.isArray((entry as EspnRosterGroup).items);
+}
+
+/**
+ * Generic sport-namespace-parameterized sibling of fetchRoster - see
+ * fetchTeamsForSport's comment. Backs MLB's favorite-players search/browse
+ * screen (NFL/NHL rosters are out of scope for now).
+ */
+export async function fetchRosterForSport(sportSlug: string, league: string, teamId: string): Promise<EspnRosterAthlete[]> {
+  const data = await getJson<{ athletes: Array<EspnRosterAthlete | EspnRosterGroup> }>(
+    `https://site.api.espn.com/apis/site/v2/sports/${sportSlug}/${league}/teams/${teamId}/roster`
+  );
+  const raw = data.athletes ?? [];
+  return raw.flatMap((entry) => (isRosterGroup(entry) ? entry.items ?? [] : [entry]));
+}
+
+/**
  * Every date [league] has at least one scheduled game, for whichever season
  * ESPN currently considers "current" as of [dateYyyymmdd] (a season already
  * over, with no next one announced yet, yields dates that are all in the
