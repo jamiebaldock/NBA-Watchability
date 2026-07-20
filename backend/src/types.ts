@@ -79,6 +79,30 @@ export interface GameJson {
   score?: number;
   score_visible: boolean;
   yt?: string;
+  // MLB-only raw rubric facts (mlbRubric.ts's MlbRubricInputs) - backs the
+  // game-detail popup's Breakdown tab, which otherwise has nothing
+  // MLB-shaped to show (every other GameJson field above - ot/c5/lcf/fp/bz/
+  // st - is basketball-specific and always false/null/0 for MLB games).
+  // Mirrors the existing NBA/WNBA pattern of sending raw facts and letting
+  // the client recompute per-category points (Rubric.kt), rather than
+  // sending pre-computed points, since that also gets MLB weight-adjustable
+  // sliders "for free" whenever that's built.
+  mlbInputs?: MlbRubricInputsJson;
+}
+
+export interface MlbRubricInputsJson {
+  finalMargin: number;
+  totalRuns: number;
+  largestDeficitOvercome: number;
+  walkOff: boolean;
+  extraInningsCount: number;
+  combinedHomeRuns: number;
+  maxHomeRunsByPlayer: number;
+  teamBlanked: boolean;
+  noHitter: boolean;
+  perfectGame: boolean;
+  blownSave: boolean;
+  combinedErrors: number;
 }
 
 export interface StandoutPerformerJson {

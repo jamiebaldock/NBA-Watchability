@@ -27,6 +27,30 @@ data class StandoutPerformer(
     val team: String? = null
 )
 
+/**
+ * MLB's raw rubric facts (backend/src/mlbRubric.ts's MlbRubricInputs) - the
+ * MLB analogue of the basketball-shaped m/cb/lc/ot/c5/lcf/fp/bz/st fields
+ * above. Sent as one nested object rather than flattened top-level fields
+ * since it's genuinely a different sport's shape, not a variant of the same
+ * facts (see Rubric.kt's mlbRubricBreakdown for how these become the
+ * game-detail popup's real MLB point breakdown).
+ */
+@Serializable
+data class MlbRubricInputs(
+    val finalMargin: Int,
+    val totalRuns: Int,
+    val largestDeficitOvercome: Int,
+    val walkOff: Boolean = false,
+    val extraInningsCount: Int = 0,
+    val combinedHomeRuns: Int = 0,
+    val maxHomeRunsByPlayer: Int = 0,
+    val teamBlanked: Boolean = false,
+    val noHitter: Boolean = false,
+    val perfectGame: Boolean = false,
+    val blownSave: Boolean = false,
+    val combinedErrors: Int = 0
+)
+
 enum class Tier(val label: String, val emoji: String) {
     INSTANT_CLASSIC("INSTANT CLASSIC", "🔥"),
     WORTH_YOUR_TIME("WORTH YOUR TIME", "⭐"),
@@ -101,7 +125,8 @@ data class Game(
     @SerialName("pitch") val pitch: String? = null,
     @SerialName("score") val score: Int? = null,
     @SerialName("score_visible") val scoreVisible: Boolean,
-    @SerialName("yt") val youtubeVideoId: String? = null
+    @SerialName("yt") val youtubeVideoId: String? = null,
+    @SerialName("mlbInputs") val mlbInputs: MlbRubricInputs? = null
 ) {
     val id: String get() = "$away@$home@$tipoffUtc"
 

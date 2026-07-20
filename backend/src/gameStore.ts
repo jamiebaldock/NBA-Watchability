@@ -22,6 +22,7 @@ import Database from "better-sqlite3";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { League } from "./espnClient";
+import { MlbRubricInputs } from "./mlbRubric";
 import { GameStatus, LeagueGroup, SPORT_FOR_LEAGUE_GROUP, StandoutPerformerJson, StarPerformance } from "./types";
 
 // A game row's own "league" column is one specific ESPN league (basketball's
@@ -129,6 +130,19 @@ ensureColumn("games", "season_stage_label", "TEXT");
 // the historical backfill scripts (predate this column), so older rows are
 // simply NULL/empty rather than retroactively enriched.
 ensureColumn("games", "standout_performers", "TEXT");
+// JSON-encoded MlbRubricInputs (mlbRubric.ts) - the raw per-dimension facts
+// (walk-off/extra-innings/total-runs/HRs/pitching-dominance/blown-save/
+// errors) computeMlbWatchabilityScore was fed to produce this game's total
+// score. Only score/tier survived to gameStore before this column existed
+// (setMlbFinalRubric's own comment explains why: no MLB weight-adjusted
+// recompute existed yet, so there was nothing that needed the inputs kept
+// around) - this doesn't change that scope, it just lets the mobile client's
+// game-detail "Breakdown" tab render MLB's own real per-category point
+// values (mirroring the NBA/WNBA raw-facts-sent/client-recomputes pattern in
+// Rubric.kt) instead of basketball's fields/labels, which is what it fell
+// back to with nothing MLB-shaped to show. Null for any row scored before
+// this column existed.
+ensureColumn("games", "mlb_rubric_inputs", "TEXT");
 
 function now(): string {
   return new Date().toISOString();
@@ -184,6 +198,7 @@ export interface GameRow {
   ytFoundAt: string | null;
   ytCheckCount: number;
   seasonStageLabel: string | null;
+  mlbRubricInputs: MlbRubricInputs | null;
 }
 
 /** Creates the row if this eventId has never been seen before; a no-op otherwise - never touches an existing row's already-collected fields. */
@@ -262,11 +277,17 @@ interface RawGameRow {
   yt_found_at: string | null;
   yt_check_count: number;
   season_stage_label: string | null;
+  mlb_rubric_inputs: string | null;
 }
 
 function parseStandoutPerformers(raw: string | null): StandoutPerformerJson[] {
   if (!raw) return [];
   return JSON.parse(raw) as StandoutPerformerJson[];
+}
+
+function parseMlbRubricInputs(raw: string | null): MlbRubricInputs | null {
+  if (!raw) return null;
+  return JSON.parse(raw) as MlbRubricInputs;
 }
 
 function mapRow(raw: RawGameRow): GameRow {
@@ -303,6 +324,7 @@ function mapRow(raw: RawGameRow): GameRow {
     ytFoundAt: raw.yt_found_at,
     ytCheckCount: raw.yt_check_count,
     seasonStageLabel: raw.season_stage_label,
+    mlbRubricInputs: parseMlbRubricInputs(raw.mlb_rubric_inputs),
   };
 }
 
@@ -438,15 +460,24 @@ export interface MlbFinalResult {
   // columns directly (same concept in every sport in this codebase).
   finalMargin: number;
   largestDeficitOvercome: number;
+  // The exact facts computeMlbWatchabilityScore was given to produce [score]
+  // - persisted so the mobile client's Breakdown tab can recompute MLB's own
+  // real per-category points (Rubric.kt's mlbRubricBreakdown, mirroring how
+  // NBA/WNBA raw facts already work), not so a weight-adjusted recompute can
+  // happen server-side - that's still out of scope, see this function's own
+  // comment below.
+  rubricInputs: MlbRubricInputs;
 }
 
 /**
- * MLB's equivalent of setFinalRubric - deliberately narrower
- * (mlbGamesService.ts's first-pass scope, see its file comment): only
- * touches the columns every sport already shares (score/tier/standout
- * performers/margin/comeback), not sport-specific rubric-input columns -
- * there's no client-side weight-adjusted recompute for MLB yet, so there's
- * nothing else to persist for that purpose. Same "never overwrite"
+ * MLB's equivalent of setFinalRubric - still deliberately narrower than
+ * basketball's full column set in one respect (mlbGamesService.ts's
+ * first-pass scope, see its file comment): there's no *server-side*
+ * weight-adjusted recompute for MLB yet, so [rubricInputs] is stored as one
+ * opaque JSON blob (mlb_rubric_inputs) rather than being broken out into its
+ * own indexed/queryable columns the way basketball's rubric-input facts are
+ * - nothing here queries by an individual MLB dimension, it only ever needs
+ * to round-trip back out to GameJson whole. Same "never overwrite"
  * WHERE-guard as every other final-rubric setter.
  */
 export function setMlbFinalRubric(eventId: string, result: MlbFinalResult, finalAt: string | null = now()): void {
@@ -456,6 +487,7 @@ export function setMlbFinalRubric(eventId: string, result: MlbFinalResult, final
        away_score=@awayScore, home_score=@homeScore, score=@score, tier=@tier,
        standout_performers=@standoutPerformers,
        final_margin=@finalMargin, largest_deficit_overcome=@largestDeficitOvercome,
+       mlb_rubric_inputs=@mlbRubricInputs,
        updated_at=@updatedAt
      WHERE event_id=@eventId AND score IS NULL`
   ).run({
@@ -468,6 +500,7 @@ export function setMlbFinalRubric(eventId: string, result: MlbFinalResult, final
     standoutPerformers: JSON.stringify(result.standoutPerformers),
     finalMargin: result.finalMargin,
     largestDeficitOvercome: result.largestDeficitOvercome,
+    mlbRubricInputs: JSON.stringify(result.rubricInputs),
     updatedAt: now()
   });
 }

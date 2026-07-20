@@ -30,7 +30,7 @@ export async function getHistory(start: string, end: string, leagueGroup: League
     hl: row.homeLogo ?? teamLogoUrl(row.home, leagueGroup),
     stt: "final",
     utc: row.tipoffUtc,
-    lg: row.league === "nba" ? "nba" : row.league === "wnba" ? "wnba" : "summer",
+    lg: row.league === "nba" ? "nba" : row.league === "wnba" ? "wnba" : row.league === "mlb" ? "mlb" : "summer",
     // row.seasonStageLabel ("NBA - Playoffs: Conference Semifinals") is
     // captured once per game (gamesService.ts) from ESPN's own season/notes
     // data and persisted in gameStore, so it survives long after that raw
@@ -57,6 +57,7 @@ export async function getHistory(start: string, end: string, leagueGroup: League
     score: row.score ?? undefined,
     score_visible: true,
     yt: row.ytVideoId ?? undefined,
+    mlbInputs: row.mlbRubricInputs ?? undefined,
   }));
 
   return { earliestDate: earliestGameDate(leagueGroup) ?? start, seasons: getSeasonLabels(leagueGroup), games };

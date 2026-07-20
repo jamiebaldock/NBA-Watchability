@@ -116,6 +116,74 @@ private object Rubric {
 }
 
 /**
+ * Client-side port of backend/src/mlbRubric.ts's computeMlbWatchabilityScore
+ * - unlike basketball's Rubric object above, there's no per-category user
+ * weight for MLB yet (effectiveScore's "mlb -> score" branch just trusts the
+ * server's own total as-is), so these functions exist only so the
+ * game-detail popup's Breakdown tab can show MLB's own real per-category
+ * points instead of basketball's. Keep every bracket in sync with
+ * mlbRubric.ts if that ever changes.
+ */
+private object MlbRubric {
+    fun marginPoints(margin: Int): Int {
+        val m = abs(margin)
+        return when {
+            m == 1 -> 20
+            m == 2 -> 15
+            m <= 5 -> 9
+            m <= 7 -> 4
+            else -> 0
+        }
+    }
+
+    fun walkOffPoints(walkOff: Boolean): Int = if (walkOff) 25 else 0
+
+    fun comebackPoints(largestDeficitOvercome: Int): Int = when {
+        largestDeficitOvercome >= 6 -> 18
+        largestDeficitOvercome >= 4 -> 12
+        largestDeficitOvercome >= 2 -> 6
+        else -> 0
+    }
+
+    fun extraInningsPoints(extraInningsCount: Int): Int = when {
+        extraInningsCount >= 2 -> 10
+        extraInningsCount >= 1 -> 5
+        else -> 0
+    }
+
+    fun totalRunsPoints(totalRuns: Int): Int = when {
+        totalRuns >= 18 -> 10
+        totalRuns >= 15 -> 6
+        totalRuns >= 10 -> 3
+        else -> 0
+    }
+
+    fun combinedHomeRunsPoints(combinedHomeRuns: Int): Int = when {
+        combinedHomeRuns >= 5 -> 6
+        combinedHomeRuns >= 3 -> 3
+        else -> 0
+    }
+
+    fun starHomeRunPoints(maxHomeRunsByPlayer: Int): Int = when {
+        maxHomeRunsByPlayer >= 3 -> 12
+        maxHomeRunsByPlayer >= 2 -> 5
+        else -> 0
+    }
+
+    // Each tier implies the one below it - takes the highest bracket that applies, not a sum.
+    fun pitchingDominancePoints(perfectGame: Boolean, noHitter: Boolean, teamBlanked: Boolean): Int = when {
+        perfectGame -> 30
+        noHitter -> 20
+        teamBlanked -> 8
+        else -> 0
+    }
+
+    fun blownSavePoints(blownSave: Boolean): Int = if (blownSave) 6 else 0
+
+    fun errorsPoints(combinedErrors: Int): Int = if (combinedErrors >= 3) 4 else 0
+}
+
+/**
  * Weight-adjusted score, or null if the game's outcome isn't revealed yet -
  * mirrors the same scoreVisible gate the server uses, so recomputing locally
  * never leaks a score early regardless of what weights are set. Dispatches
@@ -159,10 +227,13 @@ data class RubricBreakdownEntry(val label: String, val points: Float, val maxPoi
  * effectiveScore/effectiveTier already call, just surfaced individually
  * instead of summed, so this can never drift out of sync with the actual
  * total. Empty if the outcome isn't revealed yet (same scoreVisible gate as
- * effectiveScore).
+ * effectiveScore). Dispatches to MLB's own dimensions/labels for MLB games
+ * (mlbRubricBreakdown below) - basketball's fields (margin/comeback aside,
+ * which MLB reuses for its own raw facts) don't apply to baseball at all.
  */
 fun Game.rubricBreakdown(nbaWeights: RubricWeights, wnbaWeights: RubricWeights): List<RubricBreakdownEntry> {
     if (!scoreVisible || score == null) return emptyList()
+    if (league == "mlb") return mlbRubricBreakdown()
     val isWnba = league == "wnba"
     val weights = if (isWnba) wnbaWeights else nbaWeights
     return listOf(
@@ -178,5 +249,34 @@ fun Game.rubricBreakdown(nbaWeights: RubricWeights, wnbaWeights: RubricWeights):
         RubricBreakdownEntry("Overtime", Rubric.overtimePoints(overtimePeriods) * weights.overtime, 10f * weights.overtime),
         RubricBreakdownEntry("Star performance", Rubric.starPoints(starPerformance) * weights.starPerformance, 10f * weights.starPerformance),
         RubricBreakdownEntry("Stakes", Rubric.stakesPoints(stakes) * weights.stakes, 10f * weights.stakes)
+    )
+}
+
+/**
+ * MLB's own dimensions (backend/src/mlbRubric.ts's MlbScoreBreakdown) - no
+ * weight multiplier (unlike the basketball path above), since MLB has no
+ * user-adjustable weights yet; every entry here is a straight 1x port of the
+ * server's real formula, so the rows always sum to exactly [Game.score].
+ * Empty (not a fallback basketball-shaped list) if an older cached game
+ * predates the mlbInputs field.
+ */
+private fun Game.mlbRubricBreakdown(): List<RubricBreakdownEntry> {
+    val inputs = mlbInputs ?: return emptyList()
+    return listOf(
+        RubricBreakdownEntry("Margin", MlbRubric.marginPoints(inputs.finalMargin).toFloat(), 20f),
+        RubricBreakdownEntry("Walk-off", MlbRubric.walkOffPoints(inputs.walkOff).toFloat(), 25f),
+        RubricBreakdownEntry("Comeback", MlbRubric.comebackPoints(inputs.largestDeficitOvercome).toFloat(), 18f),
+        RubricBreakdownEntry("Extra innings", MlbRubric.extraInningsPoints(inputs.extraInningsCount).toFloat(), 10f),
+        RubricBreakdownEntry("Total runs", MlbRubric.totalRunsPoints(inputs.totalRuns).toFloat(), 10f),
+        RubricBreakdownEntry("Combined home runs", MlbRubric.combinedHomeRunsPoints(inputs.combinedHomeRuns).toFloat(), 6f),
+        RubricBreakdownEntry("Star home run", MlbRubric.starHomeRunPoints(inputs.maxHomeRunsByPlayer).toFloat(), 12f),
+        RubricBreakdownEntry(
+            "Pitching dominance",
+            MlbRubric.pitchingDominancePoints(inputs.perfectGame, inputs.noHitter, inputs.teamBlanked).toFloat(),
+            30f
+        ),
+        RubricBreakdownEntry("Blown save", MlbRubric.blownSavePoints(inputs.blownSave).toFloat(), 6f),
+        RubricBreakdownEntry("Errors", MlbRubric.errorsPoints(inputs.combinedErrors).toFloat(), 4f),
+        RubricBreakdownEntry("Stakes", Rubric.stakesPoints(stakes).toFloat(), 10f)
     )
 }

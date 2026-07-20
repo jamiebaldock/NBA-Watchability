@@ -179,6 +179,7 @@ function migrateMlbFile(fileName: string): number {
         standoutPerformers: [],
         finalMargin: g.finalMargin,
         largestDeficitOvercome: g.largestDeficitOvercome,
+        rubricInputs,
       },
       null
     );

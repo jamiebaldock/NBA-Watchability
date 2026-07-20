@@ -150,7 +150,10 @@ private fun finishDescriptor(game: Game): String? {
 // comeback), then how tense it got late, then how it actually finished, then
 // any standout individual performance, with the score appended last by the
 // caller.
-private fun breakdownFacts(game: Game): List<String> = buildList {
+private fun breakdownFacts(game: Game): List<String> =
+    if (game.league == "mlb") mlbBreakdownFacts(game) else nbaBreakdownFacts(game)
+
+private fun nbaBreakdownFacts(game: Game): List<String> = buildList {
     game.leadChanges?.takeIf { it >= 10 }?.let { add("$it lead changes") }
     game.comeback?.takeIf { it >= 10 }?.let { add("A $it-point comeback") }
     if (game.leadChangeInFinalMin) add("Lead changed hands late")
@@ -165,6 +168,42 @@ private fun breakdownFacts(game: Game): List<String> = buildList {
             }
         )
     }
+}
+
+// Baseball's own recap facts (mlbRubric.ts's dimensions) - a direct MLB
+// analogue of nbaBreakdownFacts above, reading real per-dimension facts off
+// Game.mlbInputs instead of basketball's top-level fields. Falls back to just
+// the margin descriptor if an older cached game predates mlbInputs.
+private fun mlbBreakdownFacts(game: Game): List<String> {
+    val inputs = game.mlbInputs ?: return listOfNotNull(mlbMarginDescriptor(game.margin))
+    return buildList {
+        if (inputs.walkOff) add("Walk-off finish")
+        if (inputs.extraInningsCount >= 1) {
+            add(if (inputs.extraInningsCount == 1) "Extra innings" else "${inputs.extraInningsCount} extra innings")
+        }
+        when {
+            inputs.perfectGame -> add("A perfect game")
+            inputs.noHitter -> add("A no-hitter")
+            inputs.teamBlanked -> add("One team was held scoreless")
+        }
+        if (inputs.maxHomeRunsByPlayer >= 2) add("A ${inputs.maxHomeRunsByPlayer}-homer game for one player")
+        if (inputs.combinedHomeRuns >= 5) add("${inputs.combinedHomeRuns} combined home runs")
+        if (inputs.blownSave) add("A blown save shook things up")
+        if (inputs.totalRuns >= 15) add("A ${inputs.totalRuns}-run slugfest")
+        if (inputs.combinedErrors >= 3) add("${inputs.combinedErrors} combined errors")
+        if (!inputs.walkOff && inputs.extraInningsCount == 0) mlbMarginDescriptor(inputs.finalMargin)?.let { add(it) }
+    }
+}
+
+// Baseball-appropriate margin language (mlbRubric.ts's marginPoints brackets)
+// - basketball's "One-possession finish" wording doesn't map onto runs.
+private fun mlbMarginDescriptor(margin: Int?): String? = when {
+    margin == null -> null
+    margin == 1 -> "One-run nailbiter"
+    margin == 2 -> "Two-run finish"
+    margin <= 5 -> "Comfortable margin"
+    margin <= 7 -> "Lopsided margin"
+    else -> "Blowout margin"
 }
 
 private fun breakdownAnnotatedText(game: Game, nbaWeights: RubricWeights, wnbaWeights: RubricWeights) = buildAnnotatedString {

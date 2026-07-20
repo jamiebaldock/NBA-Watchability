@@ -151,7 +151,8 @@ async function processMlbEvent(event: EspnMlbEvent): Promise<GameJson> {
       tier: tierForMlbScore(score),
       standoutPerformers: mapped.standoutPerformers,
       finalMargin: mapped.rubricInputs.finalMargin,
-      largestDeficitOvercome: mapped.rubricInputs.largestDeficitOvercome
+      largestDeficitOvercome: mapped.rubricInputs.largestDeficitOvercome,
+      rubricInputs: mapped.rubricInputs
     });
     row = getGame(event.id)!;
   }
@@ -180,7 +181,8 @@ async function processMlbEvent(event: EspnMlbEvent): Promise<GameJson> {
     pitch: row.pitch ?? undefined,
     score: row.score ?? undefined,
     score_visible: true,
-    yt: row.ytVideoId ?? undefined
+    yt: row.ytVideoId ?? undefined,
+    mlbInputs: row.mlbRubricInputs ?? undefined
   };
 }
 
