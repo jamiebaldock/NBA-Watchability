@@ -32,6 +32,7 @@ private val LIGHT_THEME_KEY = booleanPreferencesKey("light_theme")
 // popup opens on, same string-not-enum reasoning as DEFAULT_LANDING_TAB_KEY
 // above (GameDetailTab lives in the ui package).
 private val DEFAULT_GAME_DETAIL_TAB_KEY = stringPreferencesKey("default_game_detail_tab")
+private val ALL_LEAGUES_SELECTED_KEY = booleanPreferencesKey("all_leagues_selected")
 
 // Only the core US sports set ships enabled by default for now - NBA/WNBA/MLB
 // (all fully built) plus NHL/NFL (queued next, still placeholders) - every
@@ -73,7 +74,17 @@ data class AppSettings(
     // BottomNavTab and GameDetailTab enum name reasoning, see comment above
     // this key's declaration - which of the two tabs the game-detail popup
     // opens on.
-    val defaultGameDetailTab: String = "BREAKDOWN"
+    val defaultGameDetailTab: String = "BREAKDOWN",
+    // Whether the shared "All Leagues" dropdown option (TitleLeagueSelector)
+    // is active - Games/Starred/History/Favorites all merge every enabled+
+    // supported league's tiles into one list when this is on. One shared,
+    // persisted value (not a local per-tab remember) so it survives both
+    // switching bottom-nav tabs and an app restart, the same way
+    // selectedLeague itself already does - previously each of the 4 tabs
+    // tracked this independently and reset to false on every fresh entry,
+    // which read as a bug when switching tabs mid-session (James's report,
+    // 2026-07-20).
+    val isAllLeaguesSelected: Boolean = false
 )
 
 /** Persists the last-selected league, which leagues show in the dropdown, and Games-tab display prefs (numeric score) - on-device only, so they survive an app restart. */
@@ -92,7 +103,8 @@ class AppSettingsRepository(private val context: Context) {
             minTierFilter = prefs[MIN_TIER_FILTER_KEY] ?: "SKIPPABLE",
             wifiOnlyHighlights = prefs[WIFI_ONLY_HIGHLIGHTS_KEY] ?: false,
             lightTheme = prefs[LIGHT_THEME_KEY] ?: false,
-            defaultGameDetailTab = prefs[DEFAULT_GAME_DETAIL_TAB_KEY] ?: "BREAKDOWN"
+            defaultGameDetailTab = prefs[DEFAULT_GAME_DETAIL_TAB_KEY] ?: "BREAKDOWN",
+            isAllLeaguesSelected = prefs[ALL_LEAGUES_SELECTED_KEY] ?: false
         )
     }
 
@@ -138,5 +150,9 @@ class AppSettingsRepository(private val context: Context) {
 
     suspend fun setDefaultGameDetailTab(tabName: String) {
         context.appSettingsDataStore.edit { it[DEFAULT_GAME_DETAIL_TAB_KEY] = tabName }
+    }
+
+    suspend fun setAllLeaguesSelected(value: Boolean) {
+        context.appSettingsDataStore.edit { it[ALL_LEAGUES_SELECTED_KEY] = value }
     }
 }

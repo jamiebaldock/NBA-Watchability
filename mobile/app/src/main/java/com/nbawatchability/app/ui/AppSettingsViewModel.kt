@@ -75,6 +75,22 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch { repository.setDefaultGameDetailTab(tabName) }
     }
 
+    fun setAllLeaguesSelected(value: Boolean) {
+        viewModelScope.launch { repository.setAllLeaguesSelected(value) }
+    }
+
+    /**
+     * Picks a single real league, turning "All Leagues" back off - the one
+     * place this reset happens, shared by every tab's dropdown
+     * (TitleLeagueSelector's per-league menu items all call this same
+     * callback), rather than each tab re-implementing "unset All Leagues
+     * when a specific league is picked" on its own.
+     */
+    fun selectLeague(league: LeagueGroup) {
+        setAllLeaguesSelected(false)
+        setSelectedLeague(league)
+    }
+
     /**
      * Flips [league] in the dropdown's visible set. Two safety rules the
      * Settings toggle UI can't enforce on its own: never let the set go

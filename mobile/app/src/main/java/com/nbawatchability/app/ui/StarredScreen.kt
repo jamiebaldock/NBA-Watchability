@@ -40,16 +40,18 @@ import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
 
 /**
- * Scoped to [selectedLeague] by default, same as every other tab - but
- * unlike Games/History, this scoping can be turned off entirely via the
- * league dropdown's "All Leagues" entry, since a personal favorites list
- * arguably has less reason to split by league than a live schedule does.
- * Local, non-persisted state (like Favorites' own showAllLeagues) rather
- * than a Settings toggle - resets to a real single league every time this
- * screen is freshly entered. When it's on, the full combined [games] list
- * is shown unfiltered. Sort order is a local view preference (not
- * persisted) covering all 4 combinations (date/rating x asc/desc) via a
- * single dropdown (SortMenuButton), not two independent toggles.
+ * Scoped to [selectedLeague] by default, same as every other tab - can be
+ * turned off entirely via the league dropdown's "All Leagues" entry, since a
+ * personal favorites list arguably has less reason to split by league than a
+ * live schedule does. [isAllLeaguesSelected] is one shared, persisted value
+ * (AppSettingsRepository) app-wide across every tab that supports it (Games/
+ * Starred/History/Favorites) - previously this was local per-screen state
+ * that silently reset every time a tab was freshly entered, which read as a
+ * bug when switching tabs mid-session (James's report, 2026-07-20). When
+ * it's on, the full combined [games] list is shown unfiltered. Sort order is
+ * a local view preference (not persisted) covering all 4 combinations
+ * (date/rating x asc/desc) via a single dropdown (SortMenuButton), not two
+ * independent toggles.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +69,8 @@ fun StarredScreen(
     onRefresh: () -> Unit,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    isAllLeaguesSelected: Boolean,
+    onAllLeaguesSelected: () -> Unit,
     enabledLeagues: Set<LeagueGroup>,
     favoriteTeamNames: Set<String> = emptySet(),
     bumpFavoriteTeamGames: Boolean = false,
@@ -79,9 +83,8 @@ fun StarredScreen(
 ) {
     var sortOption by remember { mutableStateOf(SortOption.DATE_NEWEST_FIRST) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
-    var showAllLeagues by remember { mutableStateOf(false) }
 
-    val visibleGames = if (showAllLeagues) games else games.filter { leagueGroupOf(it) == selectedLeague }
+    val visibleGames = if (isAllLeaguesSelected) games else games.filter { leagueGroupOf(it) == selectedLeague }
 
     Scaffold(
         containerColor = BackgroundBase,
@@ -90,10 +93,10 @@ fun StarredScreen(
                 leading = {
                     TitleLeagueSelector(
                         selectedLeague = selectedLeague,
-                        onLeagueSelected = { league -> showAllLeagues = false; onLeagueSelected(league) },
+                        onLeagueSelected = onLeagueSelected,
                         enabledLeagues = enabledLeagues,
-                        isAllLeaguesSelected = showAllLeagues,
-                        onAllLeaguesSelected = { showAllLeagues = true }
+                        isAllLeaguesSelected = isAllLeaguesSelected,
+                        onAllLeaguesSelected = onAllLeaguesSelected
                     )
                 },
                 actions = {

@@ -81,6 +81,8 @@ fun FavoritesScreen(
     onFavoriteGamesRetry: () -> Unit,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    isAllLeaguesSelected: Boolean,
+    onAllLeaguesSelected: () -> Unit,
     enabledLeagues: Set<LeagueGroup>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
@@ -104,16 +106,10 @@ fun FavoritesScreen(
     val scope = rememberCoroutineScope()
     val favoriteTeamNames = favoriteTeams.map { it.name }.toSet()
     val favoritePlayerNames = favoritePlayers.map { it.name }.toSet()
-    // Shared between the Upcoming and Past pages rather than duplicated per
-    // page - James's call, since it's one scope decision ("my teams
-    // everywhere" vs "my teams in the league I'm currently looking at"), not
-    // two independent ones. Defaults off (the real selected league) now that
-    // this is a first-class option on the same dropdown every other tab
-    // uses, rather than its own always-on toggle.
-    var showAllLeagues by remember { mutableStateOf(false) }
-    // Each Games page keeps its own independent sort - unlike showAllLeagues
-    // above, "oldest first" for Upcoming and "newest first" for Past are
-    // both meaningful defaults in their own right, not one shared decision.
+    // Each Games page keeps its own independent sort - unlike
+    // isAllLeaguesSelected (shared app-wide, see the param above), "oldest
+    // first" for Upcoming and "newest first" for Past are both meaningful
+    // defaults in their own right, not one shared decision.
     // Lifted up here (rather than owned locally per page, as before) since
     // the sort icon now lives in the single shared action row, which needs
     // to know which page's sort state it's currently controlling.
@@ -127,10 +123,10 @@ fun FavoritesScreen(
                 leading = {
                     TitleLeagueSelector(
                         selectedLeague = selectedLeague,
-                        onLeagueSelected = { league -> showAllLeagues = false; onLeagueSelected(league) },
+                        onLeagueSelected = onLeagueSelected,
                         enabledLeagues = enabledLeagues,
-                        isAllLeaguesSelected = showAllLeagues,
-                        onAllLeaguesSelected = { showAllLeagues = true }
+                        isAllLeaguesSelected = isAllLeaguesSelected,
+                        onAllLeaguesSelected = onAllLeaguesSelected
                     )
                 },
                 actions = {
@@ -170,7 +166,7 @@ fun FavoritesScreen(
                     onlyPast = false,
                     selectedLeague = selectedLeague,
                     favoriteTeams = favoriteTeams,
-                    showAllLeagues = showAllLeagues,
+                    showAllLeagues = isAllLeaguesSelected,
                     sortOption = sortOptionUpcoming,
                     showNumericScore = showNumericScore,
                     nbaWeights = nbaWeights,
@@ -191,7 +187,7 @@ fun FavoritesScreen(
                     onlyPast = true,
                     selectedLeague = selectedLeague,
                     favoriteTeams = favoriteTeams,
-                    showAllLeagues = showAllLeagues,
+                    showAllLeagues = isAllLeaguesSelected,
                     sortOption = sortOptionPast,
                     showNumericScore = showNumericScore,
                     nbaWeights = nbaWeights,

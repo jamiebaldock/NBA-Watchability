@@ -259,7 +259,9 @@ fun AppRoot() {
                 BottomNavTab.FAVORITES -> FavoritesTab(
                     favoritesViewModel = favoritesViewModel,
                     selectedLeague = selectedLeague,
-                    onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                    onLeagueSelected = appSettingsViewModel::selectLeague,
+                    isAllLeaguesSelected = appSettingsViewModel.settings.isAllLeaguesSelected,
+                    onAllLeaguesSelected = { appSettingsViewModel.setAllLeaguesSelected(true) },
                     enabledLeagues = enabledLeagues,
                     showNumericScore = appSettingsViewModel.settings.showNumericScore,
                     onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
@@ -276,7 +278,7 @@ fun AppRoot() {
                 else -> if (!selectedLeague.isSupported) {
                     ComingSoonTab(
                         selectedLeague = selectedLeague,
-                        onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                        onLeagueSelected = appSettingsViewModel::selectLeague,
                         enabledLeagues = enabledLeagues
                     )
                 } else {
@@ -286,7 +288,9 @@ fun AppRoot() {
                             wnbaWeights = wnbaSettingsViewModel.weights,
                             mlbWeights = mlbSettingsViewModel.weights,
                             selectedLeague = selectedLeague,
-                            onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                            onLeagueSelected = appSettingsViewModel::selectLeague,
+                            isAllLeaguesSelected = appSettingsViewModel.settings.isAllLeaguesSelected,
+                            onAllLeaguesSelected = { appSettingsViewModel.setAllLeaguesSelected(true) },
                             enabledLeagues = enabledLeagues,
                             showNumericScore = appSettingsViewModel.settings.showNumericScore,
                             onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
@@ -304,18 +308,20 @@ fun AppRoot() {
                         )
                         BottomNavTab.LEADERS -> LeadersTab(
                             selectedLeague = selectedLeague,
-                            onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                            onLeagueSelected = appSettingsViewModel::selectLeague,
                             enabledLeagues = enabledLeagues
                         )
                         BottomNavTab.NEWS -> NewsTab(
                             selectedLeague = selectedLeague,
-                            onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                            onLeagueSelected = appSettingsViewModel::selectLeague,
                             enabledLeagues = enabledLeagues
                         )
                         BottomNavTab.STARRED -> StarredTab(
                             starredGamesViewModel = starredGamesViewModel,
                             selectedLeague = selectedLeague,
-                            onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                            onLeagueSelected = appSettingsViewModel::selectLeague,
+                            isAllLeaguesSelected = appSettingsViewModel.settings.isAllLeaguesSelected,
+                            onAllLeaguesSelected = { appSettingsViewModel.setAllLeaguesSelected(true) },
                             enabledLeagues = enabledLeagues,
                             showNumericScore = appSettingsViewModel.settings.showNumericScore,
                             onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
@@ -337,7 +343,9 @@ fun AppRoot() {
                             wnbaWeights = wnbaSettingsViewModel.weights,
                             mlbWeights = mlbSettingsViewModel.weights,
                             selectedLeague = selectedLeague,
-                            onLeagueSelected = appSettingsViewModel::setSelectedLeague,
+                            onLeagueSelected = appSettingsViewModel::selectLeague,
+                            isAllLeaguesSelected = appSettingsViewModel.settings.isAllLeaguesSelected,
+                            onAllLeaguesSelected = { appSettingsViewModel.setAllLeaguesSelected(true) },
                             enabledLeagues = enabledLeagues,
                             showNumericScore = appSettingsViewModel.settings.showNumericScore,
                             onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
@@ -407,6 +415,8 @@ private fun GamesTab(
     mlbWeights: MlbRubricWeights,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    isAllLeaguesSelected: Boolean,
+    onAllLeaguesSelected: () -> Unit,
     enabledLeagues: Set<LeagueGroup>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
@@ -423,14 +433,13 @@ private fun GamesTab(
     onGameClick: (com.nbawatchability.app.data.Game) -> Unit
 ) {
     val viewModel: GameListViewModel = viewModel()
-    var showAllLeagues by remember { mutableStateOf(false) }
     // Only the currently-enabled leagues that actually have a real backend
     // route - a placeholder (isSupported = false) has nowhere to fetch from,
     // same gate AppRoot's own ComingSoonTab dispatch uses for a single
     // league. LeagueGroup.entries.filter (not enabledLeagues.filter)
     // guarantees a stable, deterministic order every time regardless of
     // Set iteration order, since this list feeds equality checks below.
-    val leagueGroups = if (showAllLeagues) {
+    val leagueGroups = if (isAllLeaguesSelected) {
         LeagueGroup.entries.filter { it in enabledLeagues && it.isSupported }
     } else {
         listOf(selectedLeague)
@@ -439,7 +448,7 @@ private fun GamesTab(
     // Fires on first composition and again whenever the selected league (or
     // All-Leagues selection, or the enabled-leagues set) changes - a full
     // fresh load, not a merge with whatever was showing.
-    LaunchedEffect(selectedLeague, showAllLeagues, enabledLeagues) { viewModel.load(leagueGroups) }
+    LaunchedEffect(selectedLeague, isAllLeaguesSelected, enabledLeagues) { viewModel.load(leagueGroups) }
 
     // Same refresh() pull-to-refresh already uses - cost-safe to fire more
     // often than a user would manually pull, since ensureHighlightsVideo's
@@ -466,10 +475,10 @@ private fun GamesTab(
             wnbaWeights = wnbaWeights,
             mlbWeights = mlbWeights,
             selectedLeague = selectedLeague,
-            onLeagueSelected = { league -> showAllLeagues = false; onLeagueSelected(league) },
+            onLeagueSelected = onLeagueSelected,
             enabledLeagues = enabledLeagues,
-            isAllLeaguesSelected = showAllLeagues,
-            onToggleAllLeagues = { showAllLeagues = !showAllLeagues },
+            isAllLeaguesSelected = isAllLeaguesSelected,
+            onToggleAllLeagues = onAllLeaguesSelected,
             starredIds = starredIds,
             onToggleStar = onToggleStar,
             onWatchHighlights = onWatchHighlights,
@@ -500,6 +509,8 @@ private fun StarredTab(
     starredGamesViewModel: StarredGamesViewModel,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    isAllLeaguesSelected: Boolean,
+    onAllLeaguesSelected: () -> Unit,
     enabledLeagues: Set<LeagueGroup>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
@@ -542,6 +553,8 @@ private fun StarredTab(
         onRefresh = starredGamesViewModel::refreshLiveData,
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
+        isAllLeaguesSelected = isAllLeaguesSelected,
+        onAllLeaguesSelected = onAllLeaguesSelected,
         enabledLeagues = enabledLeagues,
         favoriteTeamNames = favoriteTeamNames,
         bumpFavoriteTeamGames = bumpFavoriteTeamGames,
@@ -561,6 +574,8 @@ private fun HistoryTab(
     mlbWeights: MlbRubricWeights,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    isAllLeaguesSelected: Boolean,
+    onAllLeaguesSelected: () -> Unit,
     enabledLeagues: Set<LeagueGroup>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
@@ -578,8 +593,7 @@ private fun HistoryTab(
     onGameClick: (com.nbawatchability.app.data.Game) -> Unit
 ) {
     val viewModel: HistoryViewModel = viewModel()
-    var showAllLeagues by remember { mutableStateOf(false) }
-    val leagueGroups = if (showAllLeagues) {
+    val leagueGroups = if (isAllLeaguesSelected) {
         LeagueGroup.entries.filter { it in enabledLeagues && it.isSupported }
     } else {
         listOf(selectedLeague)
@@ -590,7 +604,7 @@ private fun HistoryTab(
     // selected before), since a preset like a named NBA season ("2024-25")
     // isn't valid for WNBA (whose season labels are plain years) and vice
     // versa.
-    LaunchedEffect(selectedLeague, showAllLeagues, enabledLeagues) {
+    LaunchedEffect(selectedLeague, isAllLeaguesSelected, enabledLeagues) {
         viewModel.load(leagueGroups, HistoryRangePreset.ThisSeason)
     }
 
@@ -611,10 +625,10 @@ private fun HistoryTab(
         onToggleStar = onToggleStar,
         onWatchHighlights = onWatchHighlights,
         selectedLeague = selectedLeague,
-        onLeagueSelected = { league -> showAllLeagues = false; onLeagueSelected(league) },
+        onLeagueSelected = onLeagueSelected,
         enabledLeagues = enabledLeagues,
-        isAllLeaguesSelected = showAllLeagues,
-        onToggleAllLeagues = { showAllLeagues = !showAllLeagues },
+        isAllLeaguesSelected = isAllLeaguesSelected,
+        onToggleAllLeagues = onAllLeaguesSelected,
         favoriteTeamNames = favoriteTeamNames,
         bumpFavoriteTeamGames = bumpFavoriteTeamGames,
         onToggleFavoriteTeam = onToggleFavoriteTeam,
@@ -632,6 +646,8 @@ private fun FavoritesTab(
     favoritesViewModel: FavoritesViewModel,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
+    isAllLeaguesSelected: Boolean,
+    onAllLeaguesSelected: () -> Unit,
     enabledLeagues: Set<LeagueGroup>,
     showNumericScore: Boolean,
     onToggleNumericScore: () -> Unit,
@@ -658,6 +674,8 @@ private fun FavoritesTab(
         onFavoriteGamesRetry = { favoriteGamesViewModel.retry(favoritesViewModel.favoriteTeams) },
         selectedLeague = selectedLeague,
         onLeagueSelected = onLeagueSelected,
+        isAllLeaguesSelected = isAllLeaguesSelected,
+        onAllLeaguesSelected = onAllLeaguesSelected,
         enabledLeagues = enabledLeagues,
         showNumericScore = showNumericScore,
         onToggleNumericScore = onToggleNumericScore,
