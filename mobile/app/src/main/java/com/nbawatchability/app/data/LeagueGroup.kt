@@ -118,7 +118,11 @@ enum class LeagueGroup(
     // as a recognizable outline against dark surfaces even though the
     // shield's black fill blends in; the "-dark" variant's border is a
     // duller grey, worse.
-    NHL("nhl", "NHL", "https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png", isSupported = false),
+    // isSupported = true: Games/Standings/Stats/News/Team-schedule
+    // (Favorites)/History are all live (real ESPN fixtures, scored via
+    // nhlRubric.ts's own independent scale, calibrated against the real,
+    // complete 2025-26 season - weight sliders included).
+    NHL("nhl", "NHL", "https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png"),
     // Navy wordmark is dim but legible (not solid black) - "-dark" here is
     // an older sponsor-name variant of the same crest, no real contrast
     // difference, so the current default is kept.

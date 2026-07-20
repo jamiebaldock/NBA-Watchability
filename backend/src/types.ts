@@ -45,7 +45,7 @@ export interface GameJson {
   hl?: string;
   stt: GameStatus;
   utc: string;
-  lg: "nba" | "wnba" | "summer" | "mlb" | "nfl";
+  lg: "nba" | "wnba" | "summer" | "mlb" | "nfl" | "nhl";
   cl?: string;
   q?: number;
   clk?: string;
@@ -91,6 +91,10 @@ export interface GameJson {
   // NFL-only raw rubric facts (nflRubric.ts's NflRubricInputs) - same
   // reasoning as mlbInputs above, football's own analogue.
   nflInputs?: NflRubricInputsJson;
+  // NHL-only raw rubric facts (nhlRubric.ts's NhlRubricInputs) - same
+  // reasoning as mlbInputs/nflInputs above, hockey's own analogue. Sent from
+  // day one (not retrofitted) per feedback_new_league_full_pipeline_checklist.md.
+  nhlInputs?: NhlRubricInputsJson;
 }
 
 export interface MlbRubricInputsJson {
@@ -120,6 +124,20 @@ export interface NflRubricInputsJson {
   maxRushingYards: number;
   maxTotalTdsByPlayer: number;
   totalPoints: number;
+}
+
+export interface NhlRubricInputsJson {
+  finalMargin: number;
+  totalGoals: number;
+  largestDeficitOvercome: number;
+  leadChanges: number;
+  overtimePeriods: number;
+  wentToShootout: boolean;
+  decisiveScoreLate: boolean;
+  combinedPowerPlayGoals: number;
+  maxGoalsByPlayer: number;
+  maxGoalieSaves: number;
+  teamShutout: boolean;
 }
 
 export interface StandoutPerformerJson {

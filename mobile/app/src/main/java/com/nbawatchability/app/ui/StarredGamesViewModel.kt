@@ -106,14 +106,13 @@ class StarredGamesViewModel(application: Application) : AndroidViewModel(applica
 // leagues" is off, and GameCard.kt's favorite-team long-press quick-add
 // uses it to tag which league a team belongs to for the per-league cap.
 //
-// game.league is "nba"/"wnba"/"summer"/"mlb"/"nfl" (soccer support was
-// removed - see archive/soccer/; NHL has no games pipeline yet, so
-// game.league == "nhl" never actually occurs, but the else branch already
-// falls through safely if it ever does before NHL gets its own case).
+// game.league is "nba"/"wnba"/"summer"/"mlb"/"nfl"/"nhl" (soccer support was
+// removed - see archive/soccer/).
 fun leagueGroupOf(game: Game): LeagueGroup = when {
     game.league == "wnba" -> LeagueGroup.WNBA
     game.league == "mlb" -> LeagueGroup.MLB
     game.league == "nfl" -> LeagueGroup.NFL
+    game.league == "nhl" -> LeagueGroup.NHL
     else -> LeagueGroup.NBA
 }
 

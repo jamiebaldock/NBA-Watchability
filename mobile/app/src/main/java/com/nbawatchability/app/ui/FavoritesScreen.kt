@@ -53,6 +53,7 @@ import com.nbawatchability.app.data.GameStatus
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.MlbRubricWeights
 import com.nbawatchability.app.data.NflRubricWeights
+import com.nbawatchability.app.data.NhlRubricWeights
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.effectiveScore
@@ -91,6 +92,7 @@ fun FavoritesScreen(
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
     nflWeights: NflRubricWeights,
+    nhlWeights: NhlRubricWeights,
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
@@ -175,6 +177,7 @@ fun FavoritesScreen(
                     wnbaWeights = wnbaWeights,
                     mlbWeights = mlbWeights,
                     nflWeights = nflWeights,
+                    nhlWeights = nhlWeights,
                     starredIds = starredIds,
                     onToggleStar = onToggleStar,
                     onWatchHighlights = onWatchHighlights,
@@ -197,6 +200,7 @@ fun FavoritesScreen(
                     wnbaWeights = wnbaWeights,
                     mlbWeights = mlbWeights,
                     nflWeights = nflWeights,
+                    nhlWeights = nhlWeights,
                     starredIds = starredIds,
                     onToggleStar = onToggleStar,
                     onWatchHighlights = onWatchHighlights,
@@ -240,6 +244,7 @@ private fun FavoriteGamesPage(
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
     nflWeights: NflRubricWeights,
+    nhlWeights: NhlRubricWeights,
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
@@ -285,12 +290,12 @@ private fun FavoriteGamesPage(
                 // score to sort by yet.
                 val ordered = when (sortOption) {
                     SortOption.RATING_HIGHEST_FIRST -> {
-                        val (scored, unscored) = visibleGames.partition { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) != null }
-                        scored.sortedByDescending { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) } + unscored.sortedByDescending { it.tipoffUtc }
+                        val (scored, unscored) = visibleGames.partition { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) != null }
+                        scored.sortedByDescending { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) } + unscored.sortedByDescending { it.tipoffUtc }
                     }
                     SortOption.RATING_LOWEST_FIRST -> {
-                        val (scored, unscored) = visibleGames.partition { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) != null }
-                        scored.sortedBy { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) } + unscored.sortedByDescending { it.tipoffUtc }
+                        val (scored, unscored) = visibleGames.partition { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) != null }
+                        scored.sortedBy { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) } + unscored.sortedByDescending { it.tipoffUtc }
                     }
                     SortOption.DATE_OLDEST_FIRST -> visibleGames.sortedBy { it.tipoffUtc }
                     SortOption.DATE_NEWEST_FIRST -> visibleGames.sortedByDescending { it.tipoffUtc }
@@ -313,6 +318,7 @@ private fun FavoriteGamesPage(
                             wnbaWeights = wnbaWeights,
                             mlbWeights = mlbWeights,
                             nflWeights = nflWeights,
+                            nhlWeights = nhlWeights,
                             isStarred = starredIds.contains(game.id),
                             onToggleStar = { onToggleStar(game) },
                             onWatchHighlights = onWatchHighlights,

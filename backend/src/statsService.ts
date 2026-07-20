@@ -47,6 +47,14 @@ function formatEra(entry: EspnLeaderEntry): string {
 function formatCount(entry: EspnLeaderEntry): string {
   return entry.value !== undefined ? String(Math.round(entry.value)) : entry.displayValue;
 }
+// Save percentage convention matches batting average's (no leading zero,
+// e.g. ".912" not "0.912") - confirmed directly against a real NHL leaders
+// response that savePct's displayValue is already a clean single number
+// (unlike MLB's leaders quirk), but formatted here anyway for the same
+// leading-zero-drop convention every other percentage stat in this app uses.
+function formatSavePct(entry: EspnLeaderEntry): string {
+  return entry.value !== undefined ? entry.value.toFixed(3).replace(/^0/, "") : entry.displayValue;
+}
 
 // MLB's classic leaderboard, split evenly across batting and pitching (the
 // two fundamentally different stat families baseball has, unlike
@@ -65,6 +73,23 @@ const MLB_SHOWN_CATEGORIES: ShownCategory[] = [
   { key: "ERA", label: "Earned Run Average", abbr: "ERA", format: formatEra },
   { key: "strikeouts", label: "Strikeouts", abbr: "K", format: formatCount },
   { key: "wins", label: "Wins", abbr: "W", format: formatCount },
+];
+
+// NHL's classic leaderboard - confirmed directly against a real leaders
+// response's full category list (goals/assists/points/plusMinus/
+// avgGoalsAgainst/penaltyMinutes/savePct/wins/shutouts - 9 categories total).
+// Points leads (hockey's single all-around offensive number, like PPG for
+// basketball), goals/assists as the two components, then the goaltending
+// side (wins/shutouts/savePct) rather than basketball's per-game rate stats,
+// since goaltending is hockey's own distinct stat family the way pitching is
+// baseball's.
+const NHL_SHOWN_CATEGORIES: ShownCategory[] = [
+  { key: "points", label: "Points", abbr: "PTS", format: formatCount },
+  { key: "goals", label: "Goals", abbr: "G", format: formatCount },
+  { key: "assists", label: "Assists", abbr: "A", format: formatCount },
+  { key: "wins", label: "Wins", abbr: "W", format: formatCount },
+  { key: "savePct", label: "Save Percentage", abbr: "SV%", format: formatSavePct },
+  { key: "shutouts", label: "Shutouts", abbr: "SO", format: formatCount },
 ];
 
 const LEADERS_PER_CATEGORY = 10;
@@ -93,11 +118,10 @@ async function resolveLeader(
 /** Cached once per calendar day per league group - same reasoning as standingsService. */
 export async function getStats(leagueGroup: LeagueGroup): Promise<StatsResponseJson> {
   const sport = SPORT_FOR_LEAGUE_GROUP[leagueGroup];
-  // No Stats route built for nfl/nhl yet (no fetchLeadersForSport branch to
-  // point at) - empty here rather than attempting a football/hockey leaders
-  // fetch that hasn't been verified against real data, same "not wired yet"
+  // No Stats route built for nfl yet (no fetchLeadersForSport branch
+  // verified against real data for it) - empty here, same "not wired yet"
   // contract every other not-yet-built route in this app already returns.
-  if (sport !== "basketball" && sport !== "baseball") {
+  if (sport !== "basketball" && sport !== "baseball" && sport !== "hockey") {
     return { season: "", categories: [] };
   }
 
@@ -107,11 +131,13 @@ export async function getStats(leagueGroup: LeagueGroup): Promise<StatsResponseJ
   const cached = loadLeagueCache<StatsResponseJson>("stats", leagueGroup, dateKey);
   if (cached) return cached;
 
-  const shownCategories = sport === "baseball" ? MLB_SHOWN_CATEGORIES : SHOWN_CATEGORIES;
+  const shownCategories = sport === "baseball" ? MLB_SHOWN_CATEGORIES : sport === "hockey" ? NHL_SHOWN_CATEGORIES : SHOWN_CATEGORIES;
   const resolved =
     sport === "baseball"
       ? await resolveSeasonYear("mlb", now, (year) => fetchLeadersForSport("baseball", "mlb", year))
-      : await resolveSeasonYear(leagueGroup as ContentLeague, now, (year) => fetchLeaders(leagueGroup as ContentLeague, year));
+      : sport === "hockey"
+        ? await resolveSeasonYear("nhl", now, (year) => fetchLeadersForSport("hockey", "nhl", year))
+        : await resolveSeasonYear(leagueGroup as ContentLeague, now, (year) => fetchLeaders(leagueGroup as ContentLeague, year));
 
   if (!resolved) {
     const empty: StatsResponseJson = { season: "", categories: [] };

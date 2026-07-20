@@ -39,9 +39,8 @@ import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 // The core US sports set only, for now - every other LeagueGroup entry
 // (F1, cricket, other basketball/soccer leagues, etc.) stays defined in the
 // enum for later but is hidden from this list and the dropdowns until it's
-// actually built out, per James's call. NHL/NFL are still isSupported =
-// false placeholders (AppRoot.kt's ComingSoonTab) but are queued next,
-// unlike the rest.
+// actually built out, per James's call. NBA/WNBA/MLB/NFL/NHL are all
+// isSupported = true now - full games pipelines for all five.
 private val VISIBLE_LEAGUES = listOf(LeagueGroup.NBA, LeagueGroup.WNBA, LeagueGroup.NHL, LeagueGroup.MLB, LeagueGroup.NFL)
 
 /**

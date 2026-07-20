@@ -19,11 +19,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { League } from "./espnClient";
-import { FinalRubric, setFinalRubric, setMlbFinalRubric, setNflFinalRubric, setSeasonStageLabel, upsertBaseEntry } from "./gameStore";
+import { FinalRubric, setFinalRubric, setMlbFinalRubric, setNflFinalRubric, setNhlFinalRubric, setSeasonStageLabel, upsertBaseEntry } from "./gameStore";
 import { COMPETITION_LABEL as MLB_COMPETITION_LABEL } from "./mlbGamesService";
 import { computeMlbWatchabilityScore, MlbRubricInputs, tierForMlbScore } from "./mlbRubric";
 import { deriveNflCompetitionLabel } from "./nflGamesService";
 import { computeNflWatchabilityScore, NflRubricInputs, tierForNflScore } from "./nflRubric";
+import { COMPETITION_LABEL as NHL_COMPETITION_LABEL } from "./nhlGamesService";
+import { computeNhlWatchabilityScore, NhlRubricInputs, tierForNhlScore } from "./nhlRubric";
 import { LeagueGroup, StarPerformance } from "./types";
 
 interface HistoricalGame {
@@ -282,13 +284,113 @@ function migrateNflFile(fileName: string): number {
   return games.length;
 }
 
+// Raw per-game facts from backfillRawStatsNhl.ts's real 2025-26-season pull
+// (backend/data/nhlRawStats.json) - same "no precomputed score/tier, compute
+// fresh via the live rubric functions" shape as MlbHistoricalGame/
+// NflHistoricalGame above.
+interface NhlHistoricalGame {
+  eventId: string;
+  date: string;
+  // Needed to derive the exact same real per-round season_stage_label the
+  // live pipeline does (deriveNhlCompetitionLabel) instead of every
+  // backfilled game getting the same generic label regardless of postseason
+  // status - see feedback_new_league_full_pipeline_checklist.md's "extra
+  // lesson for NHL" for why this matters (it's what lets gameStore.ts's
+  // getMostRecentFinalsEnd actually find the Stanley Cup Final and correctly
+  // close out "This season").
+  seasonType: number;
+  playoffRoundLabel?: string;
+  away: string;
+  home: string;
+  awayScore: number;
+  homeScore: number;
+  finalMargin: number;
+  totalGoals: number;
+  overtimePeriods: number;
+  wentToShootout: boolean;
+  leadChanges: number;
+  largestDeficitOvercome: number;
+  decisiveScoreLate: boolean;
+  combinedPowerPlayGoals: number;
+  maxGoalsByPlayer: number;
+  maxGoalieSaves: number;
+  teamShutout: boolean;
+}
+
+// NHL's analogue of migrateNflFile above - closes the same Favorites-tab
+// cold-cache gap MLB's/NFL's own migrations closed, done from day one (not
+// retrofitted after a bug report).
+function migrateNhlFile(fileName: string): number {
+  const path = join(DATA_DIR, fileName);
+  const { games } = JSON.parse(readFileSync(path, "utf8")) as { games: NhlHistoricalGame[] };
+
+  for (const g of games) {
+    upsertBaseEntry({
+      eventId: g.eventId,
+      league: "nhl",
+      leagueGroup: "nhl",
+      away: g.away,
+      home: g.home,
+      tipoffUtc: g.date,
+      status: "final",
+    });
+    // backfillRawStatsNhl.ts's playoffRoundLabel already has the "- Game N"
+    // suffix stripped (derivePlayoffRoundLabel there does that once, at
+    // collection time) - constructed directly here rather than re-parsing,
+    // unlike the live pipeline's deriveNhlCompetitionLabel which still has a
+    // raw ESPN headline to strip.
+    setSeasonStageLabel(
+      g.eventId,
+      g.seasonType === 3 && g.playoffRoundLabel ? `NHL - Playoffs: ${g.playoffRoundLabel}` : NHL_COMPETITION_LABEL
+    );
+
+    const rubricInputs: NhlRubricInputs = {
+      finalMargin: g.finalMargin,
+      totalGoals: g.totalGoals,
+      largestDeficitOvercome: g.largestDeficitOvercome,
+      leadChanges: g.leadChanges,
+      overtimePeriods: g.overtimePeriods,
+      wentToShootout: g.wentToShootout,
+      decisiveScoreLate: g.decisiveScoreLate,
+      combinedPowerPlayGoals: g.combinedPowerPlayGoals,
+      maxGoalsByPlayer: g.maxGoalsByPlayer,
+      maxGoalieSaves: g.maxGoalieSaves,
+      teamShutout: g.teamShutout,
+    };
+    // No stakes for historical rows, same reasoning as the NBA/MLB/NFL migrations above.
+    const score = computeNhlWatchabilityScore(rubricInputs, undefined).total;
+
+    setNhlFinalRubric(
+      g.eventId,
+      {
+        awayScore: g.awayScore,
+        homeScore: g.homeScore,
+        score,
+        tier: tierForNhlScore(score),
+        // Predates player-name capture in a fully attributed sense at the
+        // gameStore level (backfillRawStatsNhl.ts only recorded the max-goal
+        // *count*, not who scored them) - same gap documented on the
+        // NBA/MLB/NFL migrations above.
+        standoutPerformers: [],
+        finalMargin: g.finalMargin,
+        largestDeficitOvercome: g.largestDeficitOvercome,
+        rubricInputs,
+      },
+      null
+    );
+  }
+
+  return games.length;
+}
+
 export function migrateHistoricalBackfill(): void {
   const nbaCount = migrateFile("historicalWatchability.json", "nba", "nba");
   const wnbaCount = migrateFile("historicalWatchabilityWnba.json", "wnba", "wnba");
   const mlbCount = migrateMlbFile("mlbRawStats.json");
   const nflCount = migrateNflFile("nflRawStats.json");
+  const nhlCount = migrateNhlFile("nhlRawStats.json");
   console.log(
-    `migrateHistoricalBackfill: verified ${nbaCount} NBA, ${wnbaCount} WNBA, ${mlbCount} MLB, and ${nflCount} NFL historical games are present in gameStore.`
+    `migrateHistoricalBackfill: verified ${nbaCount} NBA, ${wnbaCount} WNBA, ${mlbCount} MLB, ${nflCount} NFL, and ${nhlCount} NHL historical games are present in gameStore.`
   );
 }
 

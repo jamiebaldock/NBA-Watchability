@@ -46,6 +46,7 @@ import com.nbawatchability.app.data.DayGames
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.MlbRubricWeights
 import com.nbawatchability.app.data.NflRubricWeights
+import com.nbawatchability.app.data.NhlRubricWeights
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.Tier
@@ -84,6 +85,7 @@ fun DayTabsScreen(
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
     nflWeights: NflRubricWeights,
+    nhlWeights: NhlRubricWeights,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     enabledLeagues: Set<LeagueGroup>,
@@ -238,6 +240,7 @@ fun DayTabsScreen(
                         wnbaWeights = wnbaWeights,
                         mlbWeights = mlbWeights,
                         nflWeights = nflWeights,
+                        nhlWeights = nhlWeights,
                         starredIds = starredIds,
                         onToggleStar = onToggleStar,
                         onWatchHighlights = onWatchHighlights,
@@ -343,6 +346,7 @@ private fun DayGamesList(
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
     nflWeights: NflRubricWeights,
+    nhlWeights: NhlRubricWeights,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
@@ -393,16 +397,16 @@ private fun DayGamesList(
     // score to sort by yet.
     val orderedGames = when (sortOption) {
         SortOption.RATING_HIGHEST_FIRST -> {
-            val (scored, unscored) = games.partition { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) != null }
-            scored.sortedByDescending { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) } + unscored.sortedByDescending { it.tipoffUtc }
+            val (scored, unscored) = games.partition { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) != null }
+            scored.sortedByDescending { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) } + unscored.sortedByDescending { it.tipoffUtc }
         }
         SortOption.RATING_LOWEST_FIRST -> {
-            val (scored, unscored) = games.partition { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) != null }
-            scored.sortedBy { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) } + unscored.sortedByDescending { it.tipoffUtc }
+            val (scored, unscored) = games.partition { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) != null }
+            scored.sortedBy { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) } + unscored.sortedByDescending { it.tipoffUtc }
         }
         SortOption.DATE_OLDEST_FIRST -> games.sortedBy { it.tipoffUtc }
         SortOption.DATE_NEWEST_FIRST -> games.sortedByDescending { it.tipoffUtc }
-    }.filterByMinTier(minTierFilterEnabled, minTierFilter, nbaWeights, wnbaWeights, mlbWeights, nflWeights)
+    }.filterByMinTier(minTierFilterEnabled, minTierFilter, nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights)
         .bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
     val listState = rememberLazyListState()
@@ -425,6 +429,7 @@ private fun DayGamesList(
                 wnbaWeights = wnbaWeights,
                 mlbWeights = mlbWeights,
                 nflWeights = nflWeights,
+                nhlWeights = nhlWeights,
                 isStarred = starredIds.contains(game.id),
                 onToggleStar = { onToggleStar(game) },
                 onWatchHighlights = onWatchHighlights,

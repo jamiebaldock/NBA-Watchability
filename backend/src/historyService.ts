@@ -39,7 +39,9 @@ export async function getHistory(start: string, end: string, leagueGroup: League
             ? "mlb"
             : row.league === "nfl"
               ? "nfl"
-              : "summer",
+              : row.league === "nhl"
+                ? "nhl"
+                : "summer",
     // row.seasonStageLabel ("NBA - Playoffs: Conference Semifinals") is
     // captured once per game (gamesService.ts) from ESPN's own season/notes
     // data and persisted in gameStore, so it survives long after that raw
@@ -68,6 +70,7 @@ export async function getHistory(start: string, end: string, leagueGroup: League
     yt: row.ytVideoId ?? undefined,
     mlbInputs: row.mlbRubricInputs ?? undefined,
     nflInputs: row.nflRubricInputs ?? undefined,
+    nhlInputs: row.nhlRubricInputs ?? undefined,
   }));
 
   return { earliestDate: earliestGameDate(leagueGroup) ?? start, seasons: getSeasonLabels(leagueGroup), games };

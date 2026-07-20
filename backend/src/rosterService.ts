@@ -33,10 +33,14 @@ export async function getRoster(leagueGroup: LeagueGroup, teamId: string): Promi
     // team roster checked directly).
     const athletes = await fetchRosterForSport("football", "nfl", teamId);
     players = athletes.map((a) => ({ id: a.id, name: a.displayName, headshot: a.headshot?.href }));
+  } else if (leagueGroup === "nhl") {
+    // Same grouped-by-position shape (forwards/defenses/goalies groups) as
+    // MLB's/NFL's roster endpoint - confirmed directly against a real
+    // response, fetchRosterForSport's isRosterGroup handling covers it with
+    // no NHL-specific code needed. Real headshot photos confirmed too.
+    const athletes = await fetchRosterForSport("hockey", "nhl", teamId);
+    players = athletes.map((a) => ({ id: a.id, name: a.displayName, headshot: a.headshot?.href }));
   } else {
-    // NHL rosters are still out of scope (no favorite-players route built
-    // for it yet) - same "no real backend route yet" placeholder-league
-    // behavior as teamsService.ts's getTeams.
     players = [];
   }
 

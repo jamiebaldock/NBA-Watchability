@@ -60,15 +60,17 @@ function flattenGroups(groups: EspnStandingsGroup[]): StandingsGroupJson[] {
 
 /** Cached once per calendar day per league group - standings don't change fast enough to justify a fresh ESPN fetch on every app open. */
 export async function getStandings(leagueGroup: LeagueGroup): Promise<StandingsResponseJson> {
-  // Only basketball (native fetchStandings, ContentLeague-typed) and MLB
-  // (fetchStandingsForSport, its own baseball/mlb branch below) have a
-  // Standings route built - fetchStandings' URL is basketball-namespaced and
-  // 404s/throws for any other sport's slug (unlike ESPN's teams/roster
-  // endpoints, which tolerate an unrecognized league and just come back
-  // empty), so nfl/nhl still have to short-circuit before ever building that
-  // request, same reasoning as newsService.ts's own early return.
+  // Basketball (native fetchStandings, ContentLeague-typed), MLB, and now NHL
+  // (both via fetchStandingsForSport, confirmed &level=3 produces the real
+  // conference->division nesting for hockey the same way it does for
+  // baseball) have a Standings route built - fetchStandings' URL is
+  // basketball-namespaced and 404s/throws for any other sport's slug (unlike
+  // ESPN's teams/roster endpoints, which tolerate an unrecognized league and
+  // just come back empty), so nfl still has to short-circuit before ever
+  // building that request, same reasoning as newsService.ts's own early
+  // return.
   const sport = SPORT_FOR_LEAGUE_GROUP[leagueGroup];
-  if (sport !== "basketball" && sport !== "baseball") {
+  if (sport !== "basketball" && sport !== "baseball" && sport !== "hockey") {
     return { season: "", groups: [] };
   }
 
@@ -82,21 +84,22 @@ export async function getStandings(leagueGroup: LeagueGroup): Promise<StandingsR
   const cached = loadLeagueCache<StandingsResponseJson>("standings2", leagueGroup, dateKey);
   if (cached) return cached;
 
-  // MLB's season is a single calendar year (guessSeasonYear's "mlb" branch,
-  // same as WNBA's) rather than basketball's "ends in" convention, so it
-  // gets its own fetchFn here instead of reusing the ContentLeague-typed
-  // fetchStandings - resolveSeasonYear itself is still shared (its league
-  // param already accepts "mlb" alongside ContentLeague, see
-  // seasonYear.ts), since the guess-then-fallback-a-year logic is identical
-  // either way.
+  // MLB's/NHL's season is resolved via fetchStandingsForSport (their own
+  // sport/league slug, &level=3 for the real division nesting) rather than
+  // basketball's native ContentLeague-typed fetchStandings - resolveSeasonYear
+  // itself is still shared (its league param already accepts "mlb"/"nhl"
+  // alongside ContentLeague, see seasonYear.ts), since the guess-then-
+  // fallback-a-year logic is identical for all three.
   const resolved =
     sport === "baseball"
       ? await resolveSeasonYear("mlb", now, (year) => fetchStandingsForSport("baseball", "mlb", year))
-      : await resolveSeasonYear(leagueGroup as ContentLeague, now, (year) => fetchStandings(leagueGroup as ContentLeague, year));
+      : sport === "hockey"
+        ? await resolveSeasonYear("nhl", now, (year) => fetchStandingsForSport("hockey", "nhl", year))
+        : await resolveSeasonYear(leagueGroup as ContentLeague, now, (year) => fetchStandings(leagueGroup as ContentLeague, year));
 
   const response: StandingsResponseJson = resolved
     ? {
-        // MLB's level=3 groups only carry seasonDisplayName at the
+        // MLB's/NHL's level=3 groups only carry seasonDisplayName at the
         // division-level (children[0].children[0]), not the AL/NL-level
         // group flattenGroups' top of the tree - resolved.year (the season
         // fetchStandingsForSport actually resolved against) is a reliable

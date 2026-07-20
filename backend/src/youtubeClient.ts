@@ -24,14 +24,44 @@ const MLB_YOUTUBE_CHANNEL_ID = "UCoLrcjPV5PbUrUyXq5mjc_A";
 // before assuming" rule this file's own match predicate exists to enforce
 // for every other league.
 const NFL_YOUTUBE_CHANNEL_ID = "UCDVYQ4Zhbm3S2dlz7P1GBDg";
+// Channel id confirmed the same way as every other league above (canonical
+// externalId + <link rel="canonical"> + channelMetadataRenderer.title="NHL"
+// on youtube.com/@NHL). Unlike NBA/WNBA/MLB, NHL's real title format is NOT
+// "FULL GAME HIGHLIGHTS" - confirmed directly against real live uploads (the
+// season just ended, so both a regular-season and a real Stanley Cup Final
+// game were checkable, unlike NFL's still-unconfirmed offseason gap):
+// regular season titles read "{Away} vs. {Home} | NHL Highlights | {Date}"
+// (e.g. "Stars vs. Oilers | NHL Highlights | November 25, 2025", 11:45 long,
+// confirmed posted by browseId UCqFMzb-4AUf6WAIbl132QKA / @NHL), postseason
+// titles read "{Away} vs. {Home} | NHL Playoff Highlights | Game N | {Date}"
+// (e.g. "Hurricanes vs. Golden Knights | NHL Playoff Highlights | Game 6 |
+// June 14, 2026" - the real 2026 Stanley Cup Final Game 6, matching ESPN's
+// own data for that exact date/matchup). Both contain "HIGHLIGHTS" as a
+// substring but never the literal "FULL GAME HIGHLIGHTS" phrase every other
+// league's title uses - the shared match predicate below is parameterized
+// per-league because of this, not left as a single hardcoded phrase.
+const NHL_YOUTUBE_CHANNEL_ID = "UCqFMzb-4AUf6WAIbl132QKA";
 
-export type HighlightsLeague = "nba" | "wnba" | "mlb" | "nfl";
+export type HighlightsLeague = "nba" | "wnba" | "mlb" | "nfl" | "nhl";
 
 function channelIdFor(league: HighlightsLeague): string {
   if (league === "wnba") return WNBA_YOUTUBE_CHANNEL_ID;
   if (league === "mlb") return MLB_YOUTUBE_CHANNEL_ID;
   if (league === "nfl") return NFL_YOUTUBE_CHANNEL_ID;
+  if (league === "nhl") return NHL_YOUTUBE_CHANNEL_ID;
   return NBA_YOUTUBE_CHANNEL_ID;
+}
+
+// NHL's real titles never contain the literal "FULL GAME HIGHLIGHTS" phrase
+// (see NHL_YOUTUBE_CHANNEL_ID's own comment) - just "HIGHLIGHTS" alongside
+// either "NHL Highlights" or "NHL Playoff Highlights". Every other league's
+// confirmed real titles do contain the full "FULL GAME HIGHLIGHTS" phrase,
+// so requiring only the broader "HIGHLIGHTS" substring for them too would
+// risk matching an unrelated video (a "Top Plays" or "Best Highlights"
+// clip-show upload) that happens to share the team-name substrings - keeping
+// the stricter phrase for those leagues is deliberate, not an oversight.
+function requiredTitlePhraseFor(league: HighlightsLeague): string {
+  return league === "nhl" ? "HIGHLIGHTS" : "FULL GAME HIGHLIGHTS";
 }
 
 // search.list has its own dedicated daily quota bucket (separate from the
@@ -180,7 +210,14 @@ export async function searchHighlightsVideo(
   // the actual match outside maxResults, especially during Summer League
   // where the channel posts far more same-day videos than a regular-season
   // day. Querying with what the title actually contains ranks it correctly.
-  const query = `${awayNickname} ${homeNickname} full game highlights`;
+  // NHL's own confirmed real titles say "NHL Highlights"/"NHL Playoff
+  // Highlights", never "full game highlights" - querying with that literal
+  // phrase for NHL would still likely surface the same video (YouTube's
+  // search ranking isn't an exact-substring match), but querying with what
+  // the title actually says is the same "don't guess, match what's real"
+  // principle every other league's query construction already follows here.
+  const query =
+    league === "nhl" ? `${awayNickname} ${homeNickname} NHL highlights` : `${awayNickname} ${homeNickname} full game highlights`;
 
   const params = new URLSearchParams({
     key: apiKey,
@@ -228,7 +265,7 @@ export async function searchHighlightsVideo(
 
     const upperTitle = title.toUpperCase();
     const isMatch =
-      upperTitle.includes("FULL GAME HIGHLIGHTS") &&
+      upperTitle.includes(requiredTitlePhraseFor(league)) &&
       upperTitle.includes(awayNickname.toUpperCase()) &&
       upperTitle.includes(homeNickname.toUpperCase());
 

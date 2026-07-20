@@ -276,6 +276,91 @@ private object NflRubric {
 }
 
 /**
+ * Client-side port of backend/src/nhlRubric.ts's computeNhlWatchabilityScore
+ * - the NHL analogue of MlbRubric/NflRubric above, scaled by the user's own
+ * NhlRubricWeights. Calibrated against the real, complete 2025-26 season
+ * (1,394 games) - keep every bracket in sync with nhlRubric.ts if that ever
+ * changes.
+ */
+private object NhlRubric {
+    fun marginPoints(margin: Int): Int {
+        val m = abs(margin)
+        return when {
+            m <= 1 -> 20
+            m <= 2 -> 14
+            m <= 3 -> 8
+            m <= 4 -> 4
+            else -> 0
+        }
+    }
+
+    fun comebackPoints(largestDeficitOvercome: Int): Int = when {
+        largestDeficitOvercome >= 3 -> 18
+        largestDeficitOvercome >= 2 -> 12
+        largestDeficitOvercome >= 1 -> 6
+        else -> 0
+    }
+
+    // >=4 lead changes occurred in only 0.1% of the real sample - top
+    // bracket is >=3 (1.4%) instead.
+    fun leadChangePoints(leadChanges: Int): Int = when {
+        leadChanges >= 3 -> 12
+        leadChanges >= 2 -> 6
+        leadChanges >= 1 -> 3
+        else -> 0
+    }
+
+    fun overtimePoints(overtimePeriods: Int, wentToShootout: Boolean): Int {
+        if (overtimePeriods < 1) return 0
+        return if (wentToShootout) 8 else 15
+    }
+
+    fun decisiveScoreLatePoints(decisiveScoreLate: Boolean): Int = if (decisiveScoreLate) 15 else 0
+
+    fun powerPlayPoints(combinedPowerPlayGoals: Int): Int = when {
+        combinedPowerPlayGoals >= 3 -> 8
+        combinedPowerPlayGoals >= 2 -> 4
+        else -> 0
+    }
+
+    // Best-qualifying tier across 2 independent paths (skater hat trick /
+    // goalie save total), not a sum. A 2-goal game alone earns nothing - real
+    // data showed it's the single most common outcome (50.1% of games), too
+    // common to signal a standout performance on its own.
+    fun starPoints(maxGoalsByPlayer: Int, maxGoalieSaves: Int): Int = when {
+        maxGoalsByPlayer >= 3 || maxGoalieSaves >= 40 -> 15
+        maxGoalieSaves >= 35 -> 8
+        maxGoalieSaves >= 30 -> 4
+        else -> 0
+    }
+
+    fun shutoutPoints(teamShutout: Boolean): Int = if (teamShutout) 12 else 0
+
+    fun totalGoalsBonus(totalGoals: Int): Int = when {
+        totalGoals >= 9 -> 8
+        totalGoals >= 7 -> 4
+        else -> 0
+    }
+
+    /** No overall cap - mirrors basketball's/MLB's/NFL's own computeScore, same reasoning. */
+    fun computeScore(inputs: NhlRubricInputs, stakes: Int?, weights: NhlRubricWeights): Int {
+        val margin = marginPoints(inputs.finalMargin) * weights.margin
+        val comeback = comebackPoints(inputs.largestDeficitOvercome) * weights.comeback
+        val leadChanges = leadChangePoints(inputs.leadChanges) * weights.leadChanges
+        val overtime = overtimePoints(inputs.overtimePeriods, inputs.wentToShootout) * weights.overtime
+        val decisiveScoreLate = decisiveScoreLatePoints(inputs.decisiveScoreLate) * weights.decisiveScoreLate
+        val powerPlay = powerPlayPoints(inputs.combinedPowerPlayGoals) * weights.powerPlay
+        val star = starPoints(inputs.maxGoalsByPlayer, inputs.maxGoalieSaves) * weights.star
+        val shutout = shutoutPoints(inputs.teamShutout) * weights.shutout
+        val totalGoals = totalGoalsBonus(inputs.totalGoals) * weights.totalGoals
+        val stakesPts = Rubric.stakesPoints(stakes) * weights.stakes
+
+        return (margin + comeback + leadChanges + overtime + decisiveScoreLate + powerPlay + star + shutout + totalGoals + stakesPts)
+            .roundToInt()
+    }
+}
+
+/**
  * Weight-adjusted score, or null if the game's outcome isn't revealed yet -
  * mirrors the same scoreVisible gate the server uses, so recomputing locally
  * never leaks a score early regardless of what weights are set. Dispatches
@@ -286,22 +371,35 @@ private object NflRubric {
  * support (EPL/La Liga/FIFA World Cup) was removed from the live app - see
  * archive/soccer/.
  */
-// Falls back to the server's own [score] for MLB/NFL only when their own
+// Falls back to the server's own [score] for MLB/NFL/NHL only when their own
 // *Inputs field is missing (an older cached game that predates that field) -
 // every game scored after that field shipped gets the real weight-adjusted
 // recompute, same as NBA/WNBA.
-fun Game.effectiveScore(nbaWeights: RubricWeights, wnbaWeights: RubricWeights, mlbWeights: MlbRubricWeights, nflWeights: NflRubricWeights): Int? =
+fun Game.effectiveScore(
+    nbaWeights: RubricWeights,
+    wnbaWeights: RubricWeights,
+    mlbWeights: MlbRubricWeights,
+    nflWeights: NflRubricWeights,
+    nhlWeights: NhlRubricWeights
+): Int? =
     if (scoreVisible && score != null) {
         when (league) {
             "mlb" -> mlbInputs?.let { MlbRubric.computeScore(it, stakes, mlbWeights) } ?: score
             "nfl" -> nflInputs?.let { NflRubric.computeScore(it, stakes, nflWeights) } ?: score
+            "nhl" -> nhlInputs?.let { NhlRubric.computeScore(it, stakes, nhlWeights) } ?: score
             "wnba" -> Rubric.computeScore(this, wnbaWeights)
             else -> Rubric.computeScore(this, nbaWeights) // "nba" and "summer" - Summer League is NBA-affiliated, not a separate scoring path
         }
     } else null
 
-fun Game.effectiveTier(nbaWeights: RubricWeights, wnbaWeights: RubricWeights, mlbWeights: MlbRubricWeights, nflWeights: NflRubricWeights): Tier? =
-    effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights)?.let { Tier.fromScore(it, league) }
+fun Game.effectiveTier(
+    nbaWeights: RubricWeights,
+    wnbaWeights: RubricWeights,
+    mlbWeights: MlbRubricWeights,
+    nflWeights: NflRubricWeights,
+    nhlWeights: NhlRubricWeights
+): Tier? =
+    effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights)?.let { Tier.fromScore(it, league) }
 
 /**
  * One line of the game-detail popup's rubric-breakdown tab - a labeled
@@ -329,11 +427,13 @@ fun Game.rubricBreakdown(
     nbaWeights: RubricWeights,
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
-    nflWeights: NflRubricWeights
+    nflWeights: NflRubricWeights,
+    nhlWeights: NhlRubricWeights
 ): List<RubricBreakdownEntry> {
     if (!scoreVisible || score == null) return emptyList()
     if (league == "mlb") return mlbRubricBreakdown(mlbWeights)
     if (league == "nfl") return nflRubricBreakdown(nflWeights)
+    if (league == "nhl") return nhlRubricBreakdown(nhlWeights)
     val isWnba = league == "wnba"
     val weights = if (isWnba) wnbaWeights else nbaWeights
     return listOf(
@@ -421,6 +521,40 @@ private fun Game.nflRubricBreakdown(weights: NflRubricWeights): List<RubricBreak
             15f * weights.star
         ),
         RubricBreakdownEntry("Total points", NflRubric.totalPointsBonus(inputs.totalPoints) * weights.totalPoints, 8f * weights.totalPoints),
+        RubricBreakdownEntry("Stakes", Rubric.stakesPoints(stakes) * weights.stakes, 10f * weights.stakes)
+    )
+}
+
+/**
+ * NHL's own dimensions (backend/src/nhlRubric.ts's NhlScoreBreakdown),
+ * scaled by [weights] - mirrors nflRubricBreakdown above. Empty if an older
+ * cached game predates the nhlInputs field. PROVISIONAL point values, see
+ * NhlRubric's own header comment.
+ */
+private fun Game.nhlRubricBreakdown(weights: NhlRubricWeights): List<RubricBreakdownEntry> {
+    val inputs = nhlInputs ?: return emptyList()
+    return listOf(
+        RubricBreakdownEntry("Margin", NhlRubric.marginPoints(inputs.finalMargin) * weights.margin, 20f * weights.margin),
+        RubricBreakdownEntry("Comeback", NhlRubric.comebackPoints(inputs.largestDeficitOvercome) * weights.comeback, 18f * weights.comeback),
+        RubricBreakdownEntry("Lead changes", NhlRubric.leadChangePoints(inputs.leadChanges) * weights.leadChanges, 12f * weights.leadChanges),
+        RubricBreakdownEntry(
+            "Overtime",
+            NhlRubric.overtimePoints(inputs.overtimePeriods, inputs.wentToShootout) * weights.overtime,
+            15f * weights.overtime
+        ),
+        RubricBreakdownEntry(
+            "Decisive late goal",
+            NhlRubric.decisiveScoreLatePoints(inputs.decisiveScoreLate) * weights.decisiveScoreLate,
+            15f * weights.decisiveScoreLate
+        ),
+        RubricBreakdownEntry("Power play goals", NhlRubric.powerPlayPoints(inputs.combinedPowerPlayGoals) * weights.powerPlay, 8f * weights.powerPlay),
+        RubricBreakdownEntry(
+            "Star performance",
+            NhlRubric.starPoints(inputs.maxGoalsByPlayer, inputs.maxGoalieSaves) * weights.star,
+            15f * weights.star
+        ),
+        RubricBreakdownEntry("Shutout", NhlRubric.shutoutPoints(inputs.teamShutout) * weights.shutout, 12f * weights.shutout),
+        RubricBreakdownEntry("Total goals", NhlRubric.totalGoalsBonus(inputs.totalGoals) * weights.totalGoals, 8f * weights.totalGoals),
         RubricBreakdownEntry("Stakes", Rubric.stakesPoints(stakes) * weights.stakes, 10f * weights.stakes)
     )
 }

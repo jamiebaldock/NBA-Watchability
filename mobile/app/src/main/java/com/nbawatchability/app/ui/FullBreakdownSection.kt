@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.MlbRubricWeights
 import com.nbawatchability.app.data.NflRubricWeights
+import com.nbawatchability.app.data.NhlRubricWeights
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.TextMuted
@@ -67,6 +68,7 @@ fun FullBreakdownSection(
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
     nflWeights: NflRubricWeights,
+    nhlWeights: NhlRubricWeights,
     modifier: Modifier = Modifier,
     spoilerFree: Boolean = false
 ) {
@@ -80,7 +82,7 @@ fun FullBreakdownSection(
             HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights, mlbWeights, nflWeights),
+                text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
@@ -88,7 +90,7 @@ fun FullBreakdownSection(
         } else {
             if (canBlur) {
                 Text(
-                    text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights, mlbWeights, nflWeights),
+                    text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                     modifier = Modifier.blur(7.dp)
@@ -157,6 +159,7 @@ private fun finishDescriptor(game: Game): String? {
 private fun breakdownFacts(game: Game): List<String> = when (game.league) {
     "mlb" -> mlbBreakdownFacts(game)
     "nfl" -> nflBreakdownFacts(game)
+    "nhl" -> nhlBreakdownFacts(game)
     else -> nbaBreakdownFacts(game)
 }
 
@@ -244,18 +247,53 @@ private fun nflMarginDescriptor(margin: Int?): String? = when {
     else -> "Blowout margin"
 }
 
+// Hockey's own recap facts (nhlRubric.ts's dimensions) - a direct NHL
+// analogue of mlbBreakdownFacts/nflBreakdownFacts above, reading real
+// per-dimension facts off Game.nhlInputs. Falls back to just the margin
+// descriptor if an older cached game predates nhlInputs. A 2-goal game is
+// still called out here as flavor text even though it earns no rubric
+// points (real data showed it's too common - 50.1% of games - to signal a
+// standout performance in the scoring itself).
+private fun nhlBreakdownFacts(game: Game): List<String> {
+    val inputs = game.nhlInputs ?: return listOfNotNull(nhlMarginDescriptor(game.margin))
+    return buildList {
+        if (inputs.teamShutout) add("One team was shut out")
+        if (inputs.overtimePeriods >= 1) add(if (inputs.wentToShootout) "Decided in a shootout" else "Overtime winner")
+        if (inputs.decisiveScoreLate) add("Go-ahead goal came late")
+        if (inputs.maxGoalsByPlayer >= 3) add("A hat trick")
+        else if (inputs.maxGoalsByPlayer >= 2) add("A multi-goal game for one player")
+        if (inputs.maxGoalieSaves >= 35) add("${inputs.maxGoalieSaves} saves by one goaltender")
+        if (inputs.combinedPowerPlayGoals >= 2) add("${inputs.combinedPowerPlayGoals} power-play goals")
+        if (inputs.totalGoals >= 7) add("A ${inputs.totalGoals}-goal shootout-style game")
+        if (!inputs.decisiveScoreLate && inputs.overtimePeriods == 0) nhlMarginDescriptor(inputs.finalMargin)?.let { add(it) }
+    }
+}
+
+// Hockey-appropriate margin language (nhlRubric.ts's marginPoints brackets) -
+// basketball's "One-possession finish" wording doesn't map onto goal-based
+// scoring, where a 1-goal margin is the single most common outcome.
+private fun nhlMarginDescriptor(margin: Int?): String? = when {
+    margin == null -> null
+    margin <= 1 -> "One-goal nailbiter"
+    margin == 2 -> "Two-goal finish"
+    margin <= 3 -> "Comfortable margin"
+    margin <= 4 -> "Lopsided margin"
+    else -> "Blowout margin"
+}
+
 private fun breakdownAnnotatedText(
     game: Game,
     nbaWeights: RubricWeights,
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
-    nflWeights: NflRubricWeights
+    nflWeights: NflRubricWeights,
+    nhlWeights: NhlRubricWeights
 ) = buildAnnotatedString {
     val facts = breakdownFacts(game)
     append(if (facts.isEmpty()) "No standout moments logged" else facts.joinToString(" · "))
     append(" · Watchability ")
     withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")) {
-        append("${game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) ?: 0}/100")
+        append("${game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) ?: 0}/100")
     }
 }
 

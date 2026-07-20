@@ -24,6 +24,7 @@ import { join } from "node:path";
 import { League } from "./espnClient";
 import { MlbRubricInputs } from "./mlbRubric";
 import { NflRubricInputs } from "./nflRubric";
+import { NhlRubricInputs } from "./nhlRubric";
 import { GameStatus, LeagueGroup, SPORT_FOR_LEAGUE_GROUP, StandoutPerformerJson, StarPerformance } from "./types";
 
 // A game row's own "league" column is one specific ESPN league (basketball's
@@ -31,7 +32,7 @@ import { GameStatus, LeagueGroup, SPORT_FOR_LEAGUE_GROUP, StandoutPerformerJson,
 // broader than the mutually-exclusive LeagueGroup a request is scoped to,
 // narrower than "any string", so a typo'd league name still fails to
 // compile.
-export type AnyLeague = League | "mlb" | "nfl";
+export type AnyLeague = League | "mlb" | "nfl" | "nhl";
 
 const DATA_DIR = process.env.DATA_DIR ?? join(__dirname, "..", "data");
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
@@ -150,6 +151,10 @@ ensureColumn("games", "mlb_rubric_inputs", "TEXT");
 // Breakdown tab and weight sliders work off NFL's own real per-dimension
 // facts instead of nothing/basketball's fields).
 ensureColumn("games", "nfl_rubric_inputs", "TEXT");
+// JSON-encoded NhlRubricInputs (nhlRubric.ts) - the NHL analogue of
+// mlb_rubric_inputs/nfl_rubric_inputs above, same reasoning, persisted from
+// day one (not retrofitted) per feedback_new_league_full_pipeline_checklist.md.
+ensureColumn("games", "nhl_rubric_inputs", "TEXT");
 
 function now(): string {
   return new Date().toISOString();
@@ -207,6 +212,7 @@ export interface GameRow {
   seasonStageLabel: string | null;
   mlbRubricInputs: MlbRubricInputs | null;
   nflRubricInputs: NflRubricInputs | null;
+  nhlRubricInputs: NhlRubricInputs | null;
 }
 
 /** Creates the row if this eventId has never been seen before; a no-op otherwise - never touches an existing row's already-collected fields. */
@@ -287,6 +293,7 @@ interface RawGameRow {
   season_stage_label: string | null;
   mlb_rubric_inputs: string | null;
   nfl_rubric_inputs: string | null;
+  nhl_rubric_inputs: string | null;
 }
 
 function parseStandoutPerformers(raw: string | null): StandoutPerformerJson[] {
@@ -302,6 +309,11 @@ function parseMlbRubricInputs(raw: string | null): MlbRubricInputs | null {
 function parseNflRubricInputs(raw: string | null): NflRubricInputs | null {
   if (!raw) return null;
   return JSON.parse(raw) as NflRubricInputs;
+}
+
+function parseNhlRubricInputs(raw: string | null): NhlRubricInputs | null {
+  if (!raw) return null;
+  return JSON.parse(raw) as NhlRubricInputs;
 }
 
 function mapRow(raw: RawGameRow): GameRow {
@@ -340,6 +352,7 @@ function mapRow(raw: RawGameRow): GameRow {
     seasonStageLabel: raw.season_stage_label,
     mlbRubricInputs: parseMlbRubricInputs(raw.mlb_rubric_inputs),
     nflRubricInputs: parseNflRubricInputs(raw.nfl_rubric_inputs),
+    nhlRubricInputs: parseNhlRubricInputs(raw.nhl_rubric_inputs),
   };
 }
 
@@ -561,6 +574,46 @@ export function setNflFinalRubric(eventId: string, result: NflFinalResult, final
   });
 }
 
+export interface NhlFinalResult {
+  awayScore: number;
+  homeScore: number;
+  score: number;
+  tier: string;
+  standoutPerformers: StandoutPerformerJson[];
+  finalMargin: number;
+  largestDeficitOvercome: number;
+  // Same reasoning as MlbFinalResult.rubricInputs/NflFinalResult.rubricInputs
+  // - persisted so the mobile client's Breakdown tab/weight sliders can work
+  // off NHL's own real per-dimension facts (Rubric.kt's nhlRubricBreakdown).
+  rubricInputs: NhlRubricInputs;
+}
+
+/** NHL's equivalent of setNflFinalRubric - same narrower-than-basketball column shape, same "never overwrite" WHERE-guard. */
+export function setNhlFinalRubric(eventId: string, result: NhlFinalResult, finalAt: string | null = now()): void {
+  db.prepare(
+    `UPDATE games SET
+       status='final', final_at=@finalAt,
+       away_score=@awayScore, home_score=@homeScore, score=@score, tier=@tier,
+       standout_performers=@standoutPerformers,
+       final_margin=@finalMargin, largest_deficit_overcome=@largestDeficitOvercome,
+       nhl_rubric_inputs=@nhlRubricInputs,
+       updated_at=@updatedAt
+     WHERE event_id=@eventId AND score IS NULL`
+  ).run({
+    eventId,
+    finalAt,
+    awayScore: result.awayScore,
+    homeScore: result.homeScore,
+    score: result.score,
+    tier: result.tier,
+    standoutPerformers: JSON.stringify(result.standoutPerformers),
+    finalMargin: result.finalMargin,
+    largestDeficitOvercome: result.largestDeficitOvercome,
+    nhlRubricInputs: JSON.stringify(result.rubricInputs),
+    updatedAt: now()
+  });
+}
+
 /**
  * Highlights video found via a real search - set once, permanent. Records
  * yt_found_at (when *we* noticed - still used to pace check spacing) and
@@ -753,6 +806,19 @@ export function getFinalNflGamesMissingHighlights(): GameRow[] {
 }
 
 /**
+ * NHL analogue of getFinalNflGamesMissingHighlights above - same
+ * recent-games-only scope, same "not called from anywhere yet" status as
+ * MLB's/NFL's own highlights search was at their own equivalent stage (see
+ * nhlGamesService.ts's checkPendingNhlHighlights) - built and ready, kept
+ * dormant until explicitly wired in.
+ */
+export function getFinalNhlGamesMissingHighlights(): GameRow[] {
+  const cutoffTime = Date.now() - RECENT_GAMES_WINDOW_MS;
+  const raws = db.prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL AND league_group='nhl'`).all() as RawGameRow[];
+  return raws.map(mapRow).filter((row) => new Date(row.tipoffUtc).getTime() >= cutoffTime);
+}
+
+/**
  * Rows still missing season_stage_label - backs migrateStageLabels.ts's
  * one-off enrichment pass for rows written before that column existed.
  * Summer League variants are excluded: deriveCompetitionLabel only accepts
@@ -823,7 +889,7 @@ export function getMostRecentFinalsEnd(leagueGroup: LeagueGroup): string | undef
   const row = db
     .prepare(
       `SELECT MAX(tipoff_utc) as end FROM games
-       WHERE league_group = ? AND (season_stage_label LIKE '%Playoffs: Finals%' OR season_stage_label LIKE '%Super Bowl%')`
+       WHERE league_group = ? AND (season_stage_label LIKE '%Playoffs: Finals%' OR season_stage_label LIKE '%Super Bowl%' OR season_stage_label LIKE '%Stanley Cup Final%')`
     )
     .get(leagueGroup) as { end: string | null };
   return row.end ?? undefined;

@@ -10,8 +10,13 @@ import { ContentLeague } from "./espnClient";
 // within one calendar year, same as WNBA's, so it shares that branch - "mlb"
 // is accepted here (and by resolveSeasonYear below) alongside the
 // basketball-only ContentLeague union rather than needing its own parallel
-// copy of this try-guess-then-fallback logic in standingsService.ts.
-function guessSeasonYear(league: ContentLeague | "mlb", now: Date): number {
+// copy of this try-guess-then-fallback logic in standingsService.ts. "nhl"
+// is NOT added to this branch - confirmed directly against a real ESPN
+// response that NHL uses the exact same "ends in" convention as NBA (the
+// 2025-26 season, which crosses the year boundary like NBA's does, is
+// queried as season=2026), so it falls through to the same month-based
+// October cutover guess below with zero changes needed.
+function guessSeasonYear(league: ContentLeague | "mlb" | "nhl", now: Date): number {
   const year = now.getUTCFullYear();
   if (league === "wnba" || league === "mlb") return year;
   const month = now.getUTCMonth(); // 0-indexed; October = 9
@@ -24,7 +29,7 @@ function guessSeasonYear(league: ContentLeague | "mlb", now: Date): number {
  * case and "current season hasn't started yet, show the one that just ended."
  */
 export async function resolveSeasonYear<T>(
-  league: ContentLeague | "mlb",
+  league: ContentLeague | "mlb" | "nhl",
   now: Date,
   fetchFn: (seasonYear: number) => Promise<T | null>
 ): Promise<{ year: number; data: T } | null> {

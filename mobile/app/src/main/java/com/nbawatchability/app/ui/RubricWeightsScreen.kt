@@ -35,6 +35,8 @@ import com.nbawatchability.app.data.MlbRubricCategory
 import com.nbawatchability.app.data.MlbRubricWeights
 import com.nbawatchability.app.data.NflRubricCategory
 import com.nbawatchability.app.data.NflRubricWeights
+import com.nbawatchability.app.data.NhlRubricCategory
+import com.nbawatchability.app.data.NhlRubricWeights
 import com.nbawatchability.app.data.RubricCategory
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.ui.theme.BackgroundBase
@@ -55,10 +57,9 @@ private enum class RubricSport(val label: String) {
  * screen from these sliders' worth of scroll. Sport switcher mirrors the
  * pattern soccer used to have here (see archive/soccer/mobile/
  * RubricWeightsScreen-soccer-tab-extracted.kt.txt) before soccer support was
- * removed - now driving Basketball (real, unchanged), MLB and NFL (real,
- * their own calibrated rubrics from backend/src/mlbRubric.ts/nflRubric.ts),
- * and NHL (an inert "coming soon" placeholder - that league only has team
- * names browsable today, no scoring rubric to customize yet).
+ * removed - now driving Basketball (real, unchanged) and MLB/NFL/NHL (real,
+ * their own calibrated rubrics from backend/src/mlbRubric.ts/nflRubric.ts/
+ * nhlRubric.ts, each grounded in a real completed-season sample).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,6 +76,9 @@ fun RubricWeightsScreen(
     nflWeights: NflRubricWeights,
     onNflWeightChange: (NflRubricCategory, Float) -> Unit,
     onNflReset: () -> Unit,
+    nhlWeights: NhlRubricWeights,
+    onNhlWeightChange: (NhlRubricCategory, Float) -> Unit,
+    onNhlReset: () -> Unit,
     onBack: () -> Unit
 ) {
     var sport by remember { mutableStateOf(RubricSport.NBA) }
@@ -212,26 +216,28 @@ fun RubricWeightsScreen(
                 }
 
                 RubricSport.NHL -> {
-                    ComingSoonPlaceholder(sport.label)
+                    WeightSlider("Margin", nhlWeights.margin) { onNhlWeightChange(NhlRubricCategory.MARGIN, it) }
+                    WeightSlider("Comeback", nhlWeights.comeback) { onNhlWeightChange(NhlRubricCategory.COMEBACK, it) }
+                    WeightSlider("Lead changes", nhlWeights.leadChanges) { onNhlWeightChange(NhlRubricCategory.LEAD_CHANGES, it) }
+                    WeightSlider("Overtime", nhlWeights.overtime) { onNhlWeightChange(NhlRubricCategory.OVERTIME, it) }
+                    WeightSlider("Decisive late goal", nhlWeights.decisiveScoreLate) { onNhlWeightChange(NhlRubricCategory.DECISIVE_SCORE_LATE, it) }
+                    WeightSlider("Power play goals", nhlWeights.powerPlay) { onNhlWeightChange(NhlRubricCategory.POWER_PLAY, it) }
+                    WeightSlider("Star performance", nhlWeights.star) { onNhlWeightChange(NhlRubricCategory.STAR, it) }
+                    WeightSlider("Shutout", nhlWeights.shutout) { onNhlWeightChange(NhlRubricCategory.SHUTOUT, it) }
+                    WeightSlider("Total goals", nhlWeights.totalGoals) { onNhlWeightChange(NhlRubricCategory.TOTAL_GOALS, it) }
+                    WeightSlider("Stakes", nhlWeights.stakes) { onNhlWeightChange(NhlRubricCategory.STAKES, it) }
+
+                    OutlinedButton(
+                        onClick = onNhlReset,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp)
+                    ) {
+                        Text("Reset to default")
+                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ComingSoonPlaceholder(sportLabel: String) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "$sportLabel weight customization is coming soon.",
-            color = TextSecondary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(24.dp),
-            style = MaterialTheme.typography.titleMedium
-        )
     }
 }
 

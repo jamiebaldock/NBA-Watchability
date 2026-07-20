@@ -34,10 +34,10 @@ data class TeamsResponse(
 data class Player(
     val id: String,
     val name: String,
-    // Real ESPN headshot photo URL - present for NBA/WNBA and MLB (all
-    // three roster endpoints carry a headshot.href field, confirmed
-    // directly against real responses). Null for NFL/NHL, which have no
-    // roster route built yet.
+    // Real ESPN headshot photo URL - present for NBA/WNBA/MLB/NFL/NHL (all
+    // five roster endpoints carry a headshot.href field, confirmed directly
+    // against real responses). Null only if ESPN itself doesn't have a photo
+    // for a specific player.
     val headshot: String? = null
 )
 

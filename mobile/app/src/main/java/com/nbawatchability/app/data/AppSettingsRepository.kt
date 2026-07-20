@@ -34,11 +34,11 @@ private val LIGHT_THEME_KEY = booleanPreferencesKey("light_theme")
 private val DEFAULT_GAME_DETAIL_TAB_KEY = stringPreferencesKey("default_game_detail_tab")
 private val ALL_LEAGUES_SELECTED_KEY = booleanPreferencesKey("all_leagues_selected")
 
-// Only the core US sports set ships enabled by default for now - NBA/WNBA/MLB
-// (all fully built) plus NHL/NFL (queued next, still placeholders) - every
-// other LeagueGroup entry (F1, cricket, other basketball/soccer leagues,
-// etc.) stays defined in the enum for later but is hidden from the dropdown
-// and Settings' "Selected Leagues" list until then, per James's call.
+// Only the core US sports set ships enabled by default for now - NBA/WNBA/MLB/
+// NFL/NHL are all fully built - every other LeagueGroup entry (F1, cricket,
+// other basketball/soccer leagues, etc.) stays defined in the enum for later
+// but is hidden from the dropdown and Settings' "Selected Leagues" list until
+// then, per James's call.
 private val DEFAULT_ENABLED_LEAGUES = setOf(LeagueGroup.NBA, LeagueGroup.WNBA, LeagueGroup.NHL, LeagueGroup.MLB, LeagueGroup.NFL)
     .map { it.apiValue }.toSet()
 
