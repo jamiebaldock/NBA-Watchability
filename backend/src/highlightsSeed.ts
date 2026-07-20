@@ -12,10 +12,13 @@
 // at all, and doing so would badly skew future scheduling.
 import { BasketballLeagueGroup, getGamesForDate } from "./gamesService";
 import { setHighlightsFromSeed } from "./gameStore";
+import { getMlbGamesForDate } from "./mlbGamesService";
+
+type SeedLeagueGroup = BasketballLeagueGroup | "mlb";
 
 interface SeedEntry {
   date: string; // YYYY-MM-DD, just to know which schedule fetch surfaces this event
-  leagueGroup: BasketballLeagueGroup;
+  leagueGroup: SeedLeagueGroup;
   eventId: string;
   videoId: string;
 }
@@ -43,6 +46,9 @@ const SEED_ENTRIES: SeedEntry[] = [
   { date: "2026-07-11", leagueGroup: "nba", eventId: "401881838", videoId: "jFiM59ru6J0" }, // New York Knicks at San Antonio Spurs
   { date: "2026-07-11", leagueGroup: "nba", eventId: "401881839", videoId: "oapzGvKg1lE" }, // Denver Nuggets at Minnesota Timberwolves
   { date: "2026-07-11", leagueGroup: "nba", eventId: "401881840", videoId: "ngg9qm7CbZ4" }, // Atlanta Hawks at Brooklyn Nets
+
+  // MLB
+  { date: "2026-07-19", leagueGroup: "mlb", eventId: "401816184", videoId: "5Nb08y6UgLA" }, // St. Louis Cardinals at Arizona Diamondbacks (F/10)
 ];
 
 export async function applySeedHighlights(): Promise<void> {
@@ -53,12 +59,18 @@ export async function applySeedHighlights(): Promise<void> {
   }
 
   for (const [key, entries] of byDate) {
-    const [date, leagueGroup] = key.split("|") as [string, BasketballLeagueGroup];
+    const [date, leagueGroup] = key.split("|") as [string, SeedLeagueGroup];
     try {
       // Ensures a real, fully-formed row exists for each event (via the
       // exact same path every normal request uses - never hand-built),
-      // then layers the confirmed video ID on top.
-      await getGamesForDate(date, leagueGroup);
+      // then layers the confirmed video ID on top. MLB dispatches to its own
+      // fetcher (mlbGamesService.ts) the same way gamesService.ts's own
+      // sport-dispatch elsewhere does - not a BasketballLeagueGroup value.
+      if (leagueGroup === "mlb") {
+        await getMlbGamesForDate(date);
+      } else {
+        await getGamesForDate(date, leagueGroup);
+      }
       for (const entry of entries) setHighlightsFromSeed(entry.eventId, entry.videoId);
     } catch (err) {
       console.error(`applySeedHighlights: failed for ${key}`, err);

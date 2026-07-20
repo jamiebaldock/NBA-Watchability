@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.Game
+import com.nbawatchability.app.data.MlbRubricWeights
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.TextMuted
@@ -63,6 +64,7 @@ fun FullBreakdownSection(
     game: Game,
     nbaWeights: RubricWeights,
     wnbaWeights: RubricWeights,
+    mlbWeights: MlbRubricWeights,
     modifier: Modifier = Modifier,
     spoilerFree: Boolean = false
 ) {
@@ -76,7 +78,7 @@ fun FullBreakdownSection(
             HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights),
+                text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights, mlbWeights),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
@@ -84,7 +86,7 @@ fun FullBreakdownSection(
         } else {
             if (canBlur) {
                 Text(
-                    text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights),
+                    text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights, mlbWeights),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                     modifier = Modifier.blur(7.dp)
@@ -206,12 +208,12 @@ private fun mlbMarginDescriptor(margin: Int?): String? = when {
     else -> "Blowout margin"
 }
 
-private fun breakdownAnnotatedText(game: Game, nbaWeights: RubricWeights, wnbaWeights: RubricWeights) = buildAnnotatedString {
+private fun breakdownAnnotatedText(game: Game, nbaWeights: RubricWeights, wnbaWeights: RubricWeights, mlbWeights: MlbRubricWeights) = buildAnnotatedString {
     val facts = breakdownFacts(game)
     append(if (facts.isEmpty()) "No standout moments logged" else facts.joinToString(" · "))
     append(" · Watchability ")
     withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")) {
-        append("${game.effectiveScore(nbaWeights, wnbaWeights) ?: 0}/100")
+        append("${game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights) ?: 0}/100")
     }
 }
 
