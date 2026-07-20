@@ -11,9 +11,21 @@ import { resolveSeasonYear } from "./seasonYear";
 import { preferDarkLogoVariant } from "./teamLogos";
 import { LeagueGroup, SPORT_FOR_LEAGUE_GROUP, StatCategoryJson, StatLeaderJson, StatsResponseJson } from "./types";
 
+interface ShownCategory {
+  key: string;
+  label: string;
+  abbr: string;
+  // Basketball's leaders' own displayValue is already a clean per-category
+  // number (e.g. "32.1" for PPG) - safe to show as-is, no formatter needed.
+  // MLB's is NOT (see EspnLeaderEntry's displayValue comment) - its shown
+  // categories below each supply a formatter that builds a clean value from
+  // the entry's raw numeric `value` instead.
+  format?: (entry: EspnLeaderEntry) => string;
+}
+
 // The classic box-score categories - matches what other sports apps lead
 // with, out of the ~16 categories ESPN exposes.
-const SHOWN_CATEGORIES: Array<{ key: string; label: string; abbr: string }> = [
+const SHOWN_CATEGORIES: ShownCategory[] = [
   { key: "pointsPerGame", label: "Points Per Game", abbr: "PPG" },
   { key: "reboundsPerGame", label: "Rebounds Per Game", abbr: "REB" },
   { key: "assistsPerGame", label: "Assists Per Game", abbr: "AST" },
@@ -21,20 +33,38 @@ const SHOWN_CATEGORIES: Array<{ key: string; label: string; abbr: string }> = [
   { key: "blocksPerGame", label: "Blocks Per Game", abbr: "BLK" },
 ];
 
+// Baseball convention: batting average is shown without its leading zero
+// (".335", never "0.335"); ERA keeps it ("1.62"). Falls back to the raw
+// displayValue on the rare entry missing a numeric value rather than
+// showing nothing.
+function formatAvg(entry: EspnLeaderEntry): string {
+  return entry.value !== undefined ? entry.value.toFixed(3).replace(/^0/, "") : entry.displayValue;
+}
+function formatEra(entry: EspnLeaderEntry): string {
+  return entry.value !== undefined ? entry.value.toFixed(2) : entry.displayValue;
+}
+// Home runs/RBIs/strikeouts/wins are all whole-number counting stats.
+function formatCount(entry: EspnLeaderEntry): string {
+  return entry.value !== undefined ? String(Math.round(entry.value)) : entry.displayValue;
+}
+
 // MLB's classic leaderboard, split evenly across batting and pitching (the
 // two fundamentally different stat families baseball has, unlike
 // basketball's single all-around box score) - confirmed directly against a
 // real leaders response's full category list (avg/homeRuns/RBIs/runs/OPS/
 // onBasePct/slugAvg/ERA/wins/strikeouts/saves/WHIP/qualityStarts/
 // opponentAvg/stolenBases/hits/holds/MLBRating/avgGameScore/WARBR - 19
-// categories total), not guessed.
-const MLB_SHOWN_CATEGORIES: Array<{ key: string; label: string; abbr: string }> = [
-  { key: "avg", label: "Batting Average", abbr: "AVG" },
-  { key: "homeRuns", label: "Home Runs", abbr: "HR" },
-  { key: "RBIs", label: "Runs Batted In", abbr: "RBI" },
-  { key: "ERA", label: "Earned Run Average", abbr: "ERA" },
-  { key: "strikeouts", label: "Strikeouts", abbr: "K" },
-  { key: "wins", label: "Wins", abbr: "W" },
+// categories total), not guessed. Each supplies its own [format] - directly
+// using displayValue here (as basketball does) put the player's entire
+// season batting/pitching line next to their name instead of one number,
+// confirmed directly against a real response before switching to [value].
+const MLB_SHOWN_CATEGORIES: ShownCategory[] = [
+  { key: "avg", label: "Batting Average", abbr: "AVG", format: formatAvg },
+  { key: "homeRuns", label: "Home Runs", abbr: "HR", format: formatCount },
+  { key: "RBIs", label: "Runs Batted In", abbr: "RBI", format: formatCount },
+  { key: "ERA", label: "Earned Run Average", abbr: "ERA", format: formatEra },
+  { key: "strikeouts", label: "Strikeouts", abbr: "K", format: formatCount },
+  { key: "wins", label: "Wins", abbr: "W", format: formatCount },
 ];
 
 const LEADERS_PER_CATEGORY = 10;
@@ -42,7 +72,8 @@ const LEADERS_PER_CATEGORY = 10;
 async function resolveLeader(
   entry: EspnLeaderEntry,
   athleteNameCache: Map<string, string>,
-  teamInfoCache: Map<string, { abbreviation: string; logo?: string }>
+  teamInfoCache: Map<string, { abbreviation: string; logo?: string }>,
+  formatValue: (entry: EspnLeaderEntry) => string = (e) => e.displayValue
 ): Promise<StatLeaderJson> {
   let name = athleteNameCache.get(entry.athlete.$ref);
   if (!name) {
@@ -56,7 +87,7 @@ async function resolveLeader(
     teamInfoCache.set(entry.team.$ref, team);
   }
 
-  return { name, team: team.abbreviation, teamLogo: preferDarkLogoVariant(team.logo), value: entry.displayValue };
+  return { name, team: team.abbreviation, teamLogo: preferDarkLogoVariant(team.logo), value: formatValue(entry) };
 }
 
 /** Cached once per calendar day per league group - same reasoning as standingsService. */
@@ -98,7 +129,7 @@ export async function getStats(leagueGroup: LeagueGroup): Promise<StatsResponseJ
     const leaders = await Promise.all(
       category.leaders
         .slice(0, LEADERS_PER_CATEGORY)
-        .map((entry) => resolveLeader(entry, athleteNameCache, teamInfoCache))
+        .map((entry) => resolveLeader(entry, athleteNameCache, teamInfoCache, shown.format))
     );
     categories.push({ key: shown.key, label: shown.label, abbr: shown.abbr, leaders });
   }

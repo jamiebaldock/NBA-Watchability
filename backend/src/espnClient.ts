@@ -345,7 +345,19 @@ export async function fetchStandingsForSport(sportSlug: string, league: string, 
 }
 
 export interface EspnLeaderEntry {
+  // For basketball, this is already a clean per-category number (e.g.
+  // "32.1" for points-per-game) - safe to show as-is. For MLB it is NOT:
+  // confirmed directly against a real response that baseball's leaders
+  // endpoint puts the player's entire season batting/pitching line here
+  // (e.g. "130-388, 9 HR, 6 3B, 27 2B, 46 RBI, 61 R, 20 BB, 18 SB, 59 K"),
+  // not a single value - statsService.ts's MLB path formats [value] itself
+  // per category instead of using this field. Kept on the type since
+  // basketball still reads it directly.
   displayValue: string;
+  // The full-precision numeric stat (e.g. avg 0.3350515...) - present on
+  // both sports' entries, but only actually consumed by statsService.ts's
+  // MLB per-category formatter today (basketball uses displayValue).
+  value?: number;
   athlete: { $ref: string };
   team: { $ref: string };
 }
