@@ -22,7 +22,7 @@ import { League } from "./espnClient";
 import { FinalRubric, setFinalRubric, setMlbFinalRubric, setNflFinalRubric, setSeasonStageLabel, upsertBaseEntry } from "./gameStore";
 import { COMPETITION_LABEL as MLB_COMPETITION_LABEL } from "./mlbGamesService";
 import { computeMlbWatchabilityScore, MlbRubricInputs, tierForMlbScore } from "./mlbRubric";
-import { COMPETITION_LABEL as NFL_COMPETITION_LABEL } from "./nflGamesService";
+import { deriveNflCompetitionLabel } from "./nflGamesService";
 import { computeNflWatchabilityScore, NflRubricInputs, tierForNflScore } from "./nflRubric";
 import { LeagueGroup, StarPerformance } from "./types";
 
@@ -197,6 +197,14 @@ function migrateMlbFile(fileName: string): number {
 interface NflHistoricalGame {
   eventId: string;
   date: string;
+  // Needed to derive the exact same real per-round season_stage_label the
+  // live pipeline does (deriveNflCompetitionLabel) instead of every
+  // backfilled game getting the same generic label regardless of
+  // postseason status - see that function's own comment for why this
+  // matters (it's what lets gameStore.ts's getMostRecentFinalsEnd actually
+  // find the Super Bowl and correctly close out "This season").
+  seasonType: number;
+  weekNumber?: number;
   away: string;
   home: string;
   awayScore: number;
@@ -234,7 +242,7 @@ function migrateNflFile(fileName: string): number {
       tipoffUtc: g.date,
       status: "final",
     });
-    setSeasonStageLabel(g.eventId, NFL_COMPETITION_LABEL);
+    setSeasonStageLabel(g.eventId, deriveNflCompetitionLabel(g.seasonType, g.weekNumber));
 
     const rubricInputs: NflRubricInputs = {
       finalMargin: g.finalMargin,

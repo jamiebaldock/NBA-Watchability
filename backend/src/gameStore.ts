@@ -821,7 +821,10 @@ export function earliestGameDate(leagueGroup?: LeagueGroup): string | undefined 
  */
 export function getMostRecentFinalsEnd(leagueGroup: LeagueGroup): string | undefined {
   const row = db
-    .prepare(`SELECT MAX(tipoff_utc) as end FROM games WHERE league_group = ? AND season_stage_label LIKE '%Playoffs: Finals%'`)
+    .prepare(
+      `SELECT MAX(tipoff_utc) as end FROM games
+       WHERE league_group = ? AND (season_stage_label LIKE '%Playoffs: Finals%' OR season_stage_label LIKE '%Super Bowl%')`
+    )
     .get(leagueGroup) as { end: string | null };
   return row.end ?? undefined;
 }
@@ -831,10 +834,16 @@ export function getMostRecentFinalsEnd(leagueGroup: LeagueGroup): string | undef
 // June 2026 conclude the "2025-26" season, so the next one is "2026-27",
 // and finalsEndTipoff's own calendar year IS that next season's start
 // year under this convention). WNBA never spans a year boundary, so its
-// next season is simply next calendar year.
+// next season is simply next calendar year. NFL is labeled by its own start
+// year too (a "2025" season runs Sept 2025 - Feb 2026, Super Bowl LX played
+// in calendar year 2026) - finalsEndTipoff's own calendar year IS already
+// the next season's label (the Super Bowl happens in the year *after* the
+// season's own label year), unlike WNBA where the label year and the
+// Finals-end year are the same and the next season needs +1.
 function upcomingSeasonLabel(finalsEndTipoff: string, leagueGroup: LeagueGroup): string {
   const finalsYear = new Date(finalsEndTipoff).getUTCFullYear();
   if (leagueGroup === "wnba") return String(finalsYear + 1);
+  if (leagueGroup === "nfl") return String(finalsYear);
   return `${finalsYear}-${String((finalsYear + 1) % 100).padStart(2, "0")}`;
 }
 
@@ -863,15 +872,24 @@ export function seasonLabelForTipoff(
   const date = new Date(tipoffUtc);
   const year = date.getUTCFullYear();
   if (leagueGroup === "wnba") return String(year);
+  // NFL: single-year label like WNBA (not hyphenated), but the season DOES
+  // cross the year boundary the way NBA's does (a "2025" season's real
+  // games run Sept 2025 - Feb 2026) - September (real regular-season start
+  // month, confirmed live) is the cutover, mirroring NBA's own
+  // "use the real season-start month" convention below rather than an
+  // arbitrary buffer month.
+  if (leagueGroup === "nfl") return String(date.getUTCMonth() >= 8 ? year : year - 1);
   const startYear = date.getUTCMonth() >= 9 ? year : year - 1;
   return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
 }
 
 // The nominal start date a seasonLabelForTipoff-style label itself begins
 // on - the inverse of that function's own math (WNBA: Jan 1 of the label's
-// year; NBA: Oct 1 of the label's start year).
+// year; NBA: Oct 1 of the label's start year; NFL: Sept 1 of the label's
+// year, matching seasonLabelForTipoff's own September cutover).
 function seasonStartDateForLabel(label: string, leagueGroup: LeagueGroup): string {
   if (leagueGroup === "wnba") return `${label}-01-01T00:00:00.000Z`;
+  if (leagueGroup === "nfl") return `${label}-09-01T00:00:00.000Z`;
   const startYear = label.slice(0, 4);
   return `${startYear}-10-01T00:00:00.000Z`;
 }

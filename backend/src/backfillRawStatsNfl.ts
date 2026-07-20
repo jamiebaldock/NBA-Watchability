@@ -39,6 +39,17 @@ interface EspnScoreboardEvent {
   id: string;
   date: string;
   season?: { type: number; slug: string };
+  // Only meaningful when season.type===3 (postseason) - reliably
+  // distinguishes each round (1=Wild Card ... 5=Super Bowl), confirmed
+  // directly against real data. Captured here so the historical backfill
+  // can derive the exact same real per-round season_stage_label
+  // (nflGamesService.ts's deriveNflCompetitionLabel) the live pipeline
+  // does, instead of every backfilled game getting the same generic
+  // "Regular Season" label regardless of postseason status - which would
+  // make the Super Bowl (the one game gameStore.ts's
+  // getMostRecentFinalsEnd needs to find the real season boundary)
+  // indistinguishable from a Week 1 game.
+  week?: { number: number };
   competitions: Array<{ status: { type: { state: string } } }>;
 }
 
@@ -239,6 +250,15 @@ export interface NflRawGame {
   eventId: string;
   season: string;
   date: string;
+  // ESPN's season type (2=regular, 3=postseason) and, when postseason, the
+  // week number that distinguishes each round - captured so
+  // migrateToGameStore.ts's historical backfill can derive the exact same
+  // real per-round season_stage_label the live pipeline does
+  // (nflGamesService.ts's deriveNflCompetitionLabel), rather than every
+  // backfilled game getting the same generic label regardless of
+  // postseason status.
+  seasonType: number;
+  weekNumber?: number;
   away: string;
   home: string;
   awayScore: number;
@@ -286,7 +306,14 @@ async function fetchSummary(eventId: string): Promise<EspnSummary> {
   return getJson<EspnSummary>(`${BASE_PATH}/summary?event=${eventId}`);
 }
 
-export function mapGame(eventId: string, season: string, date: string, summary: EspnSummary): NflRawGame | null {
+export function mapGame(
+  eventId: string,
+  season: string,
+  date: string,
+  summary: EspnSummary,
+  seasonType: number,
+  weekNumber: number | undefined
+): NflRawGame | null {
   const competition = summary.header.competitions[0];
   if (!competition?.status.type.completed) return null;
 
@@ -316,6 +343,8 @@ export function mapGame(eventId: string, season: string, date: string, summary: 
     eventId,
     season,
     date,
+    seasonType,
+    weekNumber,
     away: away.team.displayName,
     home: home.team.displayName,
     awayScore,
@@ -362,7 +391,7 @@ async function main() {
         await sleep(REQUEST_DELAY_MS);
         if (!summary) continue;
 
-        const mapped = mapGame(event.id, SEASON_WINDOW.label, event.date, summary);
+        const mapped = mapGame(event.id, SEASON_WINDOW.label, event.date, summary, event.season?.type ?? 2, event.week?.number);
         if (mapped) gamesById.set(event.id, mapped);
       }
     }

@@ -41,6 +41,17 @@ export interface EspnNflEvent {
   // nflGamesService.ts), same "skip preseason" rule
   // backfillRawStatsNfl.ts already validated against real data.
   season?: { type: number; slug: string };
+  // Only meaningful when season.type===3 (postseason) - confirmed directly
+  // against real ESPN data that week.number reliably distinguishes each
+  // postseason round: 1=Wild Card, 2=Divisional Round, 3=Conference
+  // Championship, 4=Pro Bowl (exhibition, not a real competitive game),
+  // 5=Super Bowl. Used to derive a real per-round season_stage_label
+  // (deriveNflCompetitionLabel in nflGamesService.ts) instead of the single
+  // fixed "NFL - Regular Season" string every game used to get regardless
+  // of postseason status - which meant the Super Bowl (the real season-end
+  // marker every other league group needs, see gameStore.ts's
+  // getMostRecentFinalsEnd) was indistinguishable from a Week 1 game.
+  week?: { number: number };
   competitions: Array<{
     status: EspnNflStatus;
     competitors: EspnNflCompetitor[];
@@ -170,6 +181,7 @@ interface EspnNflTeamScheduleEvent {
   id: string;
   date: string;
   seasonType?: { type: number };
+  week?: { number: number };
   competitions: Array<{
     status: EspnNflStatus;
     competitors: Array<{
@@ -195,6 +207,7 @@ function toStandardNflEvent(raw: EspnNflTeamScheduleEvent): EspnNflEvent {
     id: raw.id,
     date: raw.date,
     season: raw.seasonType ? { type: raw.seasonType.type, slug: "" } : undefined,
+    week: raw.week,
     competitions: raw.competitions.map((c) => ({
       status: c.status,
       competitors: c.competitors.map((comp) => ({

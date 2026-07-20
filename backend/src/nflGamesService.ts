@@ -59,8 +59,41 @@ function fallbackHook(away: string, home: string): string {
   return `${away} at ${home}.`;
 }
 
-// Exported so migrateToGameStore.ts's NFL historical backfill can stamp the exact same label live games get, rather than duplicating the string.
+// Fallback/regular-season label - exported so migrateToGameStore.ts's NFL
+// historical backfill can stamp the exact same default live games get,
+// rather than duplicating the string.
 export const COMPETITION_LABEL = "NFL - Regular Season";
+
+// Real per-round postseason labels, confirmed directly against ESPN data
+// (not assumed): week.number reliably distinguishes each round - 1=Wild
+// Card, 2=Divisional Round, 3=Conference Championship, 4=Pro Bowl
+// (exhibition, not a real competitive game, kept for completeness), 5=Super
+// Bowl. This is what actually fixes "This season" showing stale games from
+// the just-completed season for NFL specifically: every game used to get
+// the identical fixed COMPETITION_LABEL regardless of postseason status, so
+// the Super Bowl - the one game every other league group's season-boundary
+// detection needs (gameStore.ts's getMostRecentFinalsEnd, which searches for
+// a "Finals"/"Super Bowl"-labeled game) - was indistinguishable from a
+// regular Week 1 game. Exported so migrateToGameStore.ts's historical
+// backfill derives the exact same label for already-played games, not just
+// new ones the live pipeline touches going forward.
+export function deriveNflCompetitionLabel(seasonType: number | undefined, weekNumber: number | undefined): string {
+  if (seasonType !== 3) return COMPETITION_LABEL;
+  switch (weekNumber) {
+    case 1:
+      return "NFL - Playoffs: Wild Card";
+    case 2:
+      return "NFL - Playoffs: Divisional Round";
+    case 3:
+      return "NFL - Playoffs: Conference Championship";
+    case 4:
+      return "NFL - Pro Bowl";
+    case 5:
+      return "NFL - Playoffs: Super Bowl";
+    default:
+      return "NFL - Playoffs";
+  }
+}
 
 async function ensureNflPregamePreview(row: GameRow): Promise<void> {
   if (row.hook !== null) return; // already generated
@@ -125,7 +158,7 @@ async function processNflEvent(event: EspnNflEvent): Promise<GameJson> {
     status
   });
   updateStatus(event.id, status);
-  setSeasonStageLabel(event.id, COMPETITION_LABEL);
+  setSeasonStageLabel(event.id, deriveNflCompetitionLabel(event.season?.type, event.week?.number));
 
   let row = getGame(event.id)!;
 
