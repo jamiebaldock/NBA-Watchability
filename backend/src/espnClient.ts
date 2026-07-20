@@ -132,6 +132,20 @@ interface EspnTeamScheduleLogo {
 interface EspnTeamScheduleEvent {
   id: string;
   date: string;
+  // The season-type marker here lives at event.seasonType.type (confirmed
+  // directly - {id, type, name, abbreviation}, e.g. type:1/"Preseason",
+  // type:2/"Regular Season"), NOT event.season.slug like the scoreboard's
+  // own shape (that event.season field exists here too, but only ever
+  // carries {year, displayName} - no slug at all). Without mapping this
+  // back into the slug string gameMapper.ts's deriveSeasonStage actually
+  // switches on, every game sourced from this endpoint silently got
+  // season=undefined forever, so the Favorites tab's competition label (and
+  // therefore its league-logo tile, which only renders once a real label
+  // exists - see GameCard.kt's CompetitionLabelWithLogo) never showed for
+  // ANY favorited team's upcoming/live game, NBA and WNBA alike - not a
+  // WNBA-specific bug, just more visible there since WNBA teams are
+  // favorited more often to check the Games page for.
+  seasonType?: { type: number };
   competitions: Array<{
     status: EspnStatus;
     competitors: Array<{
@@ -152,10 +166,26 @@ function logoFromLogos(logos: EspnTeamScheduleLogo[] | undefined, rel: string): 
   return logos?.find((l) => l.rel.includes(rel))?.href;
 }
 
+// Same 1/2/3 preseason/regular/postseason convention every other ESPN
+// endpoint in this codebase already uses (confirmed live: type:1 -> real
+// "Preseason" games on this endpoint). "play-in-season" has no distinct
+// numeric marker on this endpoint as far as could be checked - a play-in
+// game here falls under type 3 same as the rest of the postseason, so it
+// reads as a plain "Playoffs" label rather than the distinct "Play-In
+// Tournament" text the day-based Games tab shows for the same game -
+// acceptable rather than guessing at an unconfirmed 4th value.
+function seasonSlugFromType(type: number | undefined): string | undefined {
+  if (type === 1) return "preseason";
+  if (type === 2) return "regular-season";
+  if (type === 3) return "post-season";
+  return undefined;
+}
+
 function toStandardEvent(raw: EspnTeamScheduleEvent): EspnEvent {
   return {
     id: raw.id,
     date: raw.date,
+    season: raw.seasonType ? { type: raw.seasonType.type, slug: seasonSlugFromType(raw.seasonType.type) ?? "" } : undefined,
     competitions: raw.competitions.map((c) => ({
       status: c.status,
       competitors: c.competitors.map((comp) => ({

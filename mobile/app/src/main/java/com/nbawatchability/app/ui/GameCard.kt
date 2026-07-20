@@ -559,7 +559,7 @@ private fun StatusIndicator(game: Game) {
             Text(text = "LIVE", color = LiveRed, style = MaterialTheme.typography.labelLarge)
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = "${periodLabel(game.quarter)} ${game.clock.orEmpty()}".trim(),
+                text = "${periodLabel(game.quarter, game.league)} ${game.clock.orEmpty()}".trim(),
                 color = TextSecondary,
                 style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = TABULAR_NUMS)
             )
@@ -593,10 +593,41 @@ private fun PulsingDot(color: Color) {
     )
 }
 
-private fun periodLabel(quarter: Int?): String = when {
-    quarter == null -> ""
-    quarter <= 4 -> "Q$quarter"
-    else -> "OT${quarter - 4}"
+// game.quarter is ESPN's raw status.period number for whatever sport this
+// game is - basketball/football genuinely call that unit a "quarter", but
+// baseball's is an inning and hockey's is a period, so a live tile was
+// showing "Q3" for a hockey game's 3rd period (and a baseball game's 3rd
+// inning) before this was made sport-aware. league here is Game.league
+// ("nba"/"wnba"/"summer"/"mlb"/"nfl"/"nhl"), not the LeagueGroup enum -
+// same raw string leagueGroupOf/isSummerLeague already dispatch on.
+private fun periodLabel(quarter: Int?, league: String): String {
+    if (quarter == null) return ""
+    return when (league) {
+        // Baseball has no overtime concept - extra innings just keep
+        // counting past 9 with the same ordinal-number convention.
+        "mlb" -> "${ordinal(quarter)}"
+        // Regulation is 3 periods, not 4 - period 4 is overtime, 5 is a
+        // shootout (nhlEspnClient.ts's own play-by-play uses the same
+        // period-5-is-SO convention this mirrors).
+        "nhl" -> when {
+            quarter <= 3 -> "${ordinal(quarter)} Period"
+            quarter == 4 -> "OT"
+            else -> "SO"
+        }
+        // "nba"/"wnba"/"summer"/"nfl" (and any future basketball/football
+        // addition) - both sports genuinely call this a quarter.
+        else -> if (quarter <= 4) "Q$quarter" else "OT${quarter - 4}"
+    }
+}
+
+private fun ordinal(n: Int): String {
+    val suffix = if (n % 100 in 11..13) "th" else when (n % 10) {
+        1 -> "st"
+        2 -> "nd"
+        3 -> "rd"
+        else -> "th"
+    }
+    return "$n$suffix"
 }
 
 // ESPN omits the seconds field when it's :00 (e.g. "19:30Z" not "19:30:00Z"),

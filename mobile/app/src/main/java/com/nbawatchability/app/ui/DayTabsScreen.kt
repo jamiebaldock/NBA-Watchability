@@ -164,10 +164,12 @@ fun DayTabsScreen(
                     )
                 },
                 actions = {
-                    // Only shown for leagues with a full-season range loaded
-                    // (currently WNBA) - a calendar has nothing useful to
-                    // offer over the swipeable tabs themselves for NBA's
-                    // narrow +/-7 day window.
+                    // Only shown for leagues with a full-season range loaded -
+                    // whichever leagues the backend's /season-window endpoint
+                    // currently has real data for (all 5 as of this build,
+                    // see seasonWindowService.ts), not a fixed list - a
+                    // calendar has nothing useful to offer over the swipeable
+                    // tabs themselves for a fixed narrow +/-7 day window.
                     if (fullSeasonRange != null) {
                         IconButton(onClick = { showCalendar = true }, enabled = !isJumpingToDate) {
                             if (isJumpingToDate) {
