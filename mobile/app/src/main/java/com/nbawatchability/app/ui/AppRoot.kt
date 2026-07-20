@@ -16,11 +16,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.SportsBasketball
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,7 +62,12 @@ import com.nbawatchability.app.ui.theme.TierWorthYourTime
 // dependency, but SettingsScreen.kt (same package) still needs the enum
 // itself to build the picker UI.
 enum class BottomNavTab(val label: String, val icon: ImageVector) {
-    GAMES("Games", Icons.Default.SportsBasketball),
+    // Enum constant name stays GAMES (not renamed to SCHEDULE) even though
+    // the visible label changed - AppSettingsRepository persists the
+    // default-landing-tab choice as this constant's raw .name string (see
+    // comment above), so renaming it would silently reset any existing
+    // user's saved choice back to the default.
+    GAMES("Schedule", Icons.Default.CalendarMonth),
     STARRED("Starred", Icons.Default.Star),
     // Team-crest icon, distinct from Starred's star (manually-starred
     // individual games) - this tab is scoped to favorited teams/players

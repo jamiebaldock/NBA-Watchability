@@ -304,7 +304,7 @@ private fun CompetitionLabelWithLogo(label: String, league: LeagueGroup) {
         AsyncImage(
             model = themeAwareLogoUrl(league.logoUrl),
             contentDescription = league.displayName,
-            modifier = Modifier.size(14.dp)
+            modifier = Modifier.size(28.dp)
         )
         if (remainder.isNotEmpty()) {
             Spacer(modifier = Modifier.width(4.dp))
