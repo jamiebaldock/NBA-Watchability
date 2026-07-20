@@ -4,7 +4,7 @@
 // carries whichever two teams happened to play, so this hits ESPN's own
 // teams-list endpoint directly (espnClient.ts's fetchTeams), cached once
 // per day per leagueGroup like standings/stats.
-import { fetchTeams, fetchTeamsForSport } from "./espnClient";
+import { EspnTeam, fetchTeams, fetchTeamsForSport } from "./espnClient";
 import { preferDarkLogoVariant, teamLogoUrl } from "./teamLogos";
 import { loadLeagueCache, saveLeagueCache, todayKey } from "./leagueCache";
 import { LeagueGroup, TeamJson, TeamsResponseJson } from "./types";
@@ -34,6 +34,15 @@ const SPORT_SLUG_FOR_LEAGUE_GROUP: Record<"mlb" | "nfl" | "nhl", string> = {
   nhl: "hockey"
 };
 
+// The /teams list endpoint (unlike the scoreboard) never has a singular
+// team.logo field for any sport, including basketball - confirmed directly
+// against a real response - only this logos[] array. Same "scoreboard
+// variant first, default as fallback" preference every other logo lookup in
+// this app already uses.
+function logoFromTeamLogos(logos: EspnTeam["logos"]): string | undefined {
+  return logos?.find((l) => l.rel.includes("scoreboard"))?.href ?? logos?.find((l) => l.rel.includes("default"))?.href;
+}
+
 async function getSportTeams(leagueGroup: "mlb" | "nfl" | "nhl"): Promise<TeamJson[]> {
   const teams = await fetchTeamsForSport(SPORT_SLUG_FOR_LEAGUE_GROUP[leagueGroup], leagueGroup);
   return teams
@@ -41,8 +50,11 @@ async function getSportTeams(leagueGroup: "mlb" | "nfl" | "nhl"): Promise<TeamJs
       id: t.id,
       name: t.displayName,
       // No static per-team logo map exists for these sports yet (teamLogos.ts
-      // is basketball-only) - ESPN's own logo field is the only source here.
-      logo: t.logo
+      // is basketball-only) - ESPN's own logos[] array is the source here.
+      // t.logo itself is never populated on this endpoint's response shape
+      // (see EspnTeam's own comment) - reading it directly was the bug that
+      // silently left every MLB/NFL/NHL favorited team with no logo at all.
+      logo: preferDarkLogoVariant(logoFromTeamLogos(t.logos))
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

@@ -25,7 +25,15 @@ export interface EspnTeam {
   id: string;
   name: string;
   displayName: string;
+  // Only present on the scoreboard's competitor.team shape (confirmed
+  // directly - a real singular URL there). The /teams list endpoint
+  // (fetchTeams/fetchTeamsForSport below) has NO such field on any sport,
+  // basketball included - it only ever returns the logos[] array below, the
+  // same "logos[] not logo" shape the team-schedule endpoints already have
+  // their own documented quirk for. teamsService.ts's getSportTeams reads
+  // logos instead of this field for exactly that reason.
   logo?: string;
+  logos?: Array<{ href: string; rel: string[] }>;
 }
 
 export interface EspnCompetitor {

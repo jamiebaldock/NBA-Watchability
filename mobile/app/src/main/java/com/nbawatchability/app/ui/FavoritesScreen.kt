@@ -523,9 +523,10 @@ private fun FavoritePlayersLeagueGroup(leagueLabel: String, players: List<Favori
 }
 
 /**
- * A real headshot photo when [headshotUrl] is present (NBA/WNBA only); a
- * tinted initials circle otherwise (MLB, or any player favorited before
- * this field existed) - never a broken-image icon.
+ * A real headshot photo when [headshotUrl] is present (NBA/WNBA/MLB/NFL/NHL
+ * all carry one); a tinted initials circle otherwise (any player favorited
+ * before this field existed, or one ESPN itself has no photo for) - never a
+ * broken-image icon.
  */
 @Composable
 private fun PlayerAvatar(name: String, headshotUrl: String?) {
