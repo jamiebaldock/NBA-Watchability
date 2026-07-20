@@ -420,3 +420,17 @@ export async function fetchNews(league: ContentLeague, limit: number): Promise<E
   );
   return data.articles ?? [];
 }
+
+/**
+ * Generic sport-namespace-parameterized sibling of fetchNews - see
+ * fetchTeamsForSport's comment. Confirmed directly against a real MLB
+ * response (baseball/mlb/news): identical article shape (id/headline/
+ * description/published/images[]/links.web.href), so EspnNewsArticle needed
+ * no changes to work for MLB.
+ */
+export async function fetchNewsForSport(sportSlug: string, league: string, limit: number): Promise<EspnNewsArticle[]> {
+  const data = await getJson<{ articles?: EspnNewsArticle[] }>(
+    `https://site.api.espn.com/apis/site/v2/sports/${sportSlug}/${league}/news?limit=${limit}`
+  );
+  return data.articles ?? [];
+}
