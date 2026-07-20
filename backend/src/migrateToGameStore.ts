@@ -19,7 +19,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { League } from "./espnClient";
-import { FinalRubric, setFinalRubric, upsertBaseEntry } from "./gameStore";
+import { FinalRubric, setFinalRubric, setMlbFinalRubric, setSeasonStageLabel, upsertBaseEntry } from "./gameStore";
+import { COMPETITION_LABEL as MLB_COMPETITION_LABEL } from "./mlbGamesService";
+import { computeMlbWatchabilityScore, MlbRubricInputs, tierForMlbScore } from "./mlbRubric";
 import { LeagueGroup, StarPerformance } from "./types";
 
 interface HistoricalGame {
@@ -92,11 +94,105 @@ function migrateFile(fileName: string, league: League, leagueGroup: LeagueGroup)
   return games.length;
 }
 
+// Raw per-game facts from backfillRawStatsMlb.ts's real 2025-season pull
+// (backend/data/mlbRawStats.json) - gathered for rubric calibration, not
+// gameStore seeding, so unlike HistoricalGame above this has no
+// precomputed score/tier; those are computed fresh below via the same
+// computeMlbWatchabilityScore/tierForMlbScore the live pipeline uses.
+interface MlbHistoricalGame {
+  eventId: string;
+  date: string;
+  away: string;
+  home: string;
+  awayScore: number;
+  homeScore: number;
+  finalMargin: number;
+  totalRuns: number;
+  extraInningsCount: number;
+  largestDeficitOvercome: number;
+  walkOff: boolean;
+  combinedHomeRuns: number;
+  maxHomeRunsByPlayer: number;
+  noHitter: boolean;
+  perfectGame: boolean;
+  shutout: boolean;
+  blownSave: boolean;
+  combinedErrors: number;
+}
+
+// MLB's analogue of migrateFile above - a separate function rather than a
+// generalized one because the source data has no precomputed score/tier
+// (mlbRawStats.json predates the rubric itself) and the column set is
+// narrower (setMlbFinalRubric, not setFinalRubric - see gameStore.ts's
+// MlbFinalResult comment for why MLB doesn't get the full basketball-shaped
+// column set). This is what actually fixes the Favorites tab's MLB gap: once
+// a game's score/tier is cached here, getMlbTeamSchedule's processMlbEvent
+// finds row.score already non-null and skips the live per-game
+// fetchMlbSummary call entirely, so a newly-favorited team's ~90-100
+// already-final games resolve from gameStore instantly instead of one slow
+// sequential ESPN round-trip per game.
+function migrateMlbFile(fileName: string): number {
+  const path = join(DATA_DIR, fileName);
+  const { games } = JSON.parse(readFileSync(path, "utf8")) as { games: MlbHistoricalGame[] };
+
+  for (const g of games) {
+    upsertBaseEntry({
+      eventId: g.eventId,
+      league: "mlb",
+      leagueGroup: "mlb",
+      away: g.away,
+      home: g.home,
+      tipoffUtc: g.date,
+      status: "final",
+    });
+    setSeasonStageLabel(g.eventId, MLB_COMPETITION_LABEL);
+
+    const rubricInputs: MlbRubricInputs = {
+      finalMargin: g.finalMargin,
+      totalRuns: g.totalRuns,
+      largestDeficitOvercome: g.largestDeficitOvercome,
+      walkOff: g.walkOff,
+      extraInningsCount: g.extraInningsCount,
+      combinedHomeRuns: g.combinedHomeRuns,
+      maxHomeRunsByPlayer: g.maxHomeRunsByPlayer,
+      teamBlanked: g.shutout,
+      noHitter: g.noHitter,
+      perfectGame: g.perfectGame,
+      blownSave: g.blownSave,
+      combinedErrors: g.combinedErrors,
+    };
+    // No stakes for historical rows, same reason the basketball migration
+    // above never calls setPreview for backfilled games - stakes comes from
+    // an LLM call keyed on real-time context a season-old game doesn't have.
+    const score = computeMlbWatchabilityScore(rubricInputs, undefined).total;
+
+    setMlbFinalRubric(
+      g.eventId,
+      {
+        awayScore: g.awayScore,
+        homeScore: g.homeScore,
+        score,
+        tier: tierForMlbScore(score),
+        // Predates player-name capture (backfillRawStatsMlb.ts only recorded
+        // the max-HR *count*, not who hit them) - same gap documented on the
+        // basketball migration above.
+        standoutPerformers: [],
+        finalMargin: g.finalMargin,
+        largestDeficitOvercome: g.largestDeficitOvercome,
+      },
+      null
+    );
+  }
+
+  return games.length;
+}
+
 export function migrateHistoricalBackfill(): void {
   const nbaCount = migrateFile("historicalWatchability.json", "nba", "nba");
   const wnbaCount = migrateFile("historicalWatchabilityWnba.json", "wnba", "wnba");
+  const mlbCount = migrateMlbFile("mlbRawStats.json");
   console.log(
-    `migrateHistoricalBackfill: verified ${nbaCount} NBA and ${wnbaCount} WNBA historical games are present in gameStore.`
+    `migrateHistoricalBackfill: verified ${nbaCount} NBA, ${wnbaCount} WNBA, and ${mlbCount} MLB historical games are present in gameStore.`
   );
 }
 

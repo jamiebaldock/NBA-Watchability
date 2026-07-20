@@ -60,7 +60,9 @@ function fallbackHook(away: string, home: string): string {
   return `${away} at ${home}.`;
 }
 
-const COMPETITION_LABEL = "MLB - Regular Season";
+// Exported so migrateToGameStore.ts's MLB historical backfill can stamp the
+// exact same label live games get, rather than duplicating the string.
+export const COMPETITION_LABEL = "MLB - Regular Season";
 
 async function ensureMlbPregamePreview(row: GameRow): Promise<void> {
   if (row.hook !== null) return; // already generated
