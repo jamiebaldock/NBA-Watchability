@@ -323,12 +323,13 @@ private fun PickableTeamRow(team: Team, onClick: () -> Unit) {
 }
 
 // Circular headshot thumbnail, shown wherever a Player has one - real ESPN
-// photo URLs, present for NBA/WNBA and (as of MLB roster support) MLB
-// alike. Falls back to a colored initials circle when null (NFL/NHL, which
-// have no roster route built yet) - same visual pattern already used for
-// FavoritePlayer's own avatar on the Favorites tab's already-favorited
-// list (FavoritesScreen.kt's private PlayerAvatar), replicated here rather
-// than shared since that one's private to its own file.
+// photo URLs, present for NBA/WNBA/MLB/NFL alike. Falls back to a colored
+// initials circle when null (NHL, which has no roster route built yet, or
+// any individual player ESPN itself doesn't have a photo for) - same visual
+// pattern already used for FavoritePlayer's own avatar on the Favorites
+// tab's already-favorited list (FavoritesScreen.kt's private PlayerAvatar),
+// replicated here rather than shared since that one's private to its own
+// file.
 @Composable
 private fun PlayerHeadshot(name: String, url: String?) {
     if (url != null) {
