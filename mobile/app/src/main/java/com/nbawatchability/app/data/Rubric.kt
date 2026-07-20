@@ -200,30 +200,108 @@ private object MlbRubric {
 }
 
 /**
+ * Client-side port of backend/src/nflRubric.ts's computeNflWatchabilityScore
+ * - the NFL analogue of MlbRubric above, scaled by the user's own
+ * NflRubricWeights. Keep every bracket in sync with nflRubric.ts if that
+ * ever changes.
+ */
+private object NflRubric {
+    fun marginPoints(margin: Int): Int {
+        val m = abs(margin)
+        return when {
+            m <= 3 -> 25
+            m <= 8 -> 18
+            m <= 16 -> 10
+            m <= 24 -> 5
+            else -> 0
+        }
+    }
+
+    fun comebackPoints(largestDeficitOvercome: Int): Int = when {
+        largestDeficitOvercome >= 14 -> 18
+        largestDeficitOvercome >= 10 -> 12
+        largestDeficitOvercome >= 7 -> 6
+        else -> 0
+    }
+
+    fun leadChangePoints(leadChanges: Int): Int = when {
+        leadChanges >= 4 -> 12
+        leadChanges >= 2 -> 6
+        leadChanges >= 1 -> 3
+        else -> 0
+    }
+
+    fun overtimePoints(overtimePeriods: Int): Int = if (overtimePeriods >= 1) 12 else 0
+
+    fun decisiveScoreLatePoints(decisiveScoreLate: Boolean): Int = if (decisiveScoreLate) 15 else 0
+
+    fun turnoverPoints(combinedTurnovers: Int): Int = when {
+        combinedTurnovers >= 5 -> 8
+        combinedTurnovers >= 3 -> 4
+        else -> 0
+    }
+
+    fun defensiveOrSpecialTeamsTdPoints(defensiveOrSpecialTeamsTd: Boolean): Int = if (defensiveOrSpecialTeamsTd) 10 else 0
+
+    // Best-qualifying tier across 3 independent paths (passing/rushing/total TDs), not a sum.
+    fun starPoints(maxPassingYards: Int, maxRushingYards: Int, maxTotalTdsByPlayer: Int): Int = when {
+        maxPassingYards >= 400 || maxRushingYards >= 175 || maxTotalTdsByPlayer >= 5 -> 15
+        maxPassingYards >= 350 || maxRushingYards >= 150 || maxTotalTdsByPlayer >= 4 -> 8
+        maxPassingYards >= 300 || maxRushingYards >= 125 -> 4
+        else -> 0
+    }
+
+    fun totalPointsBonus(totalPoints: Int): Int = when {
+        totalPoints >= 65 -> 8
+        totalPoints >= 56 -> 4
+        else -> 0
+    }
+
+    /** No overall cap - mirrors basketball's/MLB's own computeScore, same reasoning. */
+    fun computeScore(inputs: NflRubricInputs, stakes: Int?, weights: NflRubricWeights): Int {
+        val margin = marginPoints(inputs.finalMargin) * weights.margin
+        val comeback = comebackPoints(inputs.largestDeficitOvercome) * weights.comeback
+        val leadChanges = leadChangePoints(inputs.leadChanges) * weights.leadChanges
+        val overtime = overtimePoints(inputs.overtimePeriods) * weights.overtime
+        val decisiveScoreLate = decisiveScoreLatePoints(inputs.decisiveScoreLate) * weights.decisiveScoreLate
+        val turnovers = turnoverPoints(inputs.combinedTurnovers) * weights.turnovers
+        val defensiveOrSpecialTeamsTd = defensiveOrSpecialTeamsTdPoints(inputs.defensiveOrSpecialTeamsTd) * weights.defensiveOrSpecialTeamsTd
+        val star = starPoints(inputs.maxPassingYards, inputs.maxRushingYards, inputs.maxTotalTdsByPlayer) * weights.star
+        val totalPoints = totalPointsBonus(inputs.totalPoints) * weights.totalPoints
+        val stakesPts = Rubric.stakesPoints(stakes) * weights.stakes
+
+        return (margin + comeback + leadChanges + overtime + decisiveScoreLate + turnovers + defensiveOrSpecialTeamsTd + star + totalPoints + stakesPts)
+            .roundToInt()
+    }
+}
+
+/**
  * Weight-adjusted score, or null if the game's outcome isn't revealed yet -
  * mirrors the same scoreVisible gate the server uses, so recomputing locally
  * never leaks a score early regardless of what weights are set. Dispatches
  * to whichever sport's rubric actually applies - Rubric.computeScore for
  * basketball (margin/clutch/comeback/lead-changes/overtime/star/stakes from
  * m/cb/lc/ot/c5/lcf/fp/bz/st), MlbRubric.computeScore for MLB (from
- * mlbInputs). Soccer support (EPL/La Liga/FIFA World Cup) was removed from
- * the live app - see archive/soccer/.
+ * mlbInputs), NflRubric.computeScore for NFL (from nflInputs). Soccer
+ * support (EPL/La Liga/FIFA World Cup) was removed from the live app - see
+ * archive/soccer/.
  */
-// Falls back to the server's own [score] for MLB only when mlbInputs is
-// missing (an older cached game that predates that field) - every game
-// scored after that field shipped gets the real weight-adjusted recompute,
-// same as NBA/WNBA.
-fun Game.effectiveScore(nbaWeights: RubricWeights, wnbaWeights: RubricWeights, mlbWeights: MlbRubricWeights): Int? =
+// Falls back to the server's own [score] for MLB/NFL only when their own
+// *Inputs field is missing (an older cached game that predates that field) -
+// every game scored after that field shipped gets the real weight-adjusted
+// recompute, same as NBA/WNBA.
+fun Game.effectiveScore(nbaWeights: RubricWeights, wnbaWeights: RubricWeights, mlbWeights: MlbRubricWeights, nflWeights: NflRubricWeights): Int? =
     if (scoreVisible && score != null) {
         when (league) {
             "mlb" -> mlbInputs?.let { MlbRubric.computeScore(it, stakes, mlbWeights) } ?: score
+            "nfl" -> nflInputs?.let { NflRubric.computeScore(it, stakes, nflWeights) } ?: score
             "wnba" -> Rubric.computeScore(this, wnbaWeights)
             else -> Rubric.computeScore(this, nbaWeights) // "nba" and "summer" - Summer League is NBA-affiliated, not a separate scoring path
         }
     } else null
 
-fun Game.effectiveTier(nbaWeights: RubricWeights, wnbaWeights: RubricWeights, mlbWeights: MlbRubricWeights): Tier? =
-    effectiveScore(nbaWeights, wnbaWeights, mlbWeights)?.let { Tier.fromScore(it, league) }
+fun Game.effectiveTier(nbaWeights: RubricWeights, wnbaWeights: RubricWeights, mlbWeights: MlbRubricWeights, nflWeights: NflRubricWeights): Tier? =
+    effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights)?.let { Tier.fromScore(it, league) }
 
 /**
  * One line of the game-detail popup's rubric-breakdown tab - a labeled
@@ -242,13 +320,20 @@ data class RubricBreakdownEntry(val label: String, val points: Float, val maxPoi
  * effectiveScore/effectiveTier already call, just surfaced individually
  * instead of summed, so this can never drift out of sync with the actual
  * total. Empty if the outcome isn't revealed yet (same scoreVisible gate as
- * effectiveScore). Dispatches to MLB's own dimensions/labels for MLB games
- * (mlbRubricBreakdown below) - basketball's fields (margin/comeback aside,
- * which MLB reuses for its own raw facts) don't apply to baseball at all.
+ * effectiveScore). Dispatches to MLB's/NFL's own dimensions/labels for MLB/
+ * NFL games (mlbRubricBreakdown/nflRubricBreakdown below) - basketball's
+ * fields (margin/comeback aside, which MLB/NFL reuse for their own raw
+ * facts) don't apply to either sport.
  */
-fun Game.rubricBreakdown(nbaWeights: RubricWeights, wnbaWeights: RubricWeights, mlbWeights: MlbRubricWeights): List<RubricBreakdownEntry> {
+fun Game.rubricBreakdown(
+    nbaWeights: RubricWeights,
+    wnbaWeights: RubricWeights,
+    mlbWeights: MlbRubricWeights,
+    nflWeights: NflRubricWeights
+): List<RubricBreakdownEntry> {
     if (!scoreVisible || score == null) return emptyList()
     if (league == "mlb") return mlbRubricBreakdown(mlbWeights)
+    if (league == "nfl") return nflRubricBreakdown(nflWeights)
     val isWnba = league == "wnba"
     val weights = if (isWnba) wnbaWeights else nbaWeights
     return listOf(
@@ -303,6 +388,39 @@ private fun Game.mlbRubricBreakdown(weights: MlbRubricWeights): List<RubricBreak
         ),
         RubricBreakdownEntry("Blown save", MlbRubric.blownSavePoints(inputs.blownSave) * weights.blownSave, 6f * weights.blownSave),
         RubricBreakdownEntry("Errors", MlbRubric.errorsPoints(inputs.combinedErrors) * weights.errors, 4f * weights.errors),
+        RubricBreakdownEntry("Stakes", Rubric.stakesPoints(stakes) * weights.stakes, 10f * weights.stakes)
+    )
+}
+
+/**
+ * NFL's own dimensions (backend/src/nflRubric.ts's NflScoreBreakdown),
+ * scaled by [weights] - mirrors mlbRubricBreakdown above. Empty if an older
+ * cached game predates the nflInputs field.
+ */
+private fun Game.nflRubricBreakdown(weights: NflRubricWeights): List<RubricBreakdownEntry> {
+    val inputs = nflInputs ?: return emptyList()
+    return listOf(
+        RubricBreakdownEntry("Margin", NflRubric.marginPoints(inputs.finalMargin) * weights.margin, 25f * weights.margin),
+        RubricBreakdownEntry("Comeback", NflRubric.comebackPoints(inputs.largestDeficitOvercome) * weights.comeback, 18f * weights.comeback),
+        RubricBreakdownEntry("Lead changes", NflRubric.leadChangePoints(inputs.leadChanges) * weights.leadChanges, 12f * weights.leadChanges),
+        RubricBreakdownEntry("Overtime", NflRubric.overtimePoints(inputs.overtimePeriods) * weights.overtime, 12f * weights.overtime),
+        RubricBreakdownEntry(
+            "Decisive late score",
+            NflRubric.decisiveScoreLatePoints(inputs.decisiveScoreLate) * weights.decisiveScoreLate,
+            15f * weights.decisiveScoreLate
+        ),
+        RubricBreakdownEntry("Turnovers", NflRubric.turnoverPoints(inputs.combinedTurnovers) * weights.turnovers, 8f * weights.turnovers),
+        RubricBreakdownEntry(
+            "Defensive/special-teams TD",
+            NflRubric.defensiveOrSpecialTeamsTdPoints(inputs.defensiveOrSpecialTeamsTd) * weights.defensiveOrSpecialTeamsTd,
+            10f * weights.defensiveOrSpecialTeamsTd
+        ),
+        RubricBreakdownEntry(
+            "Star performance",
+            NflRubric.starPoints(inputs.maxPassingYards, inputs.maxRushingYards, inputs.maxTotalTdsByPlayer) * weights.star,
+            15f * weights.star
+        ),
+        RubricBreakdownEntry("Total points", NflRubric.totalPointsBonus(inputs.totalPoints) * weights.totalPoints, 8f * weights.totalPoints),
         RubricBreakdownEntry("Stakes", Rubric.stakesPoints(stakes) * weights.stakes, 10f * weights.stakes)
     )
 }

@@ -11,6 +11,7 @@ import { BasketballLeagueGroup, LEAGUE_GROUPS } from "./gamesService";
 import { loadLeagueCache, saveLeagueCache, todayKey } from "./leagueCache";
 import { fetchMlbCalendarDates, fetchMlbScoreboard } from "./mlbEspnClient";
 import { isRealSeasonEvent } from "./mlbGamesService";
+import { fetchNflCalendarGroups } from "./nflEspnClient";
 import { LeagueGroup, SPORT_FOR_LEAGUE_GROUP } from "./types";
 
 export interface SeasonWindow {
@@ -116,17 +117,37 @@ async function getMlbSeasonWindow(): Promise<SeasonWindow | null> {
   return { start, end };
 }
 
+// NFL's calendar directly labels its Regular Season/Postseason groups with
+// real startDate/endDate (see nflEspnClient.ts's own comment on this shape)
+// - no day-by-day scan needed the way MLB's sparse calendar requires.
+// "start" is the Regular Season group's own startDate (preseason, value
+// "1", deliberately excluded - same "skip preseason" rule as everywhere
+// else in this build); "end" is the Postseason group's endDate if it
+// exists yet, falling back to the Regular Season's own endDate otherwise
+// (e.g. mid-season, before the postseason group's real dates are known).
+async function getNflSeasonWindow(): Promise<SeasonWindow | null> {
+  const groups = await fetchNflCalendarGroups(toEspnDate(new Date()));
+  const regularSeason = groups.find((g) => g.value === "2");
+  if (!regularSeason) return null;
+  const postseason = groups.find((g) => g.value === "3");
+
+  return {
+    start: regularSeason.startDate.slice(0, 10),
+    end: (postseason ?? regularSeason).endDate.slice(0, 10)
+  };
+}
+
 /** Cached once per calendar day per league group - same reasoning as standings/stats (ESPN's schedule doesn't change meaningfully more often than that). */
 export async function getSeasonWindow(leagueGroup: LeagueGroup): Promise<SeasonWindow | null> {
-  // Basketball and MLB both have a full-season browse/calendar-picker route
-  // built now - NFL/NHL still have no games pipeline at all, so they still
-  // fall through to null, the same "nothing to show yet" signal
+  // Basketball, MLB, and NFL all have a full-season browse/calendar-picker
+  // route built now - NHL still has no games pipeline at all, so it still
+  // falls through to null, the same "nothing to show yet" signal
   // GameListViewModel.kt's own comment says this endpoint is already
   // expected to return gracefully, not an error state. Checked before the
   // cache/basketball fallback below, which would otherwise crash indexing
   // LEAGUE_GROUPS with a leagueGroup it doesn't recognize.
   const sport = SPORT_FOR_LEAGUE_GROUP[leagueGroup];
-  if (sport !== "basketball" && sport !== "baseball") return null;
+  if (sport !== "basketball" && sport !== "baseball" && sport !== "football") return null;
 
   const dateKey = todayKey(new Date());
   const cached = loadLeagueCache<SeasonWindow>("seasonWindow", leagueGroup, dateKey);
@@ -135,7 +156,11 @@ export async function getSeasonWindow(leagueGroup: LeagueGroup): Promise<SeasonW
   // Safe cast: the SPORT_FOR_LEAGUE_GROUP guard above already ruled out
   // every basketball-sport LeagueGroup value other than "nba" | "wnba".
   const window =
-    sport === "baseball" ? await getMlbSeasonWindow() : await getBasketballSeasonWindow(leagueGroup as BasketballLeagueGroup);
+    sport === "baseball"
+      ? await getMlbSeasonWindow()
+      : sport === "football"
+        ? await getNflSeasonWindow()
+        : await getBasketballSeasonWindow(leagueGroup as BasketballLeagueGroup);
   if (!window) return null;
 
   saveLeagueCache("seasonWindow", leagueGroup, dateKey, window);

@@ -78,7 +78,12 @@ enum class LeagueGroup(
         "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/10.png",
         isSupported = false
     ),
-    NFL("nfl", "NFL", "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png", isSupported = false),
+    // isSupported = true: Games/Standings/Team-schedule (Favorites)/History
+    // are all live (real ESPN fixtures, scored via nflRubric.ts's own
+    // independent scale) - Standings/Stats/News still degrade gracefully to
+    // an empty result for NFL (not built yet) rather than needing their own
+    // isSupported flag, same pattern MLB already established.
+    NFL("nfl", "NFL", "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png"),
     // Navy wordmark is dim but legible against dark surfaces (not solid
     // black) - "-dark" is pixel-identical to the default here, so no real
     // choice to make.
@@ -90,12 +95,9 @@ enum class LeagueGroup(
         isSupported = false,
         shortDisplayName = "F1"
     ),
-    // isSupported = true: Games is live (real ESPN fixtures, scored via
-    // mlbRubric.ts's own independent scale) as of the MLB Games-tab-only
-    // first pass - Standings/Team-schedule (Favorites)/season-window/History
-    // aren't wired up yet (backend/src/mlbGamesService.ts's file comment)
-    // but degrade gracefully (empty results, not crashes) rather than
-    // needing their own isSupported flag.
+    // isSupported = true: Games/Standings/Stats/News/Team-schedule
+    // (Favorites)/History are all live (real ESPN fixtures, scored via
+    // mlbRubric.ts's own independent scale, weight sliders included).
     MLB("mlb", "MLB", "https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png"),
     // Default crest's grey/slate mark and wordmark are low-contrast on dark
     // surfaces - the "-dark" variant recolors both white, confirmed by

@@ -33,6 +33,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.MlbRubricCategory
 import com.nbawatchability.app.data.MlbRubricWeights
+import com.nbawatchability.app.data.NflRubricCategory
+import com.nbawatchability.app.data.NflRubricWeights
 import com.nbawatchability.app.data.RubricCategory
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.ui.theme.BackgroundBase
@@ -53,10 +55,10 @@ private enum class RubricSport(val label: String) {
  * screen from these sliders' worth of scroll. Sport switcher mirrors the
  * pattern soccer used to have here (see archive/soccer/mobile/
  * RubricWeightsScreen-soccer-tab-extracted.kt.txt) before soccer support was
- * removed - now driving Basketball (real, unchanged), MLB (real, its own
- * calibrated rubric from backend/src/mlbRubric.ts), and NFL/NHL (inert
- * "coming soon" placeholders - those leagues only have team names browsable
- * today, no scoring rubric to customize yet).
+ * removed - now driving Basketball (real, unchanged), MLB and NFL (real,
+ * their own calibrated rubrics from backend/src/mlbRubric.ts/nflRubric.ts),
+ * and NHL (an inert "coming soon" placeholder - that league only has team
+ * names browsable today, no scoring rubric to customize yet).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +72,9 @@ fun RubricWeightsScreen(
     mlbWeights: MlbRubricWeights,
     onMlbWeightChange: (MlbRubricCategory, Float) -> Unit,
     onMlbReset: () -> Unit,
+    nflWeights: NflRubricWeights,
+    onNflWeightChange: (NflRubricCategory, Float) -> Unit,
+    onNflReset: () -> Unit,
     onBack: () -> Unit
 ) {
     var sport by remember { mutableStateOf(RubricSport.NBA) }
@@ -182,7 +187,31 @@ fun RubricWeightsScreen(
                     }
                 }
 
-                RubricSport.NFL, RubricSport.NHL -> {
+                RubricSport.NFL -> {
+                    WeightSlider("Margin", nflWeights.margin) { onNflWeightChange(NflRubricCategory.MARGIN, it) }
+                    WeightSlider("Comeback", nflWeights.comeback) { onNflWeightChange(NflRubricCategory.COMEBACK, it) }
+                    WeightSlider("Lead changes", nflWeights.leadChanges) { onNflWeightChange(NflRubricCategory.LEAD_CHANGES, it) }
+                    WeightSlider("Overtime", nflWeights.overtime) { onNflWeightChange(NflRubricCategory.OVERTIME, it) }
+                    WeightSlider("Decisive late score", nflWeights.decisiveScoreLate) { onNflWeightChange(NflRubricCategory.DECISIVE_SCORE_LATE, it) }
+                    WeightSlider("Turnovers", nflWeights.turnovers) { onNflWeightChange(NflRubricCategory.TURNOVERS, it) }
+                    WeightSlider("Defensive/special-teams TD", nflWeights.defensiveOrSpecialTeamsTd) {
+                        onNflWeightChange(NflRubricCategory.DEFENSIVE_OR_SPECIAL_TEAMS_TD, it)
+                    }
+                    WeightSlider("Star performance", nflWeights.star) { onNflWeightChange(NflRubricCategory.STAR, it) }
+                    WeightSlider("Total points", nflWeights.totalPoints) { onNflWeightChange(NflRubricCategory.TOTAL_POINTS, it) }
+                    WeightSlider("Stakes", nflWeights.stakes) { onNflWeightChange(NflRubricCategory.STAKES, it) }
+
+                    OutlinedButton(
+                        onClick = onNflReset,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp)
+                    ) {
+                        Text("Reset to default")
+                    }
+                }
+
+                RubricSport.NHL -> {
                     ComingSoonPlaceholder(sport.label)
                 }
             }

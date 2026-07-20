@@ -31,6 +31,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.MlbRubricWeights
+import com.nbawatchability.app.data.NflRubricWeights
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.ui.theme.TextMuted
@@ -65,6 +66,7 @@ fun FullBreakdownSection(
     nbaWeights: RubricWeights,
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
+    nflWeights: NflRubricWeights,
     modifier: Modifier = Modifier,
     spoilerFree: Boolean = false
 ) {
@@ -78,7 +80,7 @@ fun FullBreakdownSection(
             HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights, mlbWeights),
+                text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights, mlbWeights, nflWeights),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
@@ -86,7 +88,7 @@ fun FullBreakdownSection(
         } else {
             if (canBlur) {
                 Text(
-                    text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights, mlbWeights),
+                    text = breakdownAnnotatedText(game, nbaWeights, wnbaWeights, mlbWeights, nflWeights),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                     modifier = Modifier.blur(7.dp)
@@ -152,8 +154,11 @@ private fun finishDescriptor(game: Game): String? {
 // comeback), then how tense it got late, then how it actually finished, then
 // any standout individual performance, with the score appended last by the
 // caller.
-private fun breakdownFacts(game: Game): List<String> =
-    if (game.league == "mlb") mlbBreakdownFacts(game) else nbaBreakdownFacts(game)
+private fun breakdownFacts(game: Game): List<String> = when (game.league) {
+    "mlb" -> mlbBreakdownFacts(game)
+    "nfl" -> nflBreakdownFacts(game)
+    else -> nbaBreakdownFacts(game)
+}
 
 private fun nbaBreakdownFacts(game: Game): List<String> = buildList {
     game.leadChanges?.takeIf { it >= 10 }?.let { add("$it lead changes") }
@@ -208,12 +213,49 @@ private fun mlbMarginDescriptor(margin: Int?): String? = when {
     else -> "Blowout margin"
 }
 
-private fun breakdownAnnotatedText(game: Game, nbaWeights: RubricWeights, wnbaWeights: RubricWeights, mlbWeights: MlbRubricWeights) = buildAnnotatedString {
+// Football's own recap facts (nflRubric.ts's dimensions) - a direct NFL
+// analogue of mlbBreakdownFacts above, reading real per-dimension facts off
+// Game.nflInputs. Falls back to just the margin descriptor if an older
+// cached game predates nflInputs.
+private fun nflBreakdownFacts(game: Game): List<String> {
+    val inputs = game.nflInputs ?: return listOfNotNull(nflMarginDescriptor(game.margin))
+    return buildList {
+        if (inputs.decisiveScoreLate) add("Decisive score came late")
+        if (inputs.overtimePeriods >= 1) add("Overtime")
+        if (inputs.defensiveOrSpecialTeamsTd) add("A defensive or special-teams touchdown")
+        if (inputs.maxTotalTdsByPlayer >= 4) add("${inputs.maxTotalTdsByPlayer} total TDs for one player")
+        if (inputs.maxPassingYards >= 300) add("${inputs.maxPassingYards} passing yards")
+        if (inputs.maxRushingYards >= 125) add("${inputs.maxRushingYards} rushing yards")
+        if (inputs.combinedTurnovers >= 3) add("${inputs.combinedTurnovers} combined turnovers")
+        if (inputs.totalPoints >= 56) add("A ${inputs.totalPoints}-point shootout")
+        if (!inputs.decisiveScoreLate && inputs.overtimePeriods == 0) nflMarginDescriptor(inputs.finalMargin)?.let { add(it) }
+    }
+}
+
+// Football-appropriate margin language (nflRubric.ts's marginPoints brackets,
+// the "one-score game" convention at 8 points) - basketball's "One-
+// possession finish" wording doesn't map onto football scoring.
+private fun nflMarginDescriptor(margin: Int?): String? = when {
+    margin == null -> null
+    margin <= 3 -> "One-score nailbiter"
+    margin <= 8 -> "One-score game"
+    margin <= 16 -> "Two-score game"
+    margin <= 24 -> "Comfortable margin"
+    else -> "Blowout margin"
+}
+
+private fun breakdownAnnotatedText(
+    game: Game,
+    nbaWeights: RubricWeights,
+    wnbaWeights: RubricWeights,
+    mlbWeights: MlbRubricWeights,
+    nflWeights: NflRubricWeights
+) = buildAnnotatedString {
     val facts = breakdownFacts(game)
     append(if (facts.isEmpty()) "No standout moments logged" else facts.joinToString(" · "))
     append(" · Watchability ")
     withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")) {
-        append("${game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights) ?: 0}/100")
+        append("${game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) ?: 0}/100")
     }
 }
 

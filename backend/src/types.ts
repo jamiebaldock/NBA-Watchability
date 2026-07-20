@@ -45,7 +45,7 @@ export interface GameJson {
   hl?: string;
   stt: GameStatus;
   utc: string;
-  lg: "nba" | "wnba" | "summer" | "mlb";
+  lg: "nba" | "wnba" | "summer" | "mlb" | "nfl";
   cl?: string;
   q?: number;
   clk?: string;
@@ -88,6 +88,9 @@ export interface GameJson {
   // sending pre-computed points, since that also gets MLB weight-adjustable
   // sliders "for free" whenever that's built.
   mlbInputs?: MlbRubricInputsJson;
+  // NFL-only raw rubric facts (nflRubric.ts's NflRubricInputs) - same
+  // reasoning as mlbInputs above, football's own analogue.
+  nflInputs?: NflRubricInputsJson;
 }
 
 export interface MlbRubricInputsJson {
@@ -103,6 +106,20 @@ export interface MlbRubricInputsJson {
   perfectGame: boolean;
   blownSave: boolean;
   combinedErrors: number;
+}
+
+export interface NflRubricInputsJson {
+  finalMargin: number;
+  largestDeficitOvercome: number;
+  leadChanges: number;
+  overtimePeriods: number;
+  decisiveScoreLate: boolean;
+  combinedTurnovers: number;
+  defensiveOrSpecialTeamsTd: boolean;
+  maxPassingYards: number;
+  maxRushingYards: number;
+  maxTotalTdsByPlayer: number;
+  totalPoints: number;
 }
 
 export interface StandoutPerformerJson {

@@ -61,11 +61,12 @@ export async function getGameDetail(eventId: string): Promise<GameDetailResponse
   }
 
   const [topPerformers, awayStandings, homeStandings] = await Promise.all([
-    row.leagueGroup === "mlb"
-      // No top-performers breakdown built for MLB yet (Games-tab-only first
-      // pass) - fetchSummary's URL is basketball-namespaced and would 404
-      // for an MLB eventId, so this short-circuits to the same empty result
-      // basketballTopPerformers already returns for a missing boxscore.
+    row.leagueGroup === "mlb" || row.leagueGroup === "nfl"
+      // No top-performers breakdown built for MLB/NFL yet (Games-tab-only
+      // first pass) - fetchSummary's URL is basketball-namespaced and would
+      // 404 for an MLB/NFL eventId, so this short-circuits to the same empty
+      // result basketballTopPerformers already returns for a missing
+      // boxscore.
       ? Promise.resolve([])
       : fetchSummary(eventId, row.league as League).then((s) => basketballTopPerformers(s.boxscore?.players)),
     standingsContextFor(row.leagueGroup, row.away),

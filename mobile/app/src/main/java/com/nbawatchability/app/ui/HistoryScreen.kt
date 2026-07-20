@@ -33,6 +33,7 @@ import com.nbawatchability.app.data.FavoritePlayer
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.MlbRubricWeights
+import com.nbawatchability.app.data.NflRubricWeights
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.Team
 import com.nbawatchability.app.data.Tier
@@ -110,6 +111,7 @@ fun HistoryScreen(
     nbaWeights: RubricWeights,
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
+    nflWeights: NflRubricWeights,
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
@@ -270,7 +272,7 @@ fun HistoryScreen(
                                 LeagueGroup.WNBA -> ALL_TIME_MIN_SCORE_WNBA
                                 else -> ALL_TIME_MIN_SCORE_NBA
                             }
-                            (game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights) ?: 0) >= allTimeMinScore
+                            (game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) ?: 0) >= allTimeMinScore
                         }
                     } else {
                         uiState.games
@@ -297,11 +299,11 @@ fun HistoryScreen(
                         // every History game already has a score, so unlike
                         // Starred there's no unscored tail to fall back to.
                         val ordered = when (sortOption) {
-                            SortOption.RATING_HIGHEST_FIRST -> displayGames.sortedByDescending { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights) }
-                            SortOption.RATING_LOWEST_FIRST -> displayGames.sortedBy { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights) }
+                            SortOption.RATING_HIGHEST_FIRST -> displayGames.sortedByDescending { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) }
+                            SortOption.RATING_LOWEST_FIRST -> displayGames.sortedBy { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) }
                             SortOption.DATE_OLDEST_FIRST -> displayGames.sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
                             SortOption.DATE_NEWEST_FIRST -> displayGames.sortedByDescending { OffsetDateTime.parse(it.tipoffUtc) }
-                        }.filterByMinTier(minTierFilterEnabled, minTierFilter, nbaWeights, wnbaWeights, mlbWeights)
+                        }.filterByMinTier(minTierFilterEnabled, minTierFilter, nbaWeights, wnbaWeights, mlbWeights, nflWeights)
                             .bumpFavoriteTeamGames(bumpFavoriteTeamGames, favoriteTeamNames)
 
                         val listState = rememberLazyListState()
@@ -326,6 +328,7 @@ fun HistoryScreen(
                                     nbaWeights = nbaWeights,
                                     wnbaWeights = wnbaWeights,
                                     mlbWeights = mlbWeights,
+                                    nflWeights = nflWeights,
                                     isStarred = starredIds.contains(game.id),
                                     onToggleStar = { onToggleStar(game) },
                                     onWatchHighlights = onWatchHighlights,

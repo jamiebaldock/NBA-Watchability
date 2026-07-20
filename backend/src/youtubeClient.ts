@@ -13,12 +13,24 @@ const WNBA_YOUTUBE_CHANNEL_ID = "UCO9a_ryN_l7DIDS-VIt-zmw";
 // HIGHLIGHTS"), so the existing match predicate below needs no MLB-specific
 // branch - only the channel id differs.
 const MLB_YOUTUBE_CHANNEL_ID = "UCoLrcjPV5PbUrUyXq5mjc_A";
+// Channel id confirmed the same way as every other league above (canonical
+// externalId on youtube.com/@NFL) - but unlike NBA/WNBA/MLB, the actual
+// "FULL GAME HIGHLIGHTS"-style title format was NOT directly confirmed
+// against a real recent upload (the NFL is in its offseason as of this
+// build - no fresh games/videos exist to check against, and the channel's
+// video-listing page doesn't expose titles without full JS rendering).
+// Verify the title format against a real live upload before ever wiring
+// checkPendingNflHighlights into highlightsPoller.ts, the same "verify
+// before assuming" rule this file's own match predicate exists to enforce
+// for every other league.
+const NFL_YOUTUBE_CHANNEL_ID = "UCDVYQ4Zhbm3S2dlz7P1GBDg";
 
-export type HighlightsLeague = "nba" | "wnba" | "mlb";
+export type HighlightsLeague = "nba" | "wnba" | "mlb" | "nfl";
 
 function channelIdFor(league: HighlightsLeague): string {
   if (league === "wnba") return WNBA_YOUTUBE_CHANNEL_ID;
   if (league === "mlb") return MLB_YOUTUBE_CHANNEL_ID;
+  if (league === "nfl") return NFL_YOUTUBE_CHANNEL_ID;
   return NBA_YOUTUBE_CHANNEL_ID;
 }
 

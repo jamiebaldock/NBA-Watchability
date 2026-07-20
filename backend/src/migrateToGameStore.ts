@@ -19,9 +19,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { League } from "./espnClient";
-import { FinalRubric, setFinalRubric, setMlbFinalRubric, setSeasonStageLabel, upsertBaseEntry } from "./gameStore";
+import { FinalRubric, setFinalRubric, setMlbFinalRubric, setNflFinalRubric, setSeasonStageLabel, upsertBaseEntry } from "./gameStore";
 import { COMPETITION_LABEL as MLB_COMPETITION_LABEL } from "./mlbGamesService";
 import { computeMlbWatchabilityScore, MlbRubricInputs, tierForMlbScore } from "./mlbRubric";
+import { COMPETITION_LABEL as NFL_COMPETITION_LABEL } from "./nflGamesService";
+import { computeNflWatchabilityScore, NflRubricInputs, tierForNflScore } from "./nflRubric";
 import { LeagueGroup, StarPerformance } from "./types";
 
 interface HistoricalGame {
@@ -188,12 +190,97 @@ function migrateMlbFile(fileName: string): number {
   return games.length;
 }
 
+// Raw per-game facts from backfillRawStatsNfl.ts's real 286-game 2025-season
+// pull (backend/data/nflRawStats.json) - same "no precomputed score/tier,
+// compute fresh via the live rubric functions" shape as MlbHistoricalGame
+// above.
+interface NflHistoricalGame {
+  eventId: string;
+  date: string;
+  away: string;
+  home: string;
+  awayScore: number;
+  homeScore: number;
+  finalMargin: number;
+  totalPoints: number;
+  leadChanges: number;
+  largestDeficitOvercome: number;
+  decisiveScoreLate: boolean;
+  combinedTurnovers: number;
+  defensiveOrSpecialTeamsTd: boolean;
+  maxPassingYards: number;
+  maxRushingYards: number;
+  maxTotalTdsByPlayer: number;
+  overtimePeriods: number;
+}
+
+// NFL's analogue of migrateMlbFile above - this is what closes the same
+// Favorites-tab cold-cache gap MLB's own migration closed: once a game's
+// score/tier is cached here, getNflTeamSchedule's processNflEvent finds
+// row.score already non-null and skips the live per-game fetchNflSummary
+// call entirely. Done from day one for NFL (not retrofitted after a bug
+// report, unlike MLB - see feedback_new_league_full_pipeline_checklist.md).
+function migrateNflFile(fileName: string): number {
+  const path = join(DATA_DIR, fileName);
+  const { games } = JSON.parse(readFileSync(path, "utf8")) as { games: NflHistoricalGame[] };
+
+  for (const g of games) {
+    upsertBaseEntry({
+      eventId: g.eventId,
+      league: "nfl",
+      leagueGroup: "nfl",
+      away: g.away,
+      home: g.home,
+      tipoffUtc: g.date,
+      status: "final",
+    });
+    setSeasonStageLabel(g.eventId, NFL_COMPETITION_LABEL);
+
+    const rubricInputs: NflRubricInputs = {
+      finalMargin: g.finalMargin,
+      largestDeficitOvercome: g.largestDeficitOvercome,
+      leadChanges: g.leadChanges,
+      overtimePeriods: g.overtimePeriods,
+      decisiveScoreLate: g.decisiveScoreLate,
+      combinedTurnovers: g.combinedTurnovers,
+      defensiveOrSpecialTeamsTd: g.defensiveOrSpecialTeamsTd,
+      maxPassingYards: g.maxPassingYards,
+      maxRushingYards: g.maxRushingYards,
+      maxTotalTdsByPlayer: g.maxTotalTdsByPlayer,
+      totalPoints: g.totalPoints,
+    };
+    // No stakes for historical rows, same reasoning as the NBA/MLB migrations above.
+    const score = computeNflWatchabilityScore(rubricInputs, undefined).total;
+
+    setNflFinalRubric(
+      g.eventId,
+      {
+        awayScore: g.awayScore,
+        homeScore: g.homeScore,
+        score,
+        tier: tierForNflScore(score),
+        // Predates player-name capture (backfillRawStatsNfl.ts only recorded
+        // yardage/TD counts, not who drove them) - same gap documented on
+        // the NBA/MLB migrations above.
+        standoutPerformers: [],
+        finalMargin: g.finalMargin,
+        largestDeficitOvercome: g.largestDeficitOvercome,
+        rubricInputs,
+      },
+      null
+    );
+  }
+
+  return games.length;
+}
+
 export function migrateHistoricalBackfill(): void {
   const nbaCount = migrateFile("historicalWatchability.json", "nba", "nba");
   const wnbaCount = migrateFile("historicalWatchabilityWnba.json", "wnba", "wnba");
   const mlbCount = migrateMlbFile("mlbRawStats.json");
+  const nflCount = migrateNflFile("nflRawStats.json");
   console.log(
-    `migrateHistoricalBackfill: verified ${nbaCount} NBA, ${wnbaCount} WNBA, and ${mlbCount} MLB historical games are present in gameStore.`
+    `migrateHistoricalBackfill: verified ${nbaCount} NBA, ${wnbaCount} WNBA, ${mlbCount} MLB, and ${nflCount} NFL historical games are present in gameStore.`
   );
 }
 

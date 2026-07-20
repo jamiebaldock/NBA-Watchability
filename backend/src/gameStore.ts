@@ -23,13 +23,15 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { League } from "./espnClient";
 import { MlbRubricInputs } from "./mlbRubric";
+import { NflRubricInputs } from "./nflRubric";
 import { GameStatus, LeagueGroup, SPORT_FOR_LEAGUE_GROUP, StandoutPerformerJson, StarPerformance } from "./types";
 
 // A game row's own "league" column is one specific ESPN league (basketball's
-// "nba"/"nba-summer-*"/"wnba", or MLB's single "mlb") - broader than the
-// mutually-exclusive LeagueGroup a request is scoped to, narrower than "any
-// string", so a typo'd league name still fails to compile.
-export type AnyLeague = League | "mlb";
+// "nba"/"nba-summer-*"/"wnba", MLB's single "mlb", or NFL's single "nfl") -
+// broader than the mutually-exclusive LeagueGroup a request is scoped to,
+// narrower than "any string", so a typo'd league name still fails to
+// compile.
+export type AnyLeague = League | "mlb" | "nfl";
 
 const DATA_DIR = process.env.DATA_DIR ?? join(__dirname, "..", "data");
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
@@ -143,6 +145,11 @@ ensureColumn("games", "standout_performers", "TEXT");
 // back to with nothing MLB-shaped to show. Null for any row scored before
 // this column existed.
 ensureColumn("games", "mlb_rubric_inputs", "TEXT");
+// JSON-encoded NflRubricInputs (nflRubric.ts) - the NFL analogue of
+// mlb_rubric_inputs above, same reasoning (lets the mobile client's
+// Breakdown tab and weight sliders work off NFL's own real per-dimension
+// facts instead of nothing/basketball's fields).
+ensureColumn("games", "nfl_rubric_inputs", "TEXT");
 
 function now(): string {
   return new Date().toISOString();
@@ -199,6 +206,7 @@ export interface GameRow {
   ytCheckCount: number;
   seasonStageLabel: string | null;
   mlbRubricInputs: MlbRubricInputs | null;
+  nflRubricInputs: NflRubricInputs | null;
 }
 
 /** Creates the row if this eventId has never been seen before; a no-op otherwise - never touches an existing row's already-collected fields. */
@@ -278,6 +286,7 @@ interface RawGameRow {
   yt_check_count: number;
   season_stage_label: string | null;
   mlb_rubric_inputs: string | null;
+  nfl_rubric_inputs: string | null;
 }
 
 function parseStandoutPerformers(raw: string | null): StandoutPerformerJson[] {
@@ -288,6 +297,11 @@ function parseStandoutPerformers(raw: string | null): StandoutPerformerJson[] {
 function parseMlbRubricInputs(raw: string | null): MlbRubricInputs | null {
   if (!raw) return null;
   return JSON.parse(raw) as MlbRubricInputs;
+}
+
+function parseNflRubricInputs(raw: string | null): NflRubricInputs | null {
+  if (!raw) return null;
+  return JSON.parse(raw) as NflRubricInputs;
 }
 
 function mapRow(raw: RawGameRow): GameRow {
@@ -325,6 +339,7 @@ function mapRow(raw: RawGameRow): GameRow {
     ytCheckCount: raw.yt_check_count,
     seasonStageLabel: raw.season_stage_label,
     mlbRubricInputs: parseMlbRubricInputs(raw.mlb_rubric_inputs),
+    nflRubricInputs: parseNflRubricInputs(raw.nfl_rubric_inputs),
   };
 }
 
@@ -505,6 +520,47 @@ export function setMlbFinalRubric(eventId: string, result: MlbFinalResult, final
   });
 }
 
+export interface NflFinalResult {
+  awayScore: number;
+  homeScore: number;
+  score: number;
+  tier: string;
+  standoutPerformers: StandoutPerformerJson[];
+  finalMargin: number;
+  largestDeficitOvercome: number;
+  // Same reasoning as MlbFinalResult.rubricInputs - persisted so the mobile
+  // client's Breakdown tab/weight sliders can work off NFL's own real
+  // per-dimension facts (Rubric.kt's nflRubricBreakdown), not so a
+  // server-side weight-adjusted recompute can happen.
+  rubricInputs: NflRubricInputs;
+}
+
+/** NFL's equivalent of setMlbFinalRubric - same narrower-than-basketball column shape, same "never overwrite" WHERE-guard. */
+export function setNflFinalRubric(eventId: string, result: NflFinalResult, finalAt: string | null = now()): void {
+  db.prepare(
+    `UPDATE games SET
+       status='final', final_at=@finalAt,
+       away_score=@awayScore, home_score=@homeScore, score=@score, tier=@tier,
+       standout_performers=@standoutPerformers,
+       final_margin=@finalMargin, largest_deficit_overcome=@largestDeficitOvercome,
+       nfl_rubric_inputs=@nflRubricInputs,
+       updated_at=@updatedAt
+     WHERE event_id=@eventId AND score IS NULL`
+  ).run({
+    eventId,
+    finalAt,
+    awayScore: result.awayScore,
+    homeScore: result.homeScore,
+    score: result.score,
+    tier: result.tier,
+    standoutPerformers: JSON.stringify(result.standoutPerformers),
+    finalMargin: result.finalMargin,
+    largestDeficitOvercome: result.largestDeficitOvercome,
+    nflRubricInputs: JSON.stringify(result.rubricInputs),
+    updatedAt: now()
+  });
+}
+
 /**
  * Highlights video found via a real search - set once, permanent. Records
  * yt_found_at (when *we* noticed - still used to pace check spacing) and
@@ -680,6 +736,19 @@ export function getFinalGamesMissingHighlights(): GameRow[] {
 export function getFinalMlbGamesMissingHighlights(): GameRow[] {
   const cutoffTime = Date.now() - RECENT_GAMES_WINDOW_MS;
   const raws = db.prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL AND league_group='mlb'`).all() as RawGameRow[];
+  return raws.map(mapRow).filter((row) => new Date(row.tipoffUtc).getTime() >= cutoffTime);
+}
+
+/**
+ * NFL analogue of getFinalMlbGamesMissingHighlights above - same
+ * recent-games-only scope, same "not called from anywhere yet" status as
+ * MLB's own highlights search was at its own equivalent stage (see
+ * nflGamesService.ts's checkPendingNflHighlights) - built and ready, kept
+ * dormant until explicitly wired in.
+ */
+export function getFinalNflGamesMissingHighlights(): GameRow[] {
+  const cutoffTime = Date.now() - RECENT_GAMES_WINDOW_MS;
+  const raws = db.prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL AND league_group='nfl'`).all() as RawGameRow[];
   return raws.map(mapRow).filter((row) => new Date(row.tipoffUtc).getTime() >= cutoffTime);
 }
 

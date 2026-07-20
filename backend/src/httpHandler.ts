@@ -6,6 +6,7 @@ import { getHistory, HistoryResult } from "./historyService";
 import { getNews } from "./newsService";
 import { getSeasonWindow, SeasonWindow } from "./seasonWindowService";
 import { getMlbGamesForDate, getMlbTeamSchedule, getNextMlbScheduledDate, isMlbLeagueGroup } from "./mlbGamesService";
+import { getNextNflScheduledDate, getNflGamesForDate, getNflTeamSchedule, isNflLeagueGroup } from "./nflGamesService";
 import { getRoster } from "./rosterService";
 import { getStandings } from "./standingsService";
 import { getStats } from "./statsService";
@@ -45,27 +46,30 @@ function parseLeagueGroup(raw: string): LeagueGroup {
   throw new BadRequestError('leagueGroup must be one of "nba", "wnba", "mlb", "nfl", "nhl"');
 }
 
-/** Dispatches to the basketball or MLB live-schedule pipeline (types.ts's SPORT_FOR_LEAGUE_GROUP) - the one choke point where a request's leagueGroup decides which sport's data layer actually runs. NFL/NHL have no games pipeline at all yet, so they short-circuit to an empty slate before ever reaching the basketball-only getGamesForDate. */
+/** Dispatches to the basketball, MLB, or NFL live-schedule pipeline (types.ts's SPORT_FOR_LEAGUE_GROUP) - the one choke point where a request's leagueGroup decides which sport's data layer actually runs. NHL has no games pipeline at all yet, so it short-circuits to an empty slate before ever reaching the basketball-only getGamesForDate. */
 function getGamesForDateAnySport(date: string, leagueGroup: LeagueGroup): Promise<GameJson[]> {
-  if (leagueGroup === "nfl" || leagueGroup === "nhl") return Promise.resolve([]);
+  if (leagueGroup === "nhl") return Promise.resolve([]);
   if (isMlbLeagueGroup(leagueGroup)) return getMlbGamesForDate(date);
+  if (isNflLeagueGroup(leagueGroup)) return getNflGamesForDate(date);
   return getGamesForDate(date, leagueGroup);
 }
 
 /**
  * Backs the Favorites tab's Games page - a single favorited team's own
- * real schedule (past and upcoming), not a whole day's slate. "nfl"/"nhl"
- * are still rejected explicitly - neither has any games pipeline at all yet.
- * "mlb" is dispatched to its own team-schedule pipeline (mlbGamesService.ts's
- * getMlbTeamSchedule).
+ * real schedule (past and upcoming), not a whole day's slate. "nhl" is
+ * still rejected explicitly - it has no games pipeline at all yet. "mlb"/
+ * "nfl" are each dispatched to their own team-schedule pipeline
+ * (mlbGamesService.ts's getMlbTeamSchedule / nflGamesService.ts's
+ * getNflTeamSchedule).
  */
 export async function getTeamScheduleForLeagueGroup(teamId: string, leagueGroupRaw = "nba"): Promise<GameJson[]> {
   if (!teamId) throw new BadRequestError("teamId is required");
   const leagueGroup = parseLeagueGroup(leagueGroupRaw);
-  if (leagueGroup === "nfl" || leagueGroup === "nhl") {
+  if (leagueGroup === "nhl") {
     throw new BadRequestError(`team schedules aren't available for ${leagueGroup} yet`);
   }
   if (isMlbLeagueGroup(leagueGroup)) return getMlbTeamSchedule(teamId);
+  if (isNflLeagueGroup(leagueGroup)) return getNflTeamSchedule(teamId);
   return getTeamSchedule(teamId, leagueGroup);
 }
 
@@ -94,13 +98,14 @@ export interface NextGameDateResult {
 export async function getNextGameDateForLeagueGroup(afterRaw: string, leagueGroupRaw = "nba"): Promise<NextGameDateResult> {
   if (!DATE_RE.test(afterRaw)) throw new BadRequestError("after must be YYYY-MM-DD");
   const leagueGroup = parseLeagueGroup(leagueGroupRaw);
-  // NFL/NHL have no games pipeline at all yet - avoid falling through to
-  // either the MLB or basketball-only branch below (same reasoning as
-  // getGamesForDateAnySport).
-  if (leagueGroup === "nfl" || leagueGroup === "nhl") return { date: null };
+  // NHL has no games pipeline at all yet - avoid falling through to the
+  // basketball-only branch below (same reasoning as getGamesForDateAnySport).
+  if (leagueGroup === "nhl") return { date: null };
   const date = isMlbLeagueGroup(leagueGroup)
     ? await getNextMlbScheduledDate(afterRaw)
-    : await getNextScheduledDate(afterRaw, leagueGroup);
+    : isNflLeagueGroup(leagueGroup)
+      ? await getNextNflScheduledDate(afterRaw)
+      : await getNextScheduledDate(afterRaw, leagueGroup);
   return { date: date ?? null };
 }
 

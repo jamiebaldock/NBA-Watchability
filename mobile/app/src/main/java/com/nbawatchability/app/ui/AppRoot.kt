@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.MlbRubricWeights
+import com.nbawatchability.app.data.NflRubricWeights
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.ui.theme.BackgroundBase
@@ -116,6 +117,7 @@ fun AppRoot() {
     val settingsViewModel: RubricSettingsViewModel = viewModel()
     val wnbaSettingsViewModel: WnbaRubricSettingsViewModel = viewModel()
     val mlbSettingsViewModel: MlbRubricSettingsViewModel = viewModel()
+    val nflSettingsViewModel: NflRubricSettingsViewModel = viewModel()
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
     val starredGamesViewModel: StarredGamesViewModel = viewModel()
     val favoritesViewModel: FavoritesViewModel = viewModel()
@@ -165,6 +167,9 @@ fun AppRoot() {
             mlbWeights = mlbSettingsViewModel.weights,
             onMlbWeightChange = mlbSettingsViewModel::updateWeight,
             onMlbReset = mlbSettingsViewModel::resetToDefaults,
+            nflWeights = nflSettingsViewModel.weights,
+            onNflWeightChange = nflSettingsViewModel::updateWeight,
+            onNflReset = nflSettingsViewModel::resetToDefaults,
             onBack = { showRubricWeights = false }
         )
         return
@@ -212,6 +217,7 @@ fun AppRoot() {
             nbaWeights = settingsViewModel.weights,
             wnbaWeights = wnbaSettingsViewModel.weights,
             mlbWeights = mlbSettingsViewModel.weights,
+            nflWeights = nflSettingsViewModel.weights,
             defaultTab = GameDetailTab.entries.find { it.name == appSettingsViewModel.settings.defaultGameDetailTab } ?: GameDetailTab.BREAKDOWN,
             onBack = { showGameDetail = null }
         )
@@ -268,6 +274,7 @@ fun AppRoot() {
                     nbaWeights = settingsViewModel.weights,
                     wnbaWeights = wnbaSettingsViewModel.weights,
                     mlbWeights = mlbSettingsViewModel.weights,
+                    nflWeights = nflSettingsViewModel.weights,
                     starredIds = starredGamesViewModel.starredIds,
                     onToggleStar = starredGamesViewModel::toggleStar,
                     onWatchHighlights = { videoId -> highlightsVideoId = videoId },
@@ -287,6 +294,7 @@ fun AppRoot() {
                             nbaWeights = settingsViewModel.weights,
                             wnbaWeights = wnbaSettingsViewModel.weights,
                             mlbWeights = mlbSettingsViewModel.weights,
+                            nflWeights = nflSettingsViewModel.weights,
                             selectedLeague = selectedLeague,
                             onLeagueSelected = appSettingsViewModel::selectLeague,
                             isAllLeaguesSelected = appSettingsViewModel.settings.isAllLeaguesSelected,
@@ -328,6 +336,7 @@ fun AppRoot() {
                             nbaWeights = settingsViewModel.weights,
                             wnbaWeights = wnbaSettingsViewModel.weights,
                             mlbWeights = mlbSettingsViewModel.weights,
+                            nflWeights = nflSettingsViewModel.weights,
                             onWatchHighlights = { videoId -> highlightsVideoId = videoId },
                             favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
                             bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
@@ -342,6 +351,7 @@ fun AppRoot() {
                             nbaWeights = settingsViewModel.weights,
                             wnbaWeights = wnbaSettingsViewModel.weights,
                             mlbWeights = mlbSettingsViewModel.weights,
+                            nflWeights = nflSettingsViewModel.weights,
                             selectedLeague = selectedLeague,
                             onLeagueSelected = appSettingsViewModel::selectLeague,
                             isAllLeaguesSelected = appSettingsViewModel.settings.isAllLeaguesSelected,
@@ -413,6 +423,7 @@ private fun GamesTab(
     nbaWeights: RubricWeights,
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
+    nflWeights: NflRubricWeights,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     isAllLeaguesSelected: Boolean,
@@ -474,6 +485,7 @@ private fun GamesTab(
             nbaWeights = nbaWeights,
             wnbaWeights = wnbaWeights,
             mlbWeights = mlbWeights,
+            nflWeights = nflWeights,
             selectedLeague = selectedLeague,
             onLeagueSelected = onLeagueSelected,
             enabledLeagues = enabledLeagues,
@@ -517,6 +529,7 @@ private fun StarredTab(
     nbaWeights: RubricWeights,
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
+    nflWeights: NflRubricWeights,
     onWatchHighlights: (String) -> Unit,
     favoriteTeamNames: Set<String>,
     bumpFavoriteTeamGames: Boolean,
@@ -546,6 +559,7 @@ private fun StarredTab(
         nbaWeights = nbaWeights,
         wnbaWeights = wnbaWeights,
         mlbWeights = mlbWeights,
+        nflWeights = nflWeights,
         starredIds = starredGamesViewModel.starredIds,
         onToggleStar = starredGamesViewModel::toggleStar,
         onWatchHighlights = onWatchHighlights,
@@ -572,6 +586,7 @@ private fun HistoryTab(
     nbaWeights: RubricWeights,
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
+    nflWeights: NflRubricWeights,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     isAllLeaguesSelected: Boolean,
@@ -621,6 +636,7 @@ private fun HistoryTab(
         nbaWeights = nbaWeights,
         wnbaWeights = wnbaWeights,
         mlbWeights = mlbWeights,
+        nflWeights = nflWeights,
         starredIds = starredIds,
         onToggleStar = onToggleStar,
         onWatchHighlights = onWatchHighlights,
@@ -654,6 +670,7 @@ private fun FavoritesTab(
     nbaWeights: RubricWeights,
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
+    nflWeights: NflRubricWeights,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
     onWatchHighlights: (String) -> Unit,
@@ -682,6 +699,7 @@ private fun FavoritesTab(
         nbaWeights = nbaWeights,
         wnbaWeights = wnbaWeights,
         mlbWeights = mlbWeights,
+        nflWeights = nflWeights,
         starredIds = starredIds,
         onToggleStar = onToggleStar,
         onWatchHighlights = onWatchHighlights,

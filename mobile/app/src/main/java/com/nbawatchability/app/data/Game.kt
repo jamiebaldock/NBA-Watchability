@@ -51,6 +51,25 @@ data class MlbRubricInputs(
     val combinedErrors: Int = 0
 )
 
+/**
+ * NFL's raw rubric facts (backend/src/nflRubric.ts's NflRubricInputs) - the
+ * NFL analogue of MlbRubricInputs above, football's own shape.
+ */
+@Serializable
+data class NflRubricInputs(
+    val finalMargin: Int,
+    val largestDeficitOvercome: Int,
+    val leadChanges: Int,
+    val overtimePeriods: Int = 0,
+    val decisiveScoreLate: Boolean = false,
+    val combinedTurnovers: Int = 0,
+    val defensiveOrSpecialTeamsTd: Boolean = false,
+    val maxPassingYards: Int = 0,
+    val maxRushingYards: Int = 0,
+    val maxTotalTdsByPlayer: Int = 0,
+    val totalPoints: Int
+)
+
 enum class Tier(val label: String, val emoji: String) {
     INSTANT_CLASSIC("INSTANT CLASSIC", "🔥"),
     WORTH_YOUR_TIME("WORTH YOUR TIME", "⭐"),
@@ -60,12 +79,14 @@ enum class Tier(val label: String, val emoji: String) {
     companion object {
         // Same rubric-to-tier mapping as the backend (spec section 2, point 2) — kept
         // identical so client and server never disagree on badge/tier for a given score.
-        // MLB uses its own independent scale (backend/src/mlbRubric.ts's tierForMlbScore -
-        // James's explicit call, not normalized to this 45/65/85 scale the way WNBA's
-        // rubric was), so [league] must be passed through rather than assuming every
-        // sport's score lands on the same bands.
+        // MLB and NFL each use their own independent scale (backend/src/mlbRubric.ts's
+        // tierForMlbScore / nflRubric.ts's tierForNflScore - James's explicit call, not
+        // normalized to this 45/65/85 scale the way WNBA's rubric was), so [league] must
+        // be passed through rather than assuming every sport's score lands on the same
+        // bands.
         fun fromScore(score: Int, league: String = "nba"): Tier =
             if (league == "mlb") mlbTierFromScore(score)
+            else if (league == "nfl") nflTierFromScore(score)
             else when {
                 score >= 85 -> INSTANT_CLASSIC
                 score >= 65 -> WORTH_YOUR_TIME
@@ -77,6 +98,13 @@ enum class Tier(val label: String, val emoji: String) {
             score >= 60 -> INSTANT_CLASSIC
             score >= 35 -> WORTH_YOUR_TIME
             score >= 20 -> SOLID
+            else -> SKIPPABLE
+        }
+
+        private fun nflTierFromScore(score: Int): Tier = when {
+            score >= 75 -> INSTANT_CLASSIC
+            score >= 54 -> WORTH_YOUR_TIME
+            score >= 28 -> SOLID
             else -> SKIPPABLE
         }
     }
@@ -126,7 +154,8 @@ data class Game(
     @SerialName("score") val score: Int? = null,
     @SerialName("score_visible") val scoreVisible: Boolean,
     @SerialName("yt") val youtubeVideoId: String? = null,
-    @SerialName("mlbInputs") val mlbInputs: MlbRubricInputs? = null
+    @SerialName("mlbInputs") val mlbInputs: MlbRubricInputs? = null,
+    @SerialName("nflInputs") val nflInputs: NflRubricInputs? = null
 ) {
     val id: String get() = "$away@$home@$tipoffUtc"
 

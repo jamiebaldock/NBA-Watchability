@@ -52,6 +52,7 @@ import com.nbawatchability.app.data.FavoritePlayer
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.GameStatus
 import com.nbawatchability.app.data.MlbRubricWeights
+import com.nbawatchability.app.data.NflRubricWeights
 import com.nbawatchability.app.data.RubricWeights
 import com.nbawatchability.app.data.StandoutPerformer
 import com.nbawatchability.app.data.Team
@@ -82,6 +83,7 @@ fun GameCard(
     nbaWeights: RubricWeights,
     wnbaWeights: RubricWeights,
     mlbWeights: MlbRubricWeights,
+    nflWeights: NflRubricWeights,
     modifier: Modifier = Modifier,
     isStarred: Boolean = false,
     onToggleStar: () -> Unit = {},
@@ -122,7 +124,7 @@ fun GameCard(
     // is true (gated below, not by the caller).
     onGameClick: (Game) -> Unit = {}
 ) {
-    val tier = game.effectiveTier(nbaWeights, wnbaWeights, mlbWeights)
+    val tier = game.effectiveTier(nbaWeights, wnbaWeights, mlbWeights, nflWeights)
 
     Card(
         onClick = { if (game.hasBreakdown) onGameClick(game) },
@@ -170,7 +172,7 @@ fun GameCard(
                     if (tier != null) {
                         TierBadge(
                             tier = tier,
-                            numericScore = if (showNumericScore) game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights) else null
+                            numericScore = if (showNumericScore) game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights) else null
                         )
                     } else {
                         Spacer(modifier = Modifier.size(0.dp))
@@ -246,6 +248,7 @@ fun GameCard(
                         nbaWeights = nbaWeights,
                         wnbaWeights = wnbaWeights,
                         mlbWeights = mlbWeights,
+                        nflWeights = nflWeights,
                         spoilerFree = spoilerFree,
                         modifier = Modifier.padding(top = breakdownTopPadding)
                     )

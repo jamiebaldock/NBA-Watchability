@@ -13,11 +13,12 @@ fun List<Game>.filterByMinTier(
     minTier: Tier,
     nbaWeights: RubricWeights,
     wnbaWeights: RubricWeights,
-    mlbWeights: MlbRubricWeights
+    mlbWeights: MlbRubricWeights,
+    nflWeights: NflRubricWeights
 ): List<Game> {
     if (!enabled) return this
     return filter { game ->
-        val tier = game.effectiveTier(nbaWeights, wnbaWeights, mlbWeights) ?: return@filter true
+        val tier = game.effectiveTier(nbaWeights, wnbaWeights, mlbWeights, nflWeights) ?: return@filter true
         tier.ordinal <= minTier.ordinal
     }
 }
