@@ -51,6 +51,7 @@ import coil.compose.AsyncImage
 import com.nbawatchability.app.data.FavoritePlayer
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.GameStatus
+import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.MlbRubricWeights
 import com.nbawatchability.app.data.NflRubricWeights
 import com.nbawatchability.app.data.RubricWeights
@@ -146,7 +147,7 @@ fun GameCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (competitionLabel != null) {
-                            Text(text = competitionLabel, color = TextMuted, style = MaterialTheme.typography.labelSmall)
+                            CompetitionLabelWithLogo(competitionLabel, leagueGroupOf(game))
                         }
                         if (showDate) {
                             if (competitionLabel != null) {
@@ -275,6 +276,43 @@ fun GameCard(
  * protecting anything. Hook and pitch are two model outputs but read as one
  * continuous preview, so they're collapsed together as a single 2-line block.
  */
+/**
+ * Replaces the leading league-name text in a competition label (e.g. "MLB -
+ * Regular Season", "NFL - Playoffs: Super Bowl", "NBA SUMMER LEAGUE") with
+ * that league's real logo, so a tile reads as a crest + context phrase
+ * instead of spelling the league out in all-caps - matches how every league
+ * selector elsewhere in the app (LeagueSelector.kt's TitleLeagueSelector)
+ * already shows a logo instead of text. Falls back to the plain label
+ * untouched if it doesn't start with the expected league prefix (a shape
+ * this hasn't been verified against, safer than silently mangling it).
+ */
+@Composable
+private fun CompetitionLabelWithLogo(label: String, league: LeagueGroup) {
+    val prefix = league.shortDisplayName.uppercase()
+    val remainder = if (label.startsWith(prefix, ignoreCase = true)) {
+        label.substring(prefix.length).removePrefix(" - ").removePrefix(" ")
+    } else {
+        null
+    }
+
+    if (remainder == null) {
+        Text(text = label, color = TextMuted, style = MaterialTheme.typography.labelSmall)
+        return
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        AsyncImage(
+            model = themeAwareLogoUrl(league.logoUrl),
+            contentDescription = league.displayName,
+            modifier = Modifier.size(14.dp)
+        )
+        if (remainder.isNotEmpty()) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(text = remainder, color = TextMuted, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
 @Composable
 private fun PitchSection(game: Game, modifier: Modifier = Modifier) {
     // Distinct from the one-line hook: a longer spoiler-free blurb. Treated as
