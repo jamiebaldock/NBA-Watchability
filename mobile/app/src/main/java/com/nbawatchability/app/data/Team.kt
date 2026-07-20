@@ -34,8 +34,10 @@ data class TeamsResponse(
 data class Player(
     val id: String,
     val name: String,
-    // Real ESPN headshot photo URL - only ever present for NBA/WNBA (MLB
-    // rosters have no equivalent field wired up yet).
+    // Real ESPN headshot photo URL - present for NBA/WNBA and MLB (all
+    // three roster endpoints carry a headshot.href field, confirmed
+    // directly against real responses). Null for NFL/NHL, which have no
+    // roster route built yet.
     val headshot: String? = null
 )
 
@@ -62,9 +64,9 @@ data class FavoritePlayer(
     val leagueGroup: String? = null,
     // Snapshotted from Player.headshot at favorite-time, same reasoning as
     // Team.logo - avoids a network round-trip just to render the Favorites
-    // tab's Players page. Null for MLB players (no roster headshot field
-    // wired up yet), and for anyone favorited via the standout-performance
-    // callout (GameCard.kt), which has no roster headshot data available at
-    // that point.
+    // tab's Players page. Present for NBA/WNBA/MLB; null for NFL/NHL (no
+    // roster route built yet), and for anyone favorited via the
+    // standout-performance callout (GameCard.kt), which has no roster
+    // headshot data available at that point.
     val headshot: String? = null
 )
