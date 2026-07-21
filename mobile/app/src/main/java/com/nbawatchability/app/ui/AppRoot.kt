@@ -477,6 +477,14 @@ private fun GamesTab(
     // fresh load, not a merge with whatever was showing.
     LaunchedEffect(selectedLeague, isAllLeaguesSelected, enabledLeagues) { viewModel.load(leagueGroups) }
 
+    // The busiest-day easter egg is only meaningful in "All Leagues" mode
+    // (a cross-league record) - fires once per real (year, enabled-leagues)
+    // combo, cached thereafter for the session (loadYearRecordDaysIfNeeded's
+    // own guard), not on every recomposition.
+    LaunchedEffect(isAllLeaguesSelected, enabledLeagues) {
+        if (isAllLeaguesSelected) viewModel.loadYearRecordDaysIfNeeded(java.time.LocalDate.now().year, leagueGroups)
+    }
+
     // Same refresh() pull-to-refresh already uses - cost-safe to fire more
     // often than a user would manually pull, since ensureHighlightsVideo's
     // cache/cooldown and the pregame preview's once-ever gate (both in
@@ -521,6 +529,7 @@ private fun GamesTab(
             monthCountsMonth = viewModel.monthCountsMonth,
             isLoadingMonthCounts = viewModel.isLoadingMonthCounts,
             onMonthChanged = { month -> viewModel.loadMonthCounts(month, leagueGroups) },
+            recordDays = viewModel.recordDays,
             isJumpingToDate = viewModel.isJumpingToDate,
             onJumpToDate = viewModel::jumpToDate,
             favoriteTeamNames = favoriteTeamNames,

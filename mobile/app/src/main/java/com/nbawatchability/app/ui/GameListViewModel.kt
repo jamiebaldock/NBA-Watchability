@@ -153,6 +153,101 @@ class GameListViewModel : ViewModel() {
         }
     }
 
+    // The real busiest local calendar day(s) of [recordDaysYear] across every
+    // league in [recordDaysLeagueGroups] combined - computed dynamically
+    // (not a hardcoded date), by fetching all 12 months' real per-day counts
+    // the same way loadMonthCounts does and finding whichever date(s) tie for
+    // the year's real maximum. More than one date is common, not an edge
+    // case to special-case away - a shared max naturally ties across several
+    // real dates in a given year (2026, at the time this was built, actually
+    // ties across three: 2026-03-28, 2026-04-07, and 2026-04-12, all at the
+    // same combined total in Eastern-day terms - though which specific local
+    // date(s) a given viewer's own device lands on can shift by a day either
+    // way once bucketed to their own timezone, same reasoning as
+    // loadMonthCounts/scheduleCounts). Every one of them gets the banner, not
+    // just one arbitrarily picked "the" record day.
+    var recordDays by mutableStateOf<Set<LocalDate>>(emptySet())
+        private set
+    var recordDayGameCount by mutableStateOf(0)
+        private set
+    var isLoadingRecordDays by mutableStateOf(false)
+        private set
+    private var recordDaysLoadedFor: Pair<Int, List<LeagueGroup>>? = null
+
+    /**
+     * Fetches (once per real year+league-set combo, cached thereafter for
+     * the session - see [recordDaysLoadedFor]) every month's real per-day
+     * counts for [year] across [leagueGroups] and records whichever date(s)
+     * tie for the highest combined total. Safe to call on every
+     * composition; only actually fetches again if [year] or [leagueGroups]
+     * changed since the last successful load.
+     */
+    fun loadYearRecordDaysIfNeeded(year: Int, leagueGroups: List<LeagueGroup>) {
+        val key = year to leagueGroups
+        if (recordDaysLoadedFor == key || isLoadingRecordDays) return
+
+        isLoadingRecordDays = true
+        viewModelScope.launch {
+            try {
+                // Per league, not flattened across (month, league) pairs -
+                // each month's own request already includes a 1-day buffer
+                // either side (scheduleCountsService.ts) for boundary-
+                // shifting games, so consecutive months' requests overlap by
+                // one real date (e.g. both March's and April's own fetch
+                // include April 1). Merging those 12 months with addition
+                // would double-count every boundary date's games - this
+                // merges within one league's 12 months with plain
+                // assignment instead (last write wins, not a running sum),
+                // since an overlapping date's count is identical no matter
+                // which of the two adjacent months' responses it came from.
+                // Only the merge ACROSS leagues below is a real sum, since
+                // different leagues' games on the same date are genuinely
+                // additional, not overlapping duplicates of each other.
+                val perLeagueTotals = leagueGroups.map { leagueGroup ->
+                    async {
+                        val monthResults = (1..12).map { month ->
+                            async {
+                                runCatching {
+                                    NetworkGameRepository.scheduleCounts(BACKEND_BASE_URL, year, month, leagueGroup)
+                                }.getOrDefault(emptyMap())
+                            }
+                        }.awaitAll()
+
+                        val leagueTotals = mutableMapOf<LocalDate, Int>()
+                        for (monthCounts in monthResults) {
+                            for ((date, count) in monthCounts) {
+                                // Guards against a buffer day spilling into
+                                // the adjacent calendar year too (e.g.
+                                // January's request pulling in December 31
+                                // of the year before).
+                                if (date.year == year) leagueTotals[date] = count
+                            }
+                        }
+                        leagueTotals
+                    }
+                }.awaitAll()
+
+                val totals = mutableMapOf<LocalDate, Int>()
+                for (leagueTotals in perLeagueTotals) {
+                    for ((date, count) in leagueTotals) {
+                        totals[date] = (totals[date] ?: 0) + count
+                    }
+                }
+
+                val max = totals.values.maxOrNull() ?: 0
+                recordDayGameCount = max
+                recordDays = if (max > 0) totals.filterValues { it == max }.keys else emptySet()
+                recordDaysLoadedFor = key
+            } catch (e: Exception) {
+                // Leave whatever was already found (or the empty initial
+                // state) rather than erroring the whole Games tab over a
+                // background easter-egg computation.
+            } finally {
+                isLoadingRecordDays = false
+            }
+        }
+    }
+
     /**
      * Full reload for [leagueGroups] - called on first composition and
      * again whenever the league selection changes (a single-element list

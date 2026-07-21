@@ -66,44 +66,14 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-// The real busiest single day of 2026 across all 5 leagues combined -
-// computed directly from this same schedule-counts data (not researched
-// separately), by summing every league's per-day count across every month
-// of the year: 15 NBA + 15 MLB + 6 NHL, 0 NFL (season not yet started) + 0
-// WNBA (already concluded for the year) = 36 real games, in US-Eastern/ESPN-
-// scoreboard-day terms. A genuinely surprising result: the real peak isn't
-// the popularly-cited October "Sports Equinox" (NFL Sundays + MLB postseason
-// + NBA/NHL/WNBA openers, which tops out well below this) but a late-season
-// NBA/NHL + season-opening-week MLB overlap in the spring instead, when far
-// more teams in each league are playing on the same night than October's
-// leaner postseason/early-season slates allow. Tied with 2026-04-07 and
-// 2026-03-28 (both also 36 in Eastern-day terms) - 2026-04-12 was picked as
-// the one to feature, no significance to the tiebreak beyond being the most
-// recent of the three.
-//
-// Only the DATE is hardcoded, not the game count - the banner shows the
-// real days[page].games.size for that date, same as every other tile count
-// on this screen, since that's already correctly bucketed by the viewer's
-// own local calendar date (rebucketByLocalDate in GameListViewModel.kt). The
-// combined count in Eastern-day terms (36, see above) doesn't necessarily
-// match what a viewer outside the Americas actually sees tallied under this
-// exact local date - some games near the day boundary land on the day before
-// or after once rebucketed to local time - so displaying the real local
-// count here instead of a hardcoded "36" keeps the banner honest for every
-// viewer regardless of timezone.
-//
-// For the same reason, the DAY ITSELF isn't a single fixed date either - a
-// viewer at or ahead of Eastern time can have this exact slate of games
-// rebucket a full calendar day later locally (confirmed directly: a UK
-// viewer sees all 36 land on the 13th, not the 12th, since most of these
-// games' real UTC tipoffs are already past midnight UK time). Checking both
-// candidate local dates covers every timezone from the Americas through
-// Europe/Africa; a viewer far enough ahead of UTC (e.g. Australia/NZ) could
-// in principle still miss both if the slate splits across two different
-// local dates for them - an acceptable gap for a small easter egg rather
-// than building full timezone-aware date math just for this.
-private val RECORD_GAME_DAY_CANDIDATES: Set<LocalDate> = setOf(LocalDate.of(2026, 4, 12), LocalDate.of(2026, 4, 13))
-
+// Nothing hardcoded here anymore - which date(s) get the banner and how many
+// games they had are both computed dynamically by GameListViewModel.kt's
+// loadYearRecordDaysIfNeeded (real per-day counts, bucketed by the viewer's
+// own local calendar date, same mechanism the calendar picker itself uses).
+// See that function's own comment for why more than one date commonly ties
+// for the year's real max, and why the specific tied date(s) can differ by a
+// day depending on the viewer's own timezone relative to the US Eastern/
+// ESPN-scoreboard-day convention the raw data comes back in.
 @Composable
 private fun RecordGameDayBanner(gameCount: Int, modifier: Modifier = Modifier) {
     Row(
@@ -166,6 +136,7 @@ fun DayTabsScreen(
     monthCountsMonth: YearMonth?,
     isLoadingMonthCounts: Boolean,
     onMonthChanged: (YearMonth) -> Unit,
+    recordDays: Set<LocalDate>,
     isJumpingToDate: Boolean,
     onJumpToDate: (LocalDate) -> Unit,
     favoriteTeamNames: Set<String> = emptySet(),
@@ -298,11 +269,13 @@ fun DayTabsScreen(
                     Column(modifier = Modifier.fillMaxSize()) {
                         // Only meaningful in "All Leagues" mode - the record
                         // is a cross-league total (see
-                        // RECORD_GAME_DAY_CANDIDATES' own comment), which a
-                        // single-league view can't show anyway (that day's
-                        // single-league count is always a small fraction of
-                        // the real combined figure).
-                        if (isAllLeaguesSelected && days[page].date in RECORD_GAME_DAY_CANDIDATES) {
+                        // GameListViewModel.kt's loadYearRecordDaysIfNeeded),
+                        // which a single-league view can't show anyway (that
+                        // day's single-league count is always a small
+                        // fraction of the real combined figure). recordDays
+                        // is empty until that background fetch completes, so
+                        // this naturally shows nothing while it's loading.
+                        if (isAllLeaguesSelected && days[page].date in recordDays) {
                             RecordGameDayBanner(
                                 gameCount = days[page].games.size,
                                 modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp)
