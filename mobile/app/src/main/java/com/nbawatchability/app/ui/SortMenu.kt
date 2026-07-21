@@ -10,7 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -31,12 +31,13 @@ enum class SortOption(val label: String) {
 }
 
 /**
- * Two independent toggle buttons - date order and rating order - replacing
- * the old single dropdown-behind-one-icon control. Each button carries its
- * own small up/down arrow badge showing which direction it's currently
- * sorting: up = ascending (oldest first / lowest rated first), down =
- * descending (newest first / highest rated first) - the same convention on
- * both buttons, just applied to a different axis.
+ * Two independent toggle buttons - rating order (# symbol, on the left) and
+ * date order (calendar symbol, on the right) - replacing the old single
+ * dropdown-behind-one-icon control. Each button carries its own small
+ * up/down arrow badge showing which direction it's currently sorting: up =
+ * ascending (lowest rated first / oldest first), down = descending
+ * (highest rated first / newest first) - the same convention on both
+ * buttons, just applied to a different axis.
  *
  * Tapping the button for the axis that's already active flips its direction.
  * Tapping the other axis's button switches the active sort over to it,
@@ -48,6 +49,17 @@ enum class SortOption(val label: String) {
 fun SortMenuButton(selected: SortOption, onSelected: (SortOption) -> Unit) {
     Row {
         SortToggleButton(
+            icon = Icons.Filled.Tag,
+            isActive = selected == SortOption.RATING_HIGHEST_FIRST || selected == SortOption.RATING_LOWEST_FIRST,
+            pointsUp = selected == SortOption.RATING_LOWEST_FIRST,
+            activeLabel = if (selected == SortOption.RATING_LOWEST_FIRST) "Lowest rated first" else "Highest rated first",
+            onClick = {
+                onSelected(
+                    if (selected == SortOption.RATING_HIGHEST_FIRST) SortOption.RATING_LOWEST_FIRST else SortOption.RATING_HIGHEST_FIRST
+                )
+            }
+        )
+        SortToggleButton(
             icon = Icons.Filled.CalendarMonth,
             isActive = selected == SortOption.DATE_OLDEST_FIRST || selected == SortOption.DATE_NEWEST_FIRST,
             pointsUp = selected != SortOption.DATE_NEWEST_FIRST,
@@ -55,17 +67,6 @@ fun SortMenuButton(selected: SortOption, onSelected: (SortOption) -> Unit) {
             onClick = {
                 onSelected(
                     if (selected == SortOption.DATE_OLDEST_FIRST) SortOption.DATE_NEWEST_FIRST else SortOption.DATE_OLDEST_FIRST
-                )
-            }
-        )
-        SortToggleButton(
-            icon = Icons.Filled.Star,
-            isActive = selected == SortOption.RATING_HIGHEST_FIRST || selected == SortOption.RATING_LOWEST_FIRST,
-            pointsUp = selected == SortOption.RATING_LOWEST_FIRST,
-            activeLabel = if (selected == SortOption.RATING_LOWEST_FIRST) "Lowest rated first" else "Highest rated first",
-            onClick = {
-                onSelected(
-                    if (selected == SortOption.RATING_HIGHEST_FIRST) SortOption.RATING_LOWEST_FIRST else SortOption.RATING_HIGHEST_FIRST
                 )
             }
         )
