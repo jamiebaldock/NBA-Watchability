@@ -91,7 +91,18 @@ import java.util.Locale
 // or after once rebucketed to local time - so displaying the real local
 // count here instead of a hardcoded "36" keeps the banner honest for every
 // viewer regardless of timezone.
-private val RECORD_GAME_DAY: LocalDate = LocalDate.of(2026, 4, 12)
+//
+// For the same reason, the DAY ITSELF isn't a single fixed date either - a
+// viewer at or ahead of Eastern time can have this exact slate of games
+// rebucket a full calendar day later locally (confirmed directly: a UK
+// viewer sees all 36 land on the 13th, not the 12th, since most of these
+// games' real UTC tipoffs are already past midnight UK time). Checking both
+// candidate local dates covers every timezone from the Americas through
+// Europe/Africa; a viewer far enough ahead of UTC (e.g. Australia/NZ) could
+// in principle still miss both if the slate splits across two different
+// local dates for them - an acceptable gap for a small easter egg rather
+// than building full timezone-aware date math just for this.
+private val RECORD_GAME_DAY_CANDIDATES: Set<LocalDate> = setOf(LocalDate.of(2026, 4, 12), LocalDate.of(2026, 4, 13))
 
 @Composable
 private fun RecordGameDayBanner(gameCount: Int, modifier: Modifier = Modifier) {
@@ -286,11 +297,12 @@ fun DayTabsScreen(
                 ) { page ->
                     Column(modifier = Modifier.fillMaxSize()) {
                         // Only meaningful in "All Leagues" mode - the record
-                        // is a cross-league total (see RECORD_GAME_DAY's own
-                        // comment), which a single-league view can't show
-                        // anyway (that day's single-league count is always a
-                        // small fraction of the real combined figure).
-                        if (isAllLeaguesSelected && days[page].date == RECORD_GAME_DAY) {
+                        // is a cross-league total (see
+                        // RECORD_GAME_DAY_CANDIDATES' own comment), which a
+                        // single-league view can't show anyway (that day's
+                        // single-league count is always a small fraction of
+                        // the real combined figure).
+                        if (isAllLeaguesSelected && days[page].date in RECORD_GAME_DAY_CANDIDATES) {
                             RecordGameDayBanner(
                                 gameCount = days[page].games.size,
                                 modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp)
