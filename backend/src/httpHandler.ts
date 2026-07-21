@@ -141,18 +141,22 @@ export function getCurrentSeasonStartForLeagueGroup(leagueGroupRaw = "nba"): Cur
 }
 
 /**
- * Per-day game counts for one calendar month - backs the mobile Games tab's
- * season-calendar picker, fetched lazily one month at a time as the user
- * navigates it (not a giant upfront year-long fetch) since this is
- * deliberately cheap per call (scheduleCountsService.ts's own comment
- * explains why: raw scoreboard counts only, none of the expensive per-game
- * LLM/rubric pipeline the real schedule endpoints run).
+ * Every real game's UTC tipoff timestamp in one calendar month (plus a
+ * 1-day buffer either side) - backs the mobile Games tab's season-calendar
+ * picker, fetched lazily one month at a time as the user navigates it (not
+ * a giant upfront year-long fetch) since this is deliberately cheap per call
+ * (scheduleCountsService.ts's own comment explains why: raw scoreboard
+ * tipoffs only, none of the expensive per-game LLM/rubric pipeline the real
+ * schedule endpoints run). Deliberately NOT pre-grouped into per-day counts
+ * server-side - see scheduleCountsService.ts's header comment for why that
+ * silently disagreed with the real Games tab tile count for any viewer
+ * outside the Americas.
  */
 export async function getScheduleCountsForLeagueGroup(
   year: number,
   month: number,
   leagueGroupRaw = "nba"
-): Promise<Record<string, number>> {
+): Promise<string[]> {
   if (!Number.isInteger(year) || year < 1900 || year > 2200) {
     throw new BadRequestError("year must be a real calendar year");
   }

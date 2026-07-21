@@ -1,9 +1,11 @@
 package com.nbawatchability.app.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
@@ -18,8 +20,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -55,11 +59,58 @@ import com.nbawatchability.app.data.effectiveScore
 import com.nbawatchability.app.data.filterByMinTier
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextSecondary
+import com.nbawatchability.app.ui.theme.TierInstantClassic
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+
+// The real busiest single day of 2026 across all 5 leagues combined -
+// computed directly from this same schedule-counts data (not researched
+// separately), by summing every league's per-day count across every month
+// of the year: 15 NBA + 15 MLB + 6 NHL, 0 NFL (season not yet started) + 0
+// WNBA (already concluded for the year) = 36 real games, in US-Eastern/ESPN-
+// scoreboard-day terms. A genuinely surprising result: the real peak isn't
+// the popularly-cited October "Sports Equinox" (NFL Sundays + MLB postseason
+// + NBA/NHL/WNBA openers, which tops out well below this) but a late-season
+// NBA/NHL + season-opening-week MLB overlap in the spring instead, when far
+// more teams in each league are playing on the same night than October's
+// leaner postseason/early-season slates allow. Tied with 2026-04-07 and
+// 2026-03-28 (both also 36 in Eastern-day terms) - 2026-04-12 was picked as
+// the one to feature, no significance to the tiebreak beyond being the most
+// recent of the three.
+//
+// Only the DATE is hardcoded, not the game count - the banner shows the
+// real days[page].games.size for that date, same as every other tile count
+// on this screen, since that's already correctly bucketed by the viewer's
+// own local calendar date (rebucketByLocalDate in GameListViewModel.kt). The
+// combined count in Eastern-day terms (36, see above) doesn't necessarily
+// match what a viewer outside the Americas actually sees tallied under this
+// exact local date - some games near the day boundary land on the day before
+// or after once rebucketed to local time - so displaying the real local
+// count here instead of a hardcoded "36" keeps the banner honest for every
+// viewer regardless of timezone.
+private val RECORD_GAME_DAY: LocalDate = LocalDate.of(2026, 4, 12)
+
+@Composable
+private fun RecordGameDayBanner(gameCount: Int, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(TierInstantClassic.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = TierInstantClassic, modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "Busiest day of 2026 - $gameCount games across every league today",
+            color = TierInstantClassic,
+            style = MaterialTheme.typography.labelMedium
+        )
+    }
+}
 
 private val dayTabFormatter = DateTimeFormatter.ofPattern("MMM d")
 
@@ -233,29 +284,42 @@ fun DayTabsScreen(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
-                    DayGamesList(
-                        games = days[page].games,
-                        sortOption = sortOption,
-                        showNumericScore = showNumericScore,
-                        nbaWeights = nbaWeights,
-                        wnbaWeights = wnbaWeights,
-                        mlbWeights = mlbWeights,
-                        nflWeights = nflWeights,
-                        nhlWeights = nhlWeights,
-                        starredIds = starredIds,
-                        onToggleStar = onToggleStar,
-                        onWatchHighlights = onWatchHighlights,
-                        isJumpingToNextGame = isJumpingToNextGame,
-                        onJumpToNextGame = onJumpToNextGame,
-                        favoriteTeamNames = favoriteTeamNames,
-                        bumpFavoriteTeamGames = bumpFavoriteTeamGames,
-                        onToggleFavoriteTeam = onToggleFavoriteTeam,
-                        favoritePlayerNames = favoritePlayerNames,
-                        onToggleFavoritePlayer = onToggleFavoritePlayer,
-                        minTierFilterEnabled = minTierFilterEnabled,
-                        minTierFilter = minTierFilter,
-                        onGameClick = onGameClick
-                    )
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Only meaningful in "All Leagues" mode - the record
+                        // is a cross-league total (see RECORD_GAME_DAY's own
+                        // comment), which a single-league view can't show
+                        // anyway (that day's single-league count is always a
+                        // small fraction of the real combined figure).
+                        if (isAllLeaguesSelected && days[page].date == RECORD_GAME_DAY) {
+                            RecordGameDayBanner(
+                                gameCount = days[page].games.size,
+                                modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp)
+                            )
+                        }
+                        DayGamesList(
+                            games = days[page].games,
+                            sortOption = sortOption,
+                            showNumericScore = showNumericScore,
+                            nbaWeights = nbaWeights,
+                            wnbaWeights = wnbaWeights,
+                            mlbWeights = mlbWeights,
+                            nflWeights = nflWeights,
+                            nhlWeights = nhlWeights,
+                            starredIds = starredIds,
+                            onToggleStar = onToggleStar,
+                            onWatchHighlights = onWatchHighlights,
+                            isJumpingToNextGame = isJumpingToNextGame,
+                            onJumpToNextGame = onJumpToNextGame,
+                            favoriteTeamNames = favoriteTeamNames,
+                            bumpFavoriteTeamGames = bumpFavoriteTeamGames,
+                            onToggleFavoriteTeam = onToggleFavoriteTeam,
+                            favoritePlayerNames = favoritePlayerNames,
+                            onToggleFavoritePlayer = onToggleFavoritePlayer,
+                            minTierFilterEnabled = minTierFilterEnabled,
+                            minTierFilter = minTierFilter,
+                            onGameClick = onGameClick
+                        )
+                    }
                 }
             }
             ActionLabelOverlay(

@@ -10,6 +10,8 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
 
 @Serializable
 private data class DayGamesResponse(val date: String, val games: List<Game>)
@@ -185,6 +187,17 @@ object NetworkGameRepository {
      * not because a bigger request would be rejected - see that file's
      * comment. Days with zero games are simply absent from the map (the
      * calendar renders those cells blank, not "0").
+     *
+     * The backend returns raw UTC tipoff timestamps, not pre-grouped
+     * per-day counts - grouping happens here, by the device's own local
+     * calendar date (ZoneId.systemDefault(), same as GameListViewModel.kt's
+     * localDateOf), not ESPN's own US-Eastern-anchored scoreboard day. A
+     * game ESPN buckets under one scoreboard day can - and often does -
+     * fall on the next local calendar date for any viewer at or ahead of
+     * Eastern time (confirmed directly: an NBA game ESPN lists under one
+     * date tips off at 00:30 UTC, already the next day almost everywhere
+     * outside the Americas) - grouping server-side by ESPN's own day silently
+     * disagreed with the real Games tab tile count for exactly that reason.
      */
     suspend fun scheduleCounts(
         baseUrl: String,
@@ -209,7 +222,10 @@ object NetworkGameRepository {
                     throw BackendRequestException(message ?: "Backend returned HTTP $status")
                 }
 
-                json.decodeFromString<Map<String, Int>>(body).mapKeys { (dateStr, _) -> LocalDate.parse(dateStr) }
+                json.decodeFromString<List<String>>(body)
+                    .map { tipoffUtc -> OffsetDateTime.parse(tipoffUtc).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate() }
+                    .groupingBy { it }
+                    .eachCount()
             } finally {
                 connection.disconnect()
             }
