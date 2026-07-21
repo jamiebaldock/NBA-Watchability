@@ -17,6 +17,7 @@ import {
   getTeamsForLeagueGroup,
 } from "./httpHandler";
 import { registerAlertDevice, setAlertGameSub } from "./alertsService";
+import { isFcmConfigured } from "./fcm";
 import { startHighlightsPoller } from "./highlightsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
@@ -250,6 +251,14 @@ app.post("/alerts/game-sub", express.json(), (req, res) => {
       res.status(500).json({ error: "internal error" });
     }
   }
+});
+
+// Exercises fcm.ts's lazy init on demand, rather than waiting for the first
+// real send (which nothing triggers yet - no detection poller exists) - the
+// only way to confirm FIREBASE_SERVICE_ACCOUNT actually parsed into valid
+// credentials versus just being present as an env var.
+app.get("/alerts/status", (_req, res) => {
+  res.json({ fcmConfigured: isFcmConfigured() });
 });
 
 app.listen(PORT, () => {
