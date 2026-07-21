@@ -156,6 +156,16 @@ ensureColumn("games", "nfl_rubric_inputs", "TEXT");
 // day one (not retrofitted) per feedback_new_league_full_pipeline_checklist.md.
 ensureColumn("games", "nhl_rubric_inputs", "TEXT");
 
+// The one shared handle to games.db - alertStore.ts's tables live in this
+// same file (same durability story: whatever disk games.db survives deploys
+// on, the alert tables survive with it), and sharing the connection rather
+// than opening a second one keeps every write on the single synchronous
+// better-sqlite3 handle this codebase is built around - no SQLITE_BUSY
+// contention to reason about.
+export function rawDb(): Database.Database {
+  return db;
+}
+
 function now(): string {
   return new Date().toISOString();
 }

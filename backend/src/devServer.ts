@@ -16,6 +16,7 @@ import {
   getTeamScheduleForLeagueGroup,
   getTeamsForLeagueGroup,
 } from "./httpHandler";
+import { registerAlertDevice, setAlertGameSub } from "./alertsService";
 import { startHighlightsPoller } from "./highlightsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
@@ -209,6 +210,38 @@ app.get("/team-schedule", async (req, res) => {
     const teamId = String(req.query.teamId ?? "");
     const leagueGroup = String(req.query.leagueGroup ?? "nba");
     res.json(await getTeamScheduleForLeagueGroup(teamId, leagueGroup));
+  } catch (err) {
+    if (err instanceof BadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
+});
+
+// The Alerts feature's two write endpoints (everything else on this server
+// is read-only GETs, hence express.json() scoped here rather than global -
+// no GET route parses a body). Both are full-state/idempotent, see
+// alertsService.ts.
+app.post("/alerts/register", express.json(), (req, res) => {
+  try {
+    registerAlertDevice(req.body);
+    res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof BadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
+});
+
+app.post("/alerts/game-sub", express.json(), (req, res) => {
+  try {
+    setAlertGameSub(req.body);
+    res.json({ ok: true });
   } catch (err) {
     if (err instanceof BadRequestError) {
       res.status(400).json({ error: err.message });
