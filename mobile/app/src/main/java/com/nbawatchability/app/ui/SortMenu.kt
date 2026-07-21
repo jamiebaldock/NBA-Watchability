@@ -2,26 +2,27 @@ package com.nbawatchability.app.ui
 
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
-import com.nbawatchability.app.ui.theme.TextPrimary
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import com.nbawatchability.app.ui.theme.TextSecondary
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
 
-/** The 4 ways a game list can be ordered - one option picked at a time, unlike the old pair of independent date/rating toggles. */
+/** The 4 ways a game list can be ordered - one option active at a time. */
 enum class SortOption(val label: String) {
     DATE_OLDEST_FIRST("Oldest first"),
     DATE_NEWEST_FIRST("Newest first"),
@@ -30,38 +31,72 @@ enum class SortOption(val label: String) {
 }
 
 /**
- * A single sort icon that opens a 4-option dropdown (date asc/desc, rating
- * high/low first) - replaces what used to be two separate icon toggles
- * (a date-order toggle and a best-first-rating toggle) on Starred and
- * History, since those two controls together only ever expressed one of
- * these same 4 combinations at a time anyway.
+ * Two independent toggle buttons - date order and rating order - replacing
+ * the old single dropdown-behind-one-icon control. Each button carries its
+ * own small up/down arrow badge showing which direction it's currently
+ * sorting: up = ascending (oldest first / lowest rated first), down =
+ * descending (newest first / highest rated first) - the same convention on
+ * both buttons, just applied to a different axis.
+ *
+ * Tapping the button for the axis that's already active flips its direction.
+ * Tapping the other axis's button switches the active sort over to it,
+ * defaulting to oldest-first for date and highest-rated-first for rating
+ * (whichever is the more commonly useful first look at that axis) rather
+ * than preserving whatever direction that axis last had.
  */
 @Composable
 fun SortMenuButton(selected: SortOption, onSelected: (SortOption) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Sort,
-                contentDescription = "Sort: ${selected.label}",
-                tint = TextSecondary
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            SortOption.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = option.label,
-                            color = if (option == selected) TierWorthYourTime else TextPrimary
-                        )
-                    },
-                    onClick = {
-                        onSelected(option)
-                        expanded = false
-                    }
+    Row {
+        SortToggleButton(
+            icon = Icons.Filled.CalendarMonth,
+            isActive = selected == SortOption.DATE_OLDEST_FIRST || selected == SortOption.DATE_NEWEST_FIRST,
+            pointsUp = selected != SortOption.DATE_NEWEST_FIRST,
+            activeLabel = if (selected == SortOption.DATE_NEWEST_FIRST) "Newest first" else "Oldest first",
+            onClick = {
+                onSelected(
+                    if (selected == SortOption.DATE_OLDEST_FIRST) SortOption.DATE_NEWEST_FIRST else SortOption.DATE_OLDEST_FIRST
                 )
             }
+        )
+        SortToggleButton(
+            icon = Icons.Filled.Star,
+            isActive = selected == SortOption.RATING_HIGHEST_FIRST || selected == SortOption.RATING_LOWEST_FIRST,
+            pointsUp = selected == SortOption.RATING_LOWEST_FIRST,
+            activeLabel = if (selected == SortOption.RATING_LOWEST_FIRST) "Lowest rated first" else "Highest rated first",
+            onClick = {
+                onSelected(
+                    if (selected == SortOption.RATING_HIGHEST_FIRST) SortOption.RATING_LOWEST_FIRST else SortOption.RATING_HIGHEST_FIRST
+                )
+            }
+        )
+    }
+}
+
+@Composable
+private fun SortToggleButton(
+    icon: ImageVector,
+    isActive: Boolean,
+    pointsUp: Boolean,
+    activeLabel: String,
+    onClick: () -> Unit
+) {
+    val tint = if (isActive) TierWorthYourTime else TextSecondary
+    IconButton(onClick = onClick) {
+        Box(modifier = Modifier.size(28.dp)) {
+            Icon(
+                imageVector = icon,
+                contentDescription = if (isActive) "Sort: $activeLabel" else null,
+                tint = tint,
+                modifier = Modifier.size(20.dp)
+            )
+            Icon(
+                imageVector = if (pointsUp) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier
+                    .size(12.dp)
+                    .align(Alignment.BottomEnd)
+            )
         }
     }
 }
