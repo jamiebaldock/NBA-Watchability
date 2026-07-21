@@ -75,7 +75,7 @@ import java.util.Locale
 // day depending on the viewer's own timezone relative to the US Eastern/
 // ESPN-scoreboard-day convention the raw data comes back in.
 @Composable
-private fun RecordGameDayBanner(gameCount: Int, modifier: Modifier = Modifier) {
+private fun RecordGameDayBanner(gameCount: Int, isTied: Boolean, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -86,7 +86,11 @@ private fun RecordGameDayBanner(gameCount: Int, modifier: Modifier = Modifier) {
         Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = TierInstantClassic, modifier = Modifier.size(20.dp))
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = "Busiest day of 2026 - $gameCount games across every league today",
+            text = if (isTied) {
+                "One of the busiest days of 2026 - $gameCount games across every league today"
+            } else {
+                "Busiest day of 2026 - $gameCount games across every league today"
+            },
             color = TierInstantClassic,
             style = MaterialTheme.typography.labelMedium
         )
@@ -278,6 +282,7 @@ fun DayTabsScreen(
                         if (isAllLeaguesSelected && days[page].date in recordDays) {
                             RecordGameDayBanner(
                                 gameCount = days[page].games.size,
+                                isTied = recordDays.size > 1,
                                 modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp)
                             )
                         }
