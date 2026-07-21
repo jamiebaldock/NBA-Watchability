@@ -9,6 +9,7 @@ import { getMlbGamesForDate, getMlbTeamSchedule, getNextMlbScheduledDate, isMlbL
 import { getNextNflScheduledDate, getNflGamesForDate, getNflTeamSchedule, isNflLeagueGroup } from "./nflGamesService";
 import { getNextNhlScheduledDate, getNhlGamesForDate, getNhlTeamSchedule, isNhlLeagueGroup } from "./nhlGamesService";
 import { getRoster } from "./rosterService";
+import { getScheduleCounts } from "./scheduleCountsService";
 import { getStandings } from "./standingsService";
 import { getStats } from "./statsService";
 import { getTeams } from "./teamsService";
@@ -137,6 +138,29 @@ export function getCurrentSeasonStartForLeagueGroup(leagueGroupRaw = "nba"): Cur
   const dayAfter = new Date(finalsEnd);
   dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
   return { date: dayAfter.toISOString().slice(0, 10) };
+}
+
+/**
+ * Per-day game counts for one calendar month - backs the mobile Games tab's
+ * season-calendar picker, fetched lazily one month at a time as the user
+ * navigates it (not a giant upfront year-long fetch) since this is
+ * deliberately cheap per call (scheduleCountsService.ts's own comment
+ * explains why: raw scoreboard counts only, none of the expensive per-game
+ * LLM/rubric pipeline the real schedule endpoints run).
+ */
+export async function getScheduleCountsForLeagueGroup(
+  year: number,
+  month: number,
+  leagueGroupRaw = "nba"
+): Promise<Record<string, number>> {
+  if (!Number.isInteger(year) || year < 1900 || year > 2200) {
+    throw new BadRequestError("year must be a real calendar year");
+  }
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    throw new BadRequestError("month must be 1-12");
+  }
+  const leagueGroup = parseLeagueGroup(leagueGroupRaw);
+  return getScheduleCounts(leagueGroup, year, month);
 }
 
 export async function getStandingsForLeagueGroup(leagueGroupRaw = "nba"): Promise<StandingsResponseJson> {

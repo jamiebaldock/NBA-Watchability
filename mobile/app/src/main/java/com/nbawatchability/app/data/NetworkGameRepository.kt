@@ -176,4 +176,42 @@ object NetworkGameRepository {
                 connection.disconnect()
             }
         }
+
+    /**
+     * Per-day game counts for one calendar month - backs the Games tab's
+     * season-calendar picker. Fetched one month at a time as the user
+     * navigates the calendar (not the whole year up front) since the
+     * backend's own scheduleCountsService.ts is deliberately cheap per call,
+     * not because a bigger request would be rejected - see that file's
+     * comment. Days with zero games are simply absent from the map (the
+     * calendar renders those cells blank, not "0").
+     */
+    suspend fun scheduleCounts(
+        baseUrl: String,
+        year: Int,
+        month: Int,
+        leagueGroup: LeagueGroup
+    ): Map<LocalDate, Int> =
+        withContext(Dispatchers.IO) {
+            val url = URL("$baseUrl/schedule-counts?year=$year&month=$month&leagueGroup=${leagueGroup.apiValue}")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.connectTimeout = 45000
+            connection.readTimeout = 45000
+            connection.requestMethod = "GET"
+
+            try {
+                val status = connection.responseCode
+                val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+                val body = BufferedReader(InputStreamReader(stream)).use { it.readText() }
+
+                if (status !in 200..299) {
+                    val message = runCatching { json.decodeFromString<ErrorResponse>(body).error }.getOrNull()
+                    throw BackendRequestException(message ?: "Backend returned HTTP $status")
+                }
+
+                json.decodeFromString<Map<String, Int>>(body).mapKeys { (dateStr, _) -> LocalDate.parse(dateStr) }
+            } finally {
+                connection.disconnect()
+            }
+        }
 }

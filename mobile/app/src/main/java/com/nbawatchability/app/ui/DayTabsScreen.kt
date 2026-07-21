@@ -100,8 +100,10 @@ fun DayTabsScreen(
     onJumpToNextGameErrorShown: () -> Unit,
     isJumpingToToday: Boolean,
     onJumpToToday: () -> Unit,
-    fullSeasonRange: Pair<LocalDate, LocalDate>?,
-    datesWithGames: Set<LocalDate>,
+    monthCounts: Map<LocalDate, Int>,
+    monthCountsMonth: YearMonth?,
+    isLoadingMonthCounts: Boolean,
+    onMonthChanged: (YearMonth) -> Unit,
     isJumpingToDate: Boolean,
     onJumpToDate: (LocalDate) -> Unit,
     favoriteTeamNames: Set<String> = emptySet(),
@@ -164,23 +166,20 @@ fun DayTabsScreen(
                     )
                 },
                 actions = {
-                    // Only shown for leagues with a full-season range loaded -
-                    // whichever leagues the backend's /season-window endpoint
-                    // currently has real data for (all 5 as of this build,
-                    // see seasonWindowService.ts), not a fixed list - a
-                    // calendar has nothing useful to offer over the swipeable
-                    // tabs themselves for a fixed narrow +/-7 day window.
-                    if (fullSeasonRange != null) {
-                        IconButton(onClick = { showCalendar = true }, enabled = !isJumpingToDate) {
-                            if (isJumpingToDate) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.CalendarMonth,
-                                    contentDescription = "Jump to date",
-                                    tint = TextSecondary
-                                )
-                            }
+                    // Always available now - the calendar scrolls freely
+                    // across years and shows real per-day game counts
+                    // (fetched lazily per visible month), so it's useful
+                    // regardless of whether "the current season" happens to
+                    // be loaded for whichever league is selected.
+                    IconButton(onClick = { showCalendar = true }, enabled = !isJumpingToDate) {
+                        if (isJumpingToDate) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.CalendarMonth,
+                                contentDescription = "Jump to date",
+                                tint = TextSecondary
+                            )
                         }
                     }
                     // Only shown once the viewer has actually wandered off
@@ -266,13 +265,13 @@ fun DayTabsScreen(
         }
     }
 
-    if (showCalendar && fullSeasonRange != null) {
-        val (seasonStart, seasonEnd) = fullSeasonRange
+    if (showCalendar) {
         SeasonCalendarDialog(
-            seasonStart = seasonStart,
-            seasonEnd = seasonEnd,
-            datesWithGames = datesWithGames,
             initialMonth = YearMonth.from(today),
+            gameCounts = monthCounts,
+            gameCountsMonth = monthCountsMonth,
+            isLoadingCounts = isLoadingMonthCounts,
+            onMonthChanged = onMonthChanged,
             onDateSelected = { date ->
                 showCalendar = false
                 onJumpToDate(date)

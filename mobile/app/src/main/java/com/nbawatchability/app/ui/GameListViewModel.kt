@@ -10,9 +10,12 @@ import com.nbawatchability.app.data.DayGames
 import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.NetworkGameRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.YearMonth
 import java.time.ZoneId
 
 sealed interface ScheduleUiState {
@@ -84,12 +87,71 @@ class GameListViewModel : ViewModel() {
     // doesn't have enough schedule data for right now.
     private var seasonRange by mutableStateOf<Pair<LocalDate, LocalDate>?>(null)
 
-    /** Null until a full-season range loads for the current league - the calendar-picker button only shows when this is non-null. */
+    /**
+     * Null until a full-season range loads for the current league - this
+     * still only exists to let fetchSchedule() below eagerly load the whole
+     * season's day-tabs instead of a narrow +/-7 day window (WNBA/MLB/NFL/
+     * NHL/NBA all get this once their own season is real and current). It no
+     * longer gates the calendar-picker button itself - that's always shown
+     * now (see monthCounts below), since the calendar works for any month of
+     * any year regardless of whether a "current season" is loaded.
+     */
     val fullSeasonRange: Pair<LocalDate, LocalDate>? get() = seasonRange
 
-    /** Every date within the currently loaded window that actually has at least one game - backs the calendar picker's dot indicators. */
-    val datesWithGames: Set<LocalDate>
-        get() = (uiState as? ScheduleUiState.Loaded)?.days?.filter { it.games.isNotEmpty() }?.map { it.date }?.toSet().orEmpty()
+    // Counts for whichever single month the calendar dialog currently has
+    // open - fetched lazily per visible month (loadMonthCounts below) rather
+    // than for the whole year up front, since the backend's own
+    // scheduleCountsService.ts is deliberately cheap per month but there's
+    // still no reason to fetch months nobody's scrolled to yet. Keyed by the
+    // month itself (not just a flat date set) so a stale response from a
+    // month the user has since scrolled away from can be told apart from
+    // "this month's real counts, still loading."
+    var monthCounts by mutableStateOf<Map<LocalDate, Int>>(emptyMap())
+        private set
+    var monthCountsMonth by mutableStateOf<YearMonth?>(null)
+        private set
+    var isLoadingMonthCounts by mutableStateOf(false)
+        private set
+
+    /**
+     * Fetches real per-day game counts for [month] across every league in
+     * [leagueGroups] (more than one only in "All Leagues" mode - each
+     * league's counts are fetched in parallel and summed per date, same
+     * "merge independently" shape as FavoriteGamesViewModel's per-team
+     * fetches). Safe to call again for the same month that's already loaded
+     * (e.g. the calendar re-opening) - cheap since the backend caches each
+     * (league, year, month) once per day itself.
+     */
+    fun loadMonthCounts(month: YearMonth, leagueGroups: List<LeagueGroup>) {
+        isLoadingMonthCounts = true
+        viewModelScope.launch {
+            try {
+                val perLeague = leagueGroups.map { leagueGroup ->
+                    async {
+                        runCatching {
+                            NetworkGameRepository.scheduleCounts(BACKEND_BASE_URL, month.year, month.monthValue, leagueGroup)
+                        }.getOrDefault(emptyMap())
+                    }
+                }.awaitAll()
+
+                val merged = mutableMapOf<LocalDate, Int>()
+                for (counts in perLeague) {
+                    for ((date, count) in counts) {
+                        merged[date] = (merged[date] ?: 0) + count
+                    }
+                }
+                monthCounts = merged
+                monthCountsMonth = month
+            } catch (e: Exception) {
+                // Leave whatever was already loaded (likely the previous
+                // month) rather than blanking the calendar over one failed
+                // fetch - same "don't discard good state over a transient
+                // error" reasoning as refresh() above.
+            } finally {
+                isLoadingMonthCounts = false
+            }
+        }
+    }
 
     /**
      * Full reload for [leagueGroups] - called on first composition and

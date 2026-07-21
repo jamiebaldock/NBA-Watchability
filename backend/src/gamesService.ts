@@ -63,8 +63,14 @@ interface LeagueEvent {
   event: EspnEvent;
 }
 
-/** Each league is its own ESPN "sport", so a day's full slate is the union of separate per-league fetches. */
-async function fetchAllEvents(espnDate: string, leagueGroup: BasketballLeagueGroup): Promise<LeagueEvent[]> {
+/**
+ * Each league is its own ESPN "sport", so a day's full slate is the union of
+ * separate per-league fetches. Exported so scheduleCountsService.ts can
+ * reuse the exact same event set the live Games tab itself shows for a given
+ * day (no separate preseason/filter logic to keep in sync) when it only
+ * needs a lightweight per-day count, not the full processed GameJson list.
+ */
+export async function fetchAllEvents(espnDate: string, leagueGroup: BasketballLeagueGroup): Promise<LeagueEvent[]> {
   const perLeague = await Promise.all(
     LEAGUE_GROUPS[leagueGroup].map(async (league) => {
       const events = await fetchScoreboard(espnDate, league);

@@ -9,6 +9,7 @@ import {
   getNextGameDateForLeagueGroup,
   getRosterForTeam,
   getSchedule,
+  getScheduleCountsForLeagueGroup,
   getSeasonWindowForLeagueGroup,
   getStandingsForLeagueGroup,
   getStatsForLeagueGroup,
@@ -92,6 +93,22 @@ app.get("/next-game-date", async (req, res) => {
     const after = String(req.query.after ?? "");
     const leagueGroup = String(req.query.leagueGroup ?? "nba");
     res.json(await getNextGameDateForLeagueGroup(after, leagueGroup));
+  } catch (err) {
+    if (err instanceof BadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
+});
+
+app.get("/schedule-counts", async (req, res) => {
+  try {
+    const year = Number(req.query.year);
+    const month = Number(req.query.month);
+    const leagueGroup = String(req.query.leagueGroup ?? "nba");
+    res.json(await getScheduleCountsForLeagueGroup(year, month, leagueGroup));
   } catch (err) {
     if (err instanceof BadRequestError) {
       res.status(400).json({ error: err.message });
