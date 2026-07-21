@@ -44,21 +44,28 @@ enum class SortOption(val label: String) {
  * defaulting to oldest-first for date and highest-rated-first for rating
  * (whichever is the more commonly useful first look at that axis) rather
  * than preserving whatever direction that axis last had.
+ *
+ * [showRatingToggle] hides the # button entirely (e.g. Favorites' Upcoming
+ * Games page, where every game is unscored and rating order isn't a
+ * meaningful choice) - callers that hide it are expected to never pass a
+ * RATING_* [selected] value in that state.
  */
 @Composable
-fun SortMenuButton(selected: SortOption, onSelected: (SortOption) -> Unit) {
+fun SortMenuButton(selected: SortOption, onSelected: (SortOption) -> Unit, showRatingToggle: Boolean = true) {
     Row {
-        SortToggleButton(
-            icon = Icons.Filled.Tag,
-            isActive = selected == SortOption.RATING_HIGHEST_FIRST || selected == SortOption.RATING_LOWEST_FIRST,
-            pointsUp = selected == SortOption.RATING_LOWEST_FIRST,
-            activeLabel = if (selected == SortOption.RATING_LOWEST_FIRST) "Lowest rated first" else "Highest rated first",
-            onClick = {
-                onSelected(
-                    if (selected == SortOption.RATING_HIGHEST_FIRST) SortOption.RATING_LOWEST_FIRST else SortOption.RATING_HIGHEST_FIRST
-                )
-            }
-        )
+        if (showRatingToggle) {
+            SortToggleButton(
+                icon = Icons.Filled.Tag,
+                isActive = selected == SortOption.RATING_HIGHEST_FIRST || selected == SortOption.RATING_LOWEST_FIRST,
+                pointsUp = selected == SortOption.RATING_LOWEST_FIRST,
+                activeLabel = if (selected == SortOption.RATING_LOWEST_FIRST) "Lowest rated first" else "Highest rated first",
+                onClick = {
+                    onSelected(
+                        if (selected == SortOption.RATING_HIGHEST_FIRST) SortOption.RATING_LOWEST_FIRST else SortOption.RATING_HIGHEST_FIRST
+                    )
+                }
+            )
+        }
         SortToggleButton(
             icon = Icons.Filled.CalendarMonth,
             isActive = selected == SortOption.DATE_OLDEST_FIRST || selected == SortOption.DATE_NEWEST_FIRST,

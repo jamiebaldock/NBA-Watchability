@@ -141,7 +141,11 @@ fun FavoritesScreen(
                         val onUpcoming = pagerState.currentPage == 0
                         SortMenuButton(
                             selected = if (onUpcoming) sortOptionUpcoming else sortOptionPast,
-                            onSelected = { if (onUpcoming) sortOptionUpcoming = it else sortOptionPast = it }
+                            onSelected = { if (onUpcoming) sortOptionUpcoming = it else sortOptionPast = it },
+                            // Upcoming games are always unscored, so rating
+                            // order isn't a meaningful choice there - only
+                            // Past Games keeps the # toggle.
+                            showRatingToggle = !onUpcoming
                         )
                         NumericScoreToggleButton(checked = showNumericScore, onCheckedChange = { onToggleNumericScore() })
                     }
