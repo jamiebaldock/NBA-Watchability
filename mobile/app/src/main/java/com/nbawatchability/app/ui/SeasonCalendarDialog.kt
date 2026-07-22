@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,10 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,7 +44,9 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle
+import java.time.temporal.ChronoUnit
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 // Sunday-first, matching the day-tab labels' own convention elsewhere on
 // this screen (e.g. "Sat Jul 18").
@@ -79,6 +80,11 @@ private val LATEST_NAVIGABLE_MONTH = YearMonth.now().plusYears(2)
  * via [onMonthChanged], which fires on the initial month too so the caller
  * doesn't need a separate "load the starting month" call of its own.
  */
+private fun monthForPage(page: Int): YearMonth = EARLIEST_NAVIGABLE_MONTH.plusMonths(page.toLong())
+
+private fun pageForMonth(month: YearMonth): Int =
+    ChronoUnit.MONTHS.between(EARLIEST_NAVIGABLE_MONTH, month).toInt()
+
 @Composable
 fun SeasonCalendarDialog(
     initialMonth: YearMonth,
@@ -89,15 +95,29 @@ fun SeasonCalendarDialog(
     onDateSelected: (LocalDate) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var visibleMonth by remember { mutableStateOf(initialMonth.coerceIn(EARLIEST_NAVIGABLE_MONTH, LATEST_NAVIGABLE_MONTH)) }
+    // Months are pages of a HorizontalPager (swipe left/right to change
+    // month, same gesture as Games' day pager / History's season pager) -
+    // the chevrons stay as an equivalent tap alternative, both driving the
+    // same pager state. Page index <-> month mapping is an offset from
+    // EARLIEST_NAVIGABLE_MONTH, so the pager's own [0, pageCount) clamping
+    // IS the navigation bound - no separate coerceIn on swipes needed.
+    val totalMonths = pageForMonth(LATEST_NAVIGABLE_MONTH) + 1
+    val pagerState = rememberPagerState(
+        initialPage = pageForMonth(initialMonth.coerceIn(EARLIEST_NAVIGABLE_MONTH, LATEST_NAVIGABLE_MONTH))
+    ) { totalMonths }
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(visibleMonth) { onMonthChanged(visibleMonth) }
+    // Counts fetch keys off settledPage (not currentPage) so a swipe only
+    // triggers one request, for the month actually landed on - same lesson
+    // as DayTabsScreen's pager sync (and the original calendar pager's own
+    // stuck-mid-scroll fix): currentPage fires for every intermediate page
+    // a fling crosses. Fires for the initial month too, preserving this
+    // dialog's "no separate load-the-starting-month call" contract.
+    LaunchedEffect(pagerState.settledPage) { onMonthChanged(monthForPage(pagerState.settledPage)) }
 
-    // Only ever show counts for the month currently on screen - a still-
-    // loading or previously-fetched month's data would otherwise flash
-    // against the wrong grid for one frame while the new month's request is
-    // in flight.
-    val countsForVisibleMonth = if (gameCountsMonth == visibleMonth) gameCounts else emptyMap()
+    // The header month tracks currentPage (not settledPage) so the title
+    // and spinner update in step with the swipe rather than lagging it.
+    val headerMonth = monthForPage(pagerState.currentPage)
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(color = SurfaceCardElevated, shape = RoundedCornerShape(16.dp)) {
@@ -108,25 +128,25 @@ fun SeasonCalendarDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        onClick = { visibleMonth = visibleMonth.minusMonths(1) },
-                        enabled = visibleMonth > EARLIEST_NAVIGABLE_MONTH
+                        onClick = { scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) } },
+                        enabled = pagerState.currentPage > 0
                     ) {
                         Icon(Icons.Default.ChevronLeft, contentDescription = "Previous month", tint = TextPrimary)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "${visibleMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${visibleMonth.year}",
+                            text = "${headerMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${headerMonth.year}",
                             color = TextPrimary,
                             style = MaterialTheme.typography.titleMedium
                         )
-                        if (isLoadingCounts && gameCountsMonth != visibleMonth) {
+                        if (isLoadingCounts && gameCountsMonth != headerMonth) {
                             Spacer(modifier = Modifier.size(8.dp))
                             CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                         }
                     }
                     IconButton(
-                        onClick = { visibleMonth = visibleMonth.plusMonths(1) },
-                        enabled = visibleMonth < LATEST_NAVIGABLE_MONTH
+                        onClick = { scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) } },
+                        enabled = pagerState.currentPage < totalMonths - 1
                     ) {
                         Icon(Icons.Default.ChevronRight, contentDescription = "Next month", tint = TextPrimary)
                     }
@@ -148,28 +168,53 @@ fun SeasonCalendarDialog(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                val firstOfMonth = visibleMonth.atDay(1)
-                // ISO DayOfWeek.value is 1=Monday..7=Sunday; %7 remaps to a
-                // Sunday-first offset (Sunday->0, Monday->1, ..., Saturday->6).
-                val leadingBlanks = firstOfMonth.dayOfWeek.value % 7
-                val daysInMonth = visibleMonth.lengthOfMonth()
-                val totalCells = leadingBlanks + daysInMonth
-                val rows = (totalCells + 6) / 7
+                HorizontalPager(state = pagerState) { page ->
+                    val pageMonth = monthForPage(page)
+                    // Only ever show counts for the month they were fetched
+                    // for - an adjacent page mid-swipe (or a still-loading
+                    // month) renders a plain blank-count grid rather than
+                    // flashing the previous month's numbers against the
+                    // wrong days.
+                    MonthGrid(
+                        month = pageMonth,
+                        counts = if (gameCountsMonth == pageMonth) gameCounts else emptyMap(),
+                        onDateSelected = onDateSelected
+                    )
+                }
+            }
+        }
+    }
+}
 
-                for (row in 0 until rows) {
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        for (col in 0 until 7) {
-                            val dayNum = row * 7 + col - leadingBlanks + 1
-                            Box(modifier = Modifier.weight(1f).aspectRatio(1f), contentAlignment = Alignment.Center) {
-                                if (dayNum in 1..daysInMonth) {
-                                    val date = visibleMonth.atDay(dayNum)
-                                    CalendarDayCell(
-                                        date = date,
-                                        gameCount = countsForVisibleMonth[date],
-                                        onDateSelected = onDateSelected
-                                    )
-                                }
-                            }
+@Composable
+private fun MonthGrid(
+    month: YearMonth,
+    counts: Map<LocalDate, Int>,
+    onDateSelected: (LocalDate) -> Unit
+) {
+    val firstOfMonth = month.atDay(1)
+    // ISO DayOfWeek.value is 1=Monday..7=Sunday; %7 remaps to a
+    // Sunday-first offset (Sunday->0, Monday->1, ..., Saturday->6).
+    val leadingBlanks = firstOfMonth.dayOfWeek.value % 7
+    val daysInMonth = month.lengthOfMonth()
+
+    Column {
+        // Always 6 rows (the max any month needs) rather than this month's
+        // exact 4-6: pager pages must all be the same height, or the dialog
+        // visibly jumps size when a 5-week month slides in next to a 6-week
+        // one mid-swipe.
+        for (row in 0 until 6) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                for (col in 0 until 7) {
+                    val dayNum = row * 7 + col - leadingBlanks + 1
+                    Box(modifier = Modifier.weight(1f).aspectRatio(1f), contentAlignment = Alignment.Center) {
+                        if (dayNum in 1..daysInMonth) {
+                            val date = month.atDay(dayNum)
+                            CalendarDayCell(
+                                date = date,
+                                gameCount = counts[date],
+                                onDateSelected = onDateSelected
+                            )
                         }
                     }
                 }
