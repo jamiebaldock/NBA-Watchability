@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -90,6 +92,13 @@ fun GameCard(
     modifier: Modifier = Modifier,
     isStarred: Boolean = false,
     onToggleStar: () -> Unit = {},
+    // The per-game push-alert bell (Alerts phase 2/3) - only wired up from
+    // the Schedule tab (DayTabsScreen) so far, defaults off everywhere else
+    // (Starred/History/Favorites) so those tiles don't show a bell that taps
+    // through to a no-op. Also requires game.eventId (its backend identity).
+    showBell: Boolean = false,
+    isBelled: Boolean = false,
+    onToggleBell: () -> Unit = {},
     onWatchHighlights: (String) -> Unit = {},
     // Only meaningful on the Starred tab, which combines games from many
     // different dates in one list - elsewhere the day-tab context already
@@ -183,6 +192,10 @@ fun GameCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         StatusIndicator(game)
                         Spacer(modifier = Modifier.width(10.dp))
+                        if (showBell && game.eventId != null) {
+                            BellButton(isBelled = isBelled, onClick = onToggleBell)
+                            Spacer(modifier = Modifier.width(10.dp))
+                        }
                         StarButton(isStarred = isStarred, onClick = onToggleStar)
                     }
                 }
@@ -364,6 +377,16 @@ private fun StarButton(isStarred: Boolean, onClick: () -> Unit, modifier: Modifi
         imageVector = if (isStarred) Icons.Filled.Star else Icons.Filled.StarBorder,
         contentDescription = if (isStarred) "Remove from starred" else "Add to starred",
         tint = if (isStarred) TierInstantClassic else TextMuted,
+        modifier = modifier.size(22.dp).clickable(onClick = onClick)
+    )
+}
+
+@Composable
+private fun BellButton(isBelled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Icon(
+        imageVector = if (isBelled) Icons.Filled.NotificationsActive else Icons.Filled.NotificationsNone,
+        contentDescription = if (isBelled) "Turn off alerts for this game" else "Get alerted for this game",
+        tint = if (isBelled) TierInstantClassic else TextMuted,
         modifier = modifier.size(22.dp).clickable(onClick = onClick)
     )
 }

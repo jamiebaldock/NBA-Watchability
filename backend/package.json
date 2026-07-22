@@ -2,7 +2,7 @@
   "name": "nba-watchability-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Cloud function backend for the NBA Watchability app: fetches games, scores watchability, generates spoiler-free hooks/stakes via LLM, caches daily.",
+  "description": "Cloud function backend for the Big4 Watchability app: fetches games, scores watchability, generates spoiler-free hooks/stakes via LLM, caches daily.",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc -p .",

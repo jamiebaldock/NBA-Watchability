@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NBA Watchability"
+rootProject.name = "Big4 Watchability"
 include(":app")

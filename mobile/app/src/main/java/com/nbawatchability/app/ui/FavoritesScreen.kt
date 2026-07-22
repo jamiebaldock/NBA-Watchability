@@ -104,7 +104,9 @@ fun FavoritesScreen(
     onRemoveFavoritePlayer: (FavoritePlayer) -> Unit,
     onAddPlayerClick: () -> Unit,
     onToggleFavoriteTeam: (Team) -> Unit,
-    onToggleFavoritePlayer: (FavoritePlayer) -> Unit
+    onToggleFavoritePlayer: (FavoritePlayer) -> Unit,
+    belledGameIds: Set<String> = emptySet(),
+    onToggleBell: (Game) -> Unit = {}
 ) {
     val pagerState = rememberPagerState(initialPage = 0) { FAVORITES_PAGE_TITLES.size }
     val scope = rememberCoroutineScope()
@@ -189,7 +191,9 @@ fun FavoritesScreen(
                     favoriteTeamNames = favoriteTeamNames,
                     onToggleFavoriteTeam = onToggleFavoriteTeam,
                     favoritePlayerNames = favoritePlayerNames,
-                    onToggleFavoritePlayer = onToggleFavoritePlayer
+                    onToggleFavoritePlayer = onToggleFavoritePlayer,
+                    belledGameIds = belledGameIds,
+                    onToggleBell = onToggleBell
                 )
                 1 -> FavoriteGamesPage(
                     uiState = favoriteGamesUiState,
@@ -212,7 +216,9 @@ fun FavoritesScreen(
                     favoriteTeamNames = favoriteTeamNames,
                     onToggleFavoriteTeam = onToggleFavoriteTeam,
                     favoritePlayerNames = favoritePlayerNames,
-                    onToggleFavoritePlayer = onToggleFavoritePlayer
+                    onToggleFavoritePlayer = onToggleFavoritePlayer,
+                    belledGameIds = belledGameIds,
+                    onToggleBell = onToggleBell
                 )
                 2 -> FavoriteTeamsPage(favoriteTeams, onRemoveFavoriteTeam, onAddTeamClick)
                 else -> FavoritePlayersPage(favoritePlayers, onRemoveFavoritePlayer, onAddPlayerClick)
@@ -256,7 +262,9 @@ private fun FavoriteGamesPage(
     favoriteTeamNames: Set<String>,
     onToggleFavoriteTeam: (Team) -> Unit,
     favoritePlayerNames: Set<String>,
-    onToggleFavoritePlayer: (FavoritePlayer) -> Unit
+    onToggleFavoritePlayer: (FavoritePlayer) -> Unit,
+    belledGameIds: Set<String>,
+    onToggleBell: (Game) -> Unit
 ) {
     when (uiState) {
         is FavoriteGamesUiState.Loading -> LoadingBox()
@@ -325,6 +333,9 @@ private fun FavoriteGamesPage(
                             nhlWeights = nhlWeights,
                             isStarred = starredIds.contains(game.id),
                             onToggleStar = { onToggleStar(game) },
+                            showBell = true,
+                            isBelled = game.eventId != null && belledGameIds.contains(game.eventId),
+                            onToggleBell = { onToggleBell(game) },
                             onWatchHighlights = onWatchHighlights,
                             showDate = true,
                             favoriteTeamNames = favoriteTeamNames,

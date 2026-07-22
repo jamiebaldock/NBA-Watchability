@@ -150,7 +150,9 @@ fun DayTabsScreen(
     onToggleFavoritePlayer: (com.nbawatchability.app.data.FavoritePlayer) -> Unit = {},
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
-    onGameClick: (com.nbawatchability.app.data.Game) -> Unit = {}
+    onGameClick: (com.nbawatchability.app.data.Game) -> Unit = {},
+    belledGameIds: Set<String> = emptySet(),
+    onToggleBell: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
     val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -307,7 +309,9 @@ fun DayTabsScreen(
                             onToggleFavoritePlayer = onToggleFavoritePlayer,
                             minTierFilterEnabled = minTierFilterEnabled,
                             minTierFilter = minTierFilter,
-                            onGameClick = onGameClick
+                            onGameClick = onGameClick,
+                            belledGameIds = belledGameIds,
+                            onToggleBell = onToggleBell
                         )
                     }
                 }
@@ -414,7 +418,9 @@ private fun DayGamesList(
     onToggleFavoritePlayer: (com.nbawatchability.app.data.FavoritePlayer) -> Unit = {},
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
-    onGameClick: (com.nbawatchability.app.data.Game) -> Unit = {}
+    onGameClick: (com.nbawatchability.app.data.Game) -> Unit = {},
+    belledGameIds: Set<String> = emptySet(),
+    onToggleBell: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
     if (games.isEmpty()) {
         Column(
@@ -487,6 +493,9 @@ private fun DayGamesList(
                 nhlWeights = nhlWeights,
                 isStarred = starredIds.contains(game.id),
                 onToggleStar = { onToggleStar(game) },
+                showBell = true,
+                isBelled = game.eventId != null && belledGameIds.contains(game.eventId),
+                onToggleBell = { onToggleBell(game) },
                 onWatchHighlights = onWatchHighlights,
                 favoriteTeamNames = favoriteTeamNames,
                 onToggleFavoriteTeam = onToggleFavoriteTeam,

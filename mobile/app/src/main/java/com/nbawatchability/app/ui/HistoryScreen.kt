@@ -131,7 +131,9 @@ fun HistoryScreen(
     minTierFilter: Tier = Tier.SKIPPABLE,
     showScoresByDefault: Boolean = false,
     onGameClick: (Game) -> Unit = {},
-    onPrefetch: (HistoryRangePreset) -> Unit = {}
+    onPrefetch: (HistoryRangePreset) -> Unit = {},
+    belledGameIds: Set<String> = emptySet(),
+    onToggleBell: (Game) -> Unit = {}
 ) {
     // Plain remember (not rememberSaveable) - resets to showScoresByDefault
     // every time this composable enters composition, e.g. switching back to
@@ -334,6 +336,9 @@ fun HistoryScreen(
                                     nhlWeights = nhlWeights,
                                     isStarred = starredIds.contains(game.id),
                                     onToggleStar = { onToggleStar(game) },
+                                    showBell = true,
+                                    isBelled = game.eventId != null && belledGameIds.contains(game.eventId),
+                                    onToggleBell = { onToggleBell(game) },
                                     onWatchHighlights = onWatchHighlights,
                                     showDate = true,
                                     spoilerFree = true,

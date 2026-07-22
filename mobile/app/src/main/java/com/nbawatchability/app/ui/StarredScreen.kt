@@ -83,7 +83,9 @@ fun StarredScreen(
     onToggleFavoritePlayer: (FavoritePlayer) -> Unit = {},
     minTierFilterEnabled: Boolean = false,
     minTierFilter: Tier = Tier.SKIPPABLE,
-    onGameClick: (Game) -> Unit = {}
+    onGameClick: (Game) -> Unit = {},
+    belledGameIds: Set<String> = emptySet(),
+    onToggleBell: (Game) -> Unit = {}
 ) {
     var sortOption by remember { mutableStateOf(SortOption.DATE_NEWEST_FIRST) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
@@ -182,6 +184,9 @@ fun StarredScreen(
                         nhlWeights = nhlWeights,
                         isStarred = starredIds.contains(game.id),
                         onToggleStar = { onToggleStar(game) },
+                        showBell = true,
+                        isBelled = game.eventId != null && belledGameIds.contains(game.eventId),
+                        onToggleBell = { onToggleBell(game) },
                         onWatchHighlights = onWatchHighlights,
                         showDate = true,
                         favoriteTeamNames = favoriteTeamNames,

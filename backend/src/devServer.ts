@@ -19,6 +19,7 @@ import {
 import { registerAlertDevice, setAlertGameSub } from "./alertsService";
 import { isFcmConfigured } from "./fcm";
 import { startHighlightsPoller } from "./highlightsPoller";
+import { startAlertsPoller } from "./alertsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
 
@@ -262,7 +263,7 @@ app.get("/alerts/status", (_req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`NBA Watchability backend dev server listening on http://localhost:${PORT}`);
+  console.log(`Big4 Watchability backend dev server listening on http://localhost:${PORT}`);
   console.log(`Try: http://localhost:${PORT}/schedule?start=2025-01-15&end=2025-01-15`);
   // migrateHistoricalBackfill is idempotent - on a fresh/empty persistent
   // disk this self-seeds the 2,650-game backfill with no manual step
@@ -274,4 +275,5 @@ app.listen(PORT, () => {
   // here is just to have the seed's rows exist before the poller's first
   // tick, not a correctness requirement anymore.
   applySeedHighlights().then(startHighlightsPoller);
+  startAlertsPoller();
 });

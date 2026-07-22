@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Wifi
@@ -61,6 +62,7 @@ fun SettingsScreen(
     onAboutClick: () -> Unit,
     onFavoriteTeamsClick: () -> Unit,
     onFavoritePlayersClick: () -> Unit,
+    onAlertsClick: () -> Unit,
     bumpFavoriteTeamGames: Boolean,
     onToggleBumpFavoriteTeamGames: () -> Unit,
     defaultLandingTab: BottomNavTab,
@@ -159,6 +161,24 @@ fun SettingsScreen(
                     Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(text = "Favorite Players", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                }
+                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+            }
+
+            HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onAlertsClick)
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.NotificationsActive, contentDescription = null, tint = TextSecondary)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(text = "Alerts", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
                 }
                 Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
             }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "657604592189",
+    "project_id": "big4-watchability",
+    "storage_bucket": "big4-watchability.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:657604592189:android:c34b89c07ece2cfa0ca054",
+        "android_client_info": {
+          "package_name": "com.nbawatchability.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBcS5LAAQODFkj4uU8QJc-sItU9O4uRk50"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -5,6 +5,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.gms.google-services")
 }
 
 // Upload-key credentials for the Play Store release build - never committed
@@ -93,6 +94,16 @@ dependencies {
     // package as origin" fixes this at the root, but requires compileSdk 35
     // + AGP 8.6+ (bumped alongside this).
     implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:13.0.0")
+
+    // Alerts phase 2/3: device registration + push receive. BoM pins every
+    // firebase-* artifact's version together, so only messaging needs its own line.
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation("com.google.firebase:firebase-messaging-ktx")
+    // Task.await() for FirebaseMessaging.getInstance().token in AlertsViewModel.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+    // Alerts phase 3: StartingSoonRefreshWorker's periodic/one-shot alarm
+    // rescheduling (network-constrained, retrying) runs on WorkManager.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

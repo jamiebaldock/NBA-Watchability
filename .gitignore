@@ -29,6 +29,12 @@ mobile/.cxx/
 mobile/keystore/
 mobile/keystore.properties
 
+# Built debug APK, copied here (outside mobile/app/build/) after each build
+# specifically so it stays in the Drive-synced tree for phone sideloading
+# even once mobile/app/build/ itself gets excluded from Drive sync - a 20MB
+# binary has no business in git either way.
+mobile/apk-releases/
+
 # OS
 .DS_Store
 Thumbs.db

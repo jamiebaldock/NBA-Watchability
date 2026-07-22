@@ -114,6 +114,7 @@ fun AppRoot() {
     var showSelectedSports by rememberSaveable { mutableStateOf(false) }
     var showFavoriteTeams by rememberSaveable { mutableStateOf(false) }
     var showFavoritePlayers by rememberSaveable { mutableStateOf(false) }
+    var showAlertsSettings by rememberSaveable { mutableStateOf(false) }
     var highlightsVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     // Plain remember (not rememberSaveable) - Game isn't a Bundle-compatible
     // type, and losing this particular bit of state across a process death/
@@ -128,6 +129,18 @@ fun AppRoot() {
     val appSettingsViewModel: AppSettingsViewModel = viewModel()
     val starredGamesViewModel: StarredGamesViewModel = viewModel()
     val favoritesViewModel: FavoritesViewModel = viewModel()
+    val alertsViewModel: AlertsViewModel = viewModel()
+
+    // Re-registers this device (favorites + enabled-leagues snapshot) on
+    // first composition and again whenever either changes, so the backend's
+    // close-swing detection (once phase 4 exists) always scopes against the
+    // current favorites list, not a stale one from an earlier session.
+    LaunchedEffect(favoritesViewModel.favoriteTeams, appSettingsViewModel.settings.enabledLeagues) {
+        alertsViewModel.registerDevice(
+            favorites = favoritesViewModel.favoriteTeams,
+            leagues = appSettingsViewModel.settings.enabledLeagues.map { it.apiValue }
+        )
+    }
 
     // Persisted settings (last league, sort, numeric score) load from
     // DataStore asynchronously - rendering a tab before they arrive would
@@ -155,6 +168,7 @@ fun AppRoot() {
     BackHandler(enabled = showSelectedSports) { showSelectedSports = false }
     BackHandler(enabled = showFavoriteTeams) { showFavoriteTeams = false }
     BackHandler(enabled = showFavoritePlayers) { showFavoritePlayers = false }
+    BackHandler(enabled = showAlertsSettings) { showAlertsSettings = false }
     BackHandler(enabled = highlightsVideoId != null) { highlightsVideoId = null }
     BackHandler(enabled = showGameDetail != null) { showGameDetail = null }
 
@@ -212,6 +226,25 @@ fun AppRoot() {
         return
     }
 
+    if (showAlertsSettings) {
+        AlertsSettingsScreen(
+            startingSoonEnabled = alertsViewModel.settings.startingSoonEnabled,
+            onToggleStartingSoonEnabled = alertsViewModel::setStartingSoonEnabled,
+            leadTimeMinutes = alertsViewModel.settings.leadTimeMinutes,
+            onLeadTimeChange = alertsViewModel::setLeadTimeMinutes,
+            closeSwingEnabled = alertsViewModel.settings.closeSwingEnabled,
+            onToggleCloseSwingEnabled = alertsViewModel::setCloseSwingEnabled,
+            delivery = alertsViewModel.settings.delivery,
+            onDeliveryChange = alertsViewModel::setDelivery,
+            favoritesOnly = alertsViewModel.settings.favoritesOnly,
+            onToggleFavoritesOnly = alertsViewModel::setFavoritesOnly,
+            tierThreshold = alertsViewModel.settings.tierThreshold,
+            onTierThresholdChange = alertsViewModel::setTierThreshold,
+            onBack = { showAlertsSettings = false }
+        )
+        return
+    }
+
     highlightsVideoId?.let { videoId ->
         HighlightsPlayerScreen(
             videoId = videoId,
@@ -256,6 +289,7 @@ fun AppRoot() {
                     onAboutClick = { showAbout = true },
                     onFavoriteTeamsClick = { showFavoriteTeams = true },
                     onFavoritePlayersClick = { showFavoritePlayers = true },
+                    onAlertsClick = { showAlertsSettings = true },
                     bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
                     onToggleBumpFavoriteTeamGames = appSettingsViewModel::toggleBumpFavoriteTeamGames,
                     defaultLandingTab = BottomNavTab.entries.find { it.name == appSettingsViewModel.settings.defaultLandingTab } ?: BottomNavTab.GAMES,
@@ -292,7 +326,9 @@ fun AppRoot() {
                     onWatchHighlights = { videoId -> highlightsVideoId = videoId },
                     onGameClick = { showGameDetail = it },
                     onAddTeamClick = { showFavoriteTeams = true },
-                    onAddPlayerClick = { showFavoritePlayers = true }
+                    onAddPlayerClick = { showFavoritePlayers = true },
+                    belledGameIds = alertsViewModel.belledGameIds,
+                    onToggleBell = alertsViewModel::toggleBell
                 )
                 else -> if (!selectedLeague.isSupported) {
                     ComingSoonTab(
@@ -325,7 +361,9 @@ fun AppRoot() {
                             onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
                             minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
-                            onGameClick = { showGameDetail = it }
+                            onGameClick = { showGameDetail = it },
+                            belledGameIds = alertsViewModel.belledGameIds,
+                            onToggleBell = alertsViewModel::toggleBell
                         )
                         BottomNavTab.LEADERS -> LeadersTab(
                             selectedLeague = selectedLeague,
@@ -359,7 +397,9 @@ fun AppRoot() {
                             onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
                             minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
-                            onGameClick = { showGameDetail = it }
+                            onGameClick = { showGameDetail = it },
+                            belledGameIds = alertsViewModel.belledGameIds,
+                            onToggleBell = alertsViewModel::toggleBell
                         )
                         BottomNavTab.HISTORY -> HistoryTab(
                             nbaWeights = settingsViewModel.weights,
@@ -385,7 +425,9 @@ fun AppRoot() {
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
                             minTierFilter = Tier.entries.find { it.name == appSettingsViewModel.settings.minTierFilter } ?: Tier.SKIPPABLE,
                             showScoresByDefault = appSettingsViewModel.settings.historyShowScoresByDefault,
-                            onGameClick = { showGameDetail = it }
+                            onGameClick = { showGameDetail = it },
+                            belledGameIds = alertsViewModel.belledGameIds,
+                            onToggleBell = alertsViewModel::toggleBell
                         )
                         else -> {} // unreachable: SETTINGS/FAVORITES handled above
                     }
@@ -457,7 +499,9 @@ private fun GamesTab(
     onToggleFavoritePlayer: (com.nbawatchability.app.data.FavoritePlayer) -> Unit,
     minTierFilterEnabled: Boolean,
     minTierFilter: Tier,
-    onGameClick: (com.nbawatchability.app.data.Game) -> Unit
+    onGameClick: (com.nbawatchability.app.data.Game) -> Unit,
+    belledGameIds: Set<String> = emptySet(),
+    onToggleBell: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
     val viewModel: GameListViewModel = viewModel()
     // Only the currently-enabled leagues that actually have a real backend
@@ -539,7 +583,9 @@ private fun GamesTab(
             onToggleFavoritePlayer = onToggleFavoritePlayer,
             minTierFilterEnabled = minTierFilterEnabled,
             minTierFilter = minTierFilter,
-            onGameClick = onGameClick
+            onGameClick = onGameClick,
+            belledGameIds = belledGameIds,
+            onToggleBell = onToggleBell
         )
     }
 }
@@ -567,7 +613,9 @@ private fun StarredTab(
     onToggleFavoritePlayer: (com.nbawatchability.app.data.FavoritePlayer) -> Unit,
     minTierFilterEnabled: Boolean,
     minTierFilter: Tier,
-    onGameClick: (com.nbawatchability.app.data.Game) -> Unit
+    onGameClick: (com.nbawatchability.app.data.Game) -> Unit,
+    belledGameIds: Set<String> = emptySet(),
+    onToggleBell: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
     // Fires on first composition and again whenever the starred set changes
     // (a star added/removed anywhere in the app) - re-fetches live data for
@@ -607,7 +655,9 @@ private fun StarredTab(
         onToggleFavoritePlayer = onToggleFavoritePlayer,
         minTierFilterEnabled = minTierFilterEnabled,
         minTierFilter = minTierFilter,
-        onGameClick = onGameClick
+        onGameClick = onGameClick,
+        belledGameIds = belledGameIds,
+        onToggleBell = onToggleBell
     )
 }
 
@@ -636,7 +686,9 @@ private fun HistoryTab(
     minTierFilterEnabled: Boolean,
     minTierFilter: Tier,
     showScoresByDefault: Boolean,
-    onGameClick: (com.nbawatchability.app.data.Game) -> Unit
+    onGameClick: (com.nbawatchability.app.data.Game) -> Unit,
+    belledGameIds: Set<String> = emptySet(),
+    onToggleBell: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
     val viewModel: HistoryViewModel = viewModel()
     val leagueGroups = if (isAllLeaguesSelected) {
@@ -685,7 +737,9 @@ private fun HistoryTab(
         minTierFilterEnabled = minTierFilterEnabled,
         minTierFilter = minTierFilter,
         showScoresByDefault = showScoresByDefault,
-        onGameClick = onGameClick
+        onGameClick = onGameClick,
+        belledGameIds = belledGameIds,
+        onToggleBell = onToggleBell
     )
 }
 
@@ -709,7 +763,9 @@ private fun FavoritesTab(
     onWatchHighlights: (String) -> Unit,
     onGameClick: (com.nbawatchability.app.data.Game) -> Unit,
     onAddTeamClick: () -> Unit,
-    onAddPlayerClick: () -> Unit
+    onAddPlayerClick: () -> Unit,
+    belledGameIds: Set<String> = emptySet(),
+    onToggleBell: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
     val favoriteGamesViewModel: FavoriteGamesViewModel = viewModel()
     // Re-fetches whenever the favorited-team set itself changes (add/remove
@@ -745,7 +801,9 @@ private fun FavoritesTab(
         onRemoveFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
         onAddPlayerClick = onAddPlayerClick,
         onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
-        onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer
+        onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
+        belledGameIds = belledGameIds,
+        onToggleBell = onToggleBell
     )
 }
 

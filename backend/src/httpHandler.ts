@@ -48,8 +48,15 @@ function parseLeagueGroup(raw: string): LeagueGroup {
   throw new BadRequestError('leagueGroup must be one of "nba", "wnba", "mlb", "nfl", "nhl"');
 }
 
-/** Dispatches to the basketball, MLB, NFL, or NHL live-schedule pipeline (types.ts's SPORT_FOR_LEAGUE_GROUP) - the one choke point where a request's leagueGroup decides which sport's data layer actually runs. */
-function getGamesForDateAnySport(date: string, leagueGroup: LeagueGroup): Promise<GameJson[]> {
+/**
+ * Dispatches to the basketball, MLB, NFL, or NHL live-schedule pipeline
+ * (types.ts's SPORT_FOR_LEAGUE_GROUP) - the one choke point where a
+ * request's leagueGroup decides which sport's data layer actually runs.
+ * Exported for alertsPoller.ts (phase 4), which needs the same live-game
+ * data this module's own /schedule route serves, just without going through
+ * an HTTP request.
+ */
+export function getGamesForDateAnySport(date: string, leagueGroup: LeagueGroup): Promise<GameJson[]> {
   if (isMlbLeagueGroup(leagueGroup)) return getMlbGamesForDate(date);
   if (isNflLeagueGroup(leagueGroup)) return getNflGamesForDate(date);
   if (isNhlLeagueGroup(leagueGroup)) return getNhlGamesForDate(date);
