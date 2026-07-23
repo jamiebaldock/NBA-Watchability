@@ -45,6 +45,18 @@ export interface EspnMlbEvent {
   competitions: Array<{
     status: EspnMlbStatus;
     competitors: EspnMlbCompetitor[];
+    // Only meaningful when season.type===3 (postseason) - confirmed
+    // directly against real ESPN data (curl'd live scoreboard responses for
+    // the 2025 postseason) that notes[0].headline reliably distinguishes
+    // each round: "Wild Card - Game N", "ALDS - Game N"/"NLDS - Game N",
+    // "ALCS - Game N"/"NLCS - Game N", "World Series - Game N". Used to
+    // derive a real per-round season_stage_label (deriveMlbCompetitionLabel
+    // in mlbGamesService.ts) instead of the single fixed "MLB - Regular
+    // Season" string every game used to get regardless of postseason status
+    // - which meant the World Series (the real season-end marker
+    // gameStore.ts's getMostRecentFinalsEnd needs) was indistinguishable
+    // from an April game.
+    notes?: Array<{ type: string; headline: string }>;
   }>;
 }
 

@@ -447,6 +447,22 @@ export function setSeasonStageLabel(eventId: string, label: string): void {
 }
 
 /**
+ * One-off: force-overwrites season_stage_label regardless of its current
+ * value - unlike setSeasonStageLabel (used everywhere else, including by
+ * the always-safe-to-rerun migration scripts), which explicitly refuses to
+ * touch a row that already has a label. That guard means a row stamped with
+ * a wrong-but-non-null label *before* a labeling-logic fix shipped (e.g.
+ * every NFL/MLB postseason game got the generic "Regular Season" label
+ * before their own per-round derivation existed) can never self-correct
+ * through the normal path - this is the escape hatch a one-off relabel
+ * pass needs. Only meant to be reached from a temporary admin route,
+ * removed once run once against production and confirmed.
+ */
+export function forceSetSeasonStageLabel(eventId: string, label: string): void {
+  db.prepare(`UPDATE games SET season_stage_label=?, updated_at=? WHERE event_id=?`).run(label, now(), eventId);
+}
+
+/**
  * Final rubric + score/tier - set once, when the game goes final, permanent.
  * [finalAt] defaults to right now (a live game just went final) - the
  * migration script passes `null` explicitly instead, since a backfilled
@@ -857,6 +873,30 @@ export function getGamesMissingStageLabel(): GameRow[] {
   return raws.map(mapRow);
 }
 
+/**
+ * MLB rows still stamped with the generic default label AND that fall in a
+ * real postseason-plausible month (October or November - MLB's actual
+ * postseason window every year, regular season always wraps up by late
+ * September) - backs relabelMlbStages.ts's one-off re-derive pass. Every
+ * MLB game got the fixed default label regardless of postseason status
+ * before deriveMlbCompetitionLabel existed, so unlike
+ * getGamesMissingStageLabel above (rows with no label at all), the target
+ * set here is rows with a *present but possibly wrong* label. The Oct/Nov
+ * filter is a real constraint, not a guess - it's what keeps this a
+ * one-off re-check of a few weeks' worth of games instead of re-fetching
+ * ESPN for every date across an entire multi-month season for nothing
+ * (every March-September row is guaranteed regular season and already
+ * correctly labeled).
+ */
+export function getMlbGamesWithGenericLabel(): GameRow[] {
+  const raws = db
+    .prepare(
+      `SELECT * FROM games WHERE league_group = 'mlb' AND season_stage_label = 'MLB - Regular Season' AND strftime('%m', tipoff_utc) IN ('10', '11')`
+    )
+    .all() as RawGameRow[];
+  return raws.map(mapRow);
+}
+
 // Deliberately a raw score cutoff, not the "worth_your_time" tier's own
 // >=65 boundary (rubric.ts's tierForScore) - the History tab wants a
 // stricter bar than the tier badge itself uses, so a game can show a
@@ -913,7 +953,7 @@ export function getMostRecentFinalsEnd(leagueGroup: LeagueGroup): string | undef
   const row = db
     .prepare(
       `SELECT MAX(tipoff_utc) as end FROM games
-       WHERE league_group = ? AND (season_stage_label LIKE '%Playoffs: Finals%' OR season_stage_label LIKE '%Super Bowl%' OR season_stage_label LIKE '%Stanley Cup Final%')`
+       WHERE league_group = ? AND (season_stage_label LIKE '%Playoffs: Finals%' OR season_stage_label LIKE '%Super Bowl%' OR season_stage_label LIKE '%Stanley Cup Final%' OR season_stage_label LIKE '%World Series%')`
     )
     .get(leagueGroup) as { end: string | null };
   return row.end ?? undefined;

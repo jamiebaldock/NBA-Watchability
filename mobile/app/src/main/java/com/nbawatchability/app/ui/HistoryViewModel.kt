@@ -208,13 +208,24 @@ private suspend fun dateRangeFor(preset: HistoryRangePreset, today: LocalDate, l
 // Matches gameStore.ts's seasonLabelForTipoff: NBA's "2024-25" runs Oct 1
 // (the label's start year) through Sep 30 the following year; WNBA's is
 // just the plain calendar year, since a WNBA season never crosses a year
-// boundary. The server clamps the end date to today if it's in the future
-// (e.g. the still-forming current season), so passing each season's nominal
-// end here is always safe.
+// boundary; NFL's is a plain single-year label like WNBA's (not hyphenated)
+// but DOES cross the year boundary the way NBA's does - a "2025" season's
+// real games run Sept 2025 - Feb 2026, so it needs its own September
+// cutover rather than either the WNBA or the generic Oct-1 branch. Before
+// this branch existed, NFL fell into the generic Oct-1 case below, which
+// silently excluded every real September game from that season's own
+// chip - confirmed against live data (7 real September 2025 games missing
+// from the "2025" chip). The server clamps the end date to today if it's
+// in the future (e.g. the still-forming current season), so passing each
+// season's nominal end here is always safe.
 private fun seasonDateRange(label: String, leagueGroup: LeagueGroup): Pair<LocalDate, LocalDate> {
     if (leagueGroup == LeagueGroup.WNBA) {
         val year = label.toInt()
         return LocalDate.of(year, 1, 1) to LocalDate.of(year, 12, 31)
+    }
+    if (leagueGroup == LeagueGroup.NFL) {
+        val year = label.toInt()
+        return LocalDate.of(year, 9, 1) to LocalDate.of(year + 1, 8, 31)
     }
     val startYear = label.substringBefore("-").toInt()
     return LocalDate.of(startYear, 10, 1) to LocalDate.of(startYear + 1, 9, 30)

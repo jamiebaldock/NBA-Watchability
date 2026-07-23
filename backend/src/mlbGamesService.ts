@@ -60,9 +60,33 @@ function fallbackHook(away: string, home: string): string {
   return `${away} at ${home}.`;
 }
 
-// Exported so migrateToGameStore.ts's MLB historical backfill can stamp the
-// exact same label live games get, rather than duplicating the string.
+// Fallback/regular-season label - exported so migrateToGameStore.ts's MLB
+// historical backfill can stamp the exact same default live games get,
+// rather than duplicating the string.
 export const COMPETITION_LABEL = "MLB - Regular Season";
+
+// Real per-round postseason labels, confirmed directly against live ESPN
+// data (curl'd real scoreboard responses across the 2025 postseason, not
+// assumed): competitions[0].notes[0].headline reliably distinguishes each
+// round - "ALWC - Game N"/"NLWC - Game N" (wild card - ESPN uses the
+// abbreviation here, not the spelled-out "Wild Card" NBA/NFL notes use
+// elsewhere), "ALDS - Game N"/"NLDS - Game N" (division series, AL/NL
+// collapsed into one label the same way NBA's own East/West conference
+// rounds already do), "ALCS - Game N"/"NLCS - Game N" (championship series,
+// same collapsing), "World Series - Game N". This is what actually lets
+// "This season" close out for MLB: every game used to get the identical
+// fixed COMPETITION_LABEL regardless of postseason status, so the World
+// Series - the one game gameStore.ts's getMostRecentFinalsEnd searches for
+// - was indistinguishable from a regular-season game.
+export function deriveMlbCompetitionLabel(event: EspnMlbEvent): string {
+  if (event.season?.type !== 3) return COMPETITION_LABEL;
+  const headline = event.competitions[0]?.notes?.[0]?.headline?.toLowerCase() ?? "";
+  if (headline.includes("alwc") || headline.includes("nlwc") || headline.includes("wild card")) return "MLB - Playoffs: Wild Card";
+  if (headline.includes("alds") || headline.includes("nlds")) return "MLB - Playoffs: Division Series";
+  if (headline.includes("alcs") || headline.includes("nlcs")) return "MLB - Playoffs: Championship Series";
+  if (headline.includes("world series")) return "MLB - Playoffs: World Series";
+  return "MLB - Playoffs";
+}
 
 async function ensureMlbPregamePreview(row: GameRow): Promise<void> {
   if (row.hook !== null) return; // already generated
@@ -127,7 +151,7 @@ async function processMlbEvent(event: EspnMlbEvent): Promise<GameJson> {
     status
   });
   updateStatus(event.id, status);
-  setSeasonStageLabel(event.id, COMPETITION_LABEL);
+  setSeasonStageLabel(event.id, deriveMlbCompetitionLabel(event));
 
   let row = getGame(event.id)!;
 
