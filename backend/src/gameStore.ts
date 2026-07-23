@@ -773,7 +773,18 @@ const RECENT_GAMES_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
  */
 export function getFinalGamesMissingHighlights(): GameRow[] {
   const cutoffTime = Date.now() - RECENT_GAMES_WINDOW_MS;
-  const raws = db.prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL`).all() as RawGameRow[];
+  // Newest tipoff first: a game whose only check attempt(s) landed on a day
+  // the shared daily search budget ran dry never gets markHighlightsChecked
+  // called (see checkGameHighlights's canSpendSearchQuota guard), so it stays
+  // "due" indefinitely. Without this ordering, that growing backlog of
+  // stuck old rows - always sorted first by rowid/insertion order - would
+  // permanently eat every tick's MAX_CHECKS_PER_POLL budget ahead of
+  // whatever actually just went final, starving new games of checks forever
+  // (confirmed against production: 19 stuck NBA Summer League games from
+  // July 9-14 were still blocking every one of yesterday's 5 WNBA finals).
+  const raws = db
+    .prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL ORDER BY tipoff_utc DESC`)
+    .all() as RawGameRow[];
   return raws
     .map(mapRow)
     .filter((row) => new Date(row.tipoffUtc).getTime() >= cutoffTime)
@@ -798,7 +809,10 @@ export function getFinalGamesMissingHighlights(): GameRow[] {
  */
 export function getFinalMlbGamesMissingHighlights(): GameRow[] {
   const cutoffTime = Date.now() - RECENT_GAMES_WINDOW_MS;
-  const raws = db.prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL AND league_group='mlb'`).all() as RawGameRow[];
+  // Newest first - same starvation reasoning as getFinalGamesMissingHighlights above.
+  const raws = db
+    .prepare(`SELECT * FROM games WHERE status='final' AND yt_video_id IS NULL AND league_group='mlb' ORDER BY tipoff_utc DESC`)
+    .all() as RawGameRow[];
   return raws.map(mapRow).filter((row) => new Date(row.tipoffUtc).getTime() >= cutoffTime);
 }
 
