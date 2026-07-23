@@ -77,14 +77,19 @@ private const val ALL_TIME_MIN_SCORE_WNBA = 75
  * tier badge's own >=65), most-watchable-first by default - except "All
  * time" (ALL_TIME_MIN_SCORE_NBA/ALL_TIME_MIN_SCORE_WNBA above), which holds
  * every season's worth of backfill to a much higher, per-league bar
- * instead. Unlike every other tab, these games are
- * ones the viewer is intentionally browsing rather than following live, so
- * the breakdown is never spoiler-blurred (GameCard's spoilerFree = true) -
- * the tier/score/final result are the point, not something to hide.
+ * instead. The breakdown defaults to spoiler-blurred here (GameCard's
+ * spoilerFree = false) same as every other tab, tap-to-reveal per game
+ * (FullBreakdownSection's own `revealed` state) - was briefly spoilerFree =
+ * true on the reasoning that these are old, already-decided games with
+ * nothing left to spoil, but that fought the tab's own "browse blind"
+ * default (showScore below): revealing comeback size/OT on sight while
+ * scores stay hidden was a mixed signal, not a real distinction a user
+ * browsing this tab cares about.
  * [showScore] is a separate, purely local "browse blind" preference -
  * unlike spoilerFree, turning it off only hides the two teams' final
- * numeric score digits (tier badge, breakdown, and final result stay
- * visible either way). Resets to [showScoresByDefault] every time this
+ * numeric score digits (tier badge and final result stay visible either
+ * way; the breakdown's own visibility is spoilerFree's job, not this
+ * one's). Resets to [showScoresByDefault] every time this
  * screen is (re)composed - e.g. navigating back to History from another
  * tab - rather than remembering whatever the toggle was last left at
  * within a single session, so an accidental peek doesn't linger past a
@@ -341,7 +346,7 @@ fun HistoryScreen(
                                     onToggleBell = { onToggleBell(game) },
                                     onWatchHighlights = onWatchHighlights,
                                     showDate = true,
-                                    spoilerFree = true,
+                                    spoilerFree = false,
                                     showScore = showScore,
                                     favoriteTeamNames = favoriteTeamNames,
                                     onToggleFavoriteTeam = onToggleFavoriteTeam,

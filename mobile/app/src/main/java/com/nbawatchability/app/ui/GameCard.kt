@@ -104,16 +104,18 @@ fun GameCard(
     // different dates in one list - elsewhere the day-tab context already
     // makes the date obvious, so this defaults off.
     showDate: Boolean = false,
-    // History tab only: these are old, already-finished games the user is
-    // intentionally browsing to pick one to watch, not a live/recent game
-    // that could still be spoiled - so the breakdown starts revealed instead
-    // of blurred behind its own reveal tap.
+    // Whether the breakdown (FullBreakdownSection) starts revealed instead
+    // of blurred behind its own reveal tap. False (blurred-by-default,
+    // tap-to-reveal) everywhere, including History - browsing old games is
+    // still "picking one to go watch," and revealing comeback size/OT on
+    // sight there fought the tab's own browse-blind default (showScore
+    // below), so it doesn't get a special-cased default either.
     spoilerFree: Boolean = false,
     // History tab only: a "browse blind" preference - hides just the two
-    // teams' final numeric score digits (TeamRow below), not the
-    // watchability rating (tier badge + breakdown), which stay visible
-    // either way - the rating is the point of this tab, only the literal
-    // score is optional to peek at.
+    // teams' final numeric score digits (TeamRow below), not the tier badge,
+    // which stays visible either way - the rating is the point of this tab,
+    // only the literal score is optional to peek at. The breakdown's own
+    // visibility is spoilerFree's job, independent of this.
     showScore: Boolean = true,
     // Global favorites (not per-league) - checked against by exact team name
     // match, same identity every favorites surface in the app uses.
