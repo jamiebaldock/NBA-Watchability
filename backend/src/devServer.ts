@@ -22,8 +22,6 @@ import { startHighlightsPoller } from "./highlightsPoller";
 import { startAlertsPoller } from "./alertsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
-import { relabelMlbStages } from "./relabelMlbStages";
-import { relabelNflStages } from "./relabelNflStages";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
@@ -262,24 +260,6 @@ app.post("/alerts/game-sub", express.json(), (req, res) => {
 // credentials versus just being present as an env var.
 app.get("/alerts/status", (_req, res) => {
   res.json({ fcmConfigured: isFcmConfigured() });
-});
-
-// TEMPORARY one-off admin routes: force-relabel already-stored NFL/MLB
-// postseason games with their real per-round season_stage_label, so
-// gameStore.ts's getMostRecentFinalsEnd can actually find the Super
-// Bowl/World Series already sitting in production under the old generic
-// label. Remove both routes (and the relabelNflStages/relabelMlbStages
-// imports above) once run once against production and confirmed.
-app.post("/admin/relabel-nfl-stages", (_req, res) => {
-  res.json(relabelNflStages());
-});
-app.post("/admin/relabel-mlb-stages", async (_req, res) => {
-  try {
-    res.json(await relabelMlbStages());
-  } catch (err) {
-    console.error("relabelMlbStages failed:", err);
-    res.status(500).json({ error: "internal error" });
-  }
 });
 
 app.listen(PORT, () => {
