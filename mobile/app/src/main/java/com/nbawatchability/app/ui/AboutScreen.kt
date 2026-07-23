@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.nbawatchability.app.BuildConfig
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextMuted
@@ -105,13 +106,13 @@ fun AboutScreen(onBack: () -> Unit, onSecretUnlocked: () -> Unit) {
                 Text(
                     text = "Big4 Watchability",
                     color = TextPrimary,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 26.sp),
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = "Spoiler-free NBA, WNBA, MLB, NFL & NHL watchability scores.",
                     color = TextSecondary,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 4.dp, start = 24.dp, end = 24.dp)
                 )
@@ -119,7 +120,7 @@ fun AboutScreen(onBack: () -> Unit, onSecretUnlocked: () -> Unit) {
                 Text(
                     text = "v${BuildConfig.VERSION_NAME}",
                     color = TextMuted,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 13.sp),
                     modifier = Modifier.padding(top = 8.dp).clickable {
                         tapCount++
                         if (tapCount >= TAPS_TO_UNLOCK_SECRET) {
@@ -143,7 +144,7 @@ fun AboutScreen(onBack: () -> Unit, onSecretUnlocked: () -> Unit) {
                     "games rather than one generic formula. Nothing about how a game turns out is shown " +
                     "until you ask for it.",
                 color = TextSecondary,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
                 modifier = Modifier.padding(bottom = 20.dp)
             )
 
@@ -240,7 +241,7 @@ fun AboutScreen(onBack: () -> Unit, onSecretUnlocked: () -> Unit) {
             Text(
                 text = "© 2026 Tech3D. All rights reserved.",
                 color = TextMuted,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 13.sp),
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -261,7 +262,7 @@ private fun AboutSectionHeader(icon: androidx.compose.ui.graphics.vector.ImageVe
         Text(
             text = title,
             color = TextPrimary,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleMedium.copy(fontSize = 20.sp),
             fontWeight = FontWeight.Bold
         )
     }
@@ -288,7 +289,7 @@ private fun AboutExpandableItem(title: String, body: String, trailingDivider: Bo
             Text(
                 text = title,
                 color = TextPrimary,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
                 modifier = Modifier.weight(1f)
             )
             Icon(
@@ -306,7 +307,7 @@ private fun AboutExpandableItem(title: String, body: String, trailingDivider: Bo
             Text(
                 text = body,
                 color = TextSecondary,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
                 modifier = Modifier.padding(bottom = 14.dp)
             )
         }
@@ -333,9 +334,9 @@ private fun AboutLinkRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
-            Text(text = label, color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+            Text(text = label, color = TextPrimary, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp))
             if (sublabel != null) {
-                Text(text = sublabel, color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                Text(text = sublabel, color = TextMuted, style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp))
             }
         }
         Icon(imageVector = icon, contentDescription = null, tint = TextMuted)
