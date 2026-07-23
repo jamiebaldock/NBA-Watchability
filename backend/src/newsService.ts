@@ -11,11 +11,9 @@ export async function getNews(leagueGroup: LeagueGroup): Promise<NewsResponseJso
   // fetchLeaders already catches), news' sport-namespaced URL 404s for a
   // leagueGroup with no branch below and getJson throws - short-circuit
   // before ever building that request rather than letting an unhandled
-  // rejection surface as a 500. No News route exists for nfl yet (no
-  // fetchNewsForSport branch verified against real data for it), so an
-  // empty result is the correct answer for it.
+  // rejection surface as a 500.
   const sport = SPORT_FOR_LEAGUE_GROUP[leagueGroup];
-  if (sport !== "basketball" && sport !== "baseball" && sport !== "hockey") {
+  if (sport !== "basketball" && sport !== "baseball" && sport !== "hockey" && sport !== "football") {
     return { articles: [] };
   }
 
@@ -30,7 +28,9 @@ export async function getNews(leagueGroup: LeagueGroup): Promise<NewsResponseJso
       ? await fetchNewsForSport("baseball", "mlb", ARTICLE_LIMIT)
       : sport === "hockey"
         ? await fetchNewsForSport("hockey", "nhl", ARTICLE_LIMIT)
-        : await fetchNews(leagueGroup as ContentLeague, ARTICLE_LIMIT);
+        : sport === "football"
+          ? await fetchNewsForSport("football", "nfl", ARTICLE_LIMIT)
+          : await fetchNews(leagueGroup as ContentLeague, ARTICLE_LIMIT);
   const response: NewsResponseJson = {
     articles: articles.map(
       (a): NewsArticleJson => ({
