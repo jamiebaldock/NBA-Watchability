@@ -192,7 +192,11 @@ fun GameCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         StatusIndicator(game)
                         Spacer(modifier = Modifier.width(10.dp))
-                        if (showBell && game.eventId != null) {
+                        // Alerts are for games that haven't happened yet or are still
+                        // live - a final game has nothing left to alert on, so the bell
+                        // disappears the moment status flips, not just once a
+                        // notification's actually been sent for it.
+                        if (showBell && game.eventId != null && game.status != GameStatus.FINAL) {
                             BellButton(isBelled = isBelled, onClick = onToggleBell)
                             Spacer(modifier = Modifier.width(10.dp))
                         }
