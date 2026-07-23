@@ -2,14 +2,20 @@
 // send wrapper, and the mobile client (registration, the bell, receiving a
 // push) - nothing decided *when* to actually call sendPush until this file.
 //
-// Close-swing detection has no calibrated rubric behind it the way
-// mlbRubric.ts/nflRubric.ts/nhlRubric.ts do (those are fit against real
-// season data - see the rubric-calibration project notes). A live game has
-// none of the inputs those rubrics need (comeback size, lead changes, final
-// margin) until it's over, so this uses a simple, openly-approximate proxy
-// instead: current margin vs. a per-sport threshold, gated on being late in
-// the game (final period/inning, or overtime). Tunable later; not meant to
-// match the final-score tiers exactly, just to be in the right neighborhood.
+// Close-swing detection doesn't have the full rubric treatment
+// mlbRubric.ts/nflRubric.ts/nhlRubric.ts get (those score a finished game
+// across many dimensions - comeback size, lead changes, walk-offs, none of
+// which exist yet while a game is live). What it does have, as of the 2026-07
+// calibration pass below, is CLOSE_MARGIN's cutoffs grounded in the same
+// real per-sport datasets those rubrics were built from
+// (mlbRawStats.json/nflRawStats.json/nhlRawStats.json/
+// historicalWatchability(Wnba).json) - using each game's *final* margin as
+// the best available real-data proxy for "how rare is this margin," since
+// there's no historical period-by-period linescore data to compute the
+// actual live margin at the Q4/7th-inning/3rd-period mark directly. Current
+// margin vs. a per-sport threshold, gated on being late in the game (final
+// period/inning, or overtime) - still an approximation of live excitement,
+// just no longer an ungrounded one.
 import { claimAlertSend, clearDeadToken, getAlertableDevices, getDeviceFavorites, getGameSubDeviceIds, type AlertDeviceRow } from "./alertStore";
 import { fetchScoreboard } from "./espnClient";
 import { DEAD_TOKEN_CODES, sendPush } from "./fcm";
@@ -29,15 +35,40 @@ const LEAGUE_GROUPS: LeagueGroup[] = ["nba", "wnba", "mlb", "nfl", "nhl"];
 type ExcitementLevel = 0 | 1 | 2 | 3;
 
 // Absolute-margin cutoffs (points/runs/goals) for each excitement level, per
-// sport - loosely picked, not fit against real data. game.lg's "summer"
-// value (NBA Summer League) reuses the nba row.
+// sport - each grounded in that sport's real final-margin qualification
+// rate (see the per-league comments below). game.lg's "summer" value (NBA
+// Summer League) reuses the nba row - no separate real data for it (low-
+// volume exhibition games), and NBA's own thresholds turned out to double
+// as WNBA's (see wnba below).
 const CLOSE_MARGIN: Record<string, { solid: number; worthYourTime: number; instantClassic: number }> = {
+  // 2,650-game 2024-25+ sample: m<=8 in 39.5% of games, m<=5 in 24.7%,
+  // m<=3 in 14.8%. Already well-calibrated as first picked - unchanged.
   nba: { solid: 8, worthYourTime: 5, instantClassic: 3 },
+  // 576-game sample: m<=8 in 43.6%, m<=5 in 25.2%, m<=3 in 13.7% - close
+  // enough to NBA's own rates at the same raw margins to stay on NBA's
+  // thresholds rather than get its own bracket, same precedent as
+  // rubric.ts's clutch/overtime dimensions staying league-agnostic.
   wnba: { solid: 8, worthYourTime: 5, instantClassic: 3 },
   summer: { solid: 8, worthYourTime: 5, instantClassic: 3 },
+  // 2,478-game 2025 sample: m<=3 in 59.0%, m<=2 in 46.3%, m<=1 in 29.3%.
+  // Already the tightest achievable bracket - baseball's run differential
+  // can't go below 1 (no ties), so instantClassic=1 is a floor, not an
+  // undertuned choice. Matches mlbRubric.ts's own marginPoints note about
+  // baseball's much flatter/wider margin distribution than basketball's.
   mlb: { solid: 3, worthYourTime: 2, instantClassic: 1 },
-  nfl: { solid: 10, worthYourTime: 7, instantClassic: 4 },
-  nhl: { solid: 2, worthYourTime: 1, instantClassic: 1 }
+  // 286-game 2025 sample: m<=10 in 58.0%, m<=7 in 50.0% - solid/worthYourTime
+  // left as-is. instantClassic tightened 4->3 (33.9%->27.3%) to land on
+  // football's real "one-possession" line (a single FG ties or wins),
+  // matching nflRubric.ts's own top marginPoints bracket instead of an
+  // arbitrary in-between number.
+  nfl: { solid: 10, worthYourTime: 7, instantClassic: 3 },
+  // 1,394-game 2025-26 sample: m<=3 in 83.9%, m<=2 in 61.1%, m<=1 in 43.3%.
+  // Was { solid: 2, worthYourTime: 1, instantClassic: 1 } - worthYourTime
+  // and instantClassic shared the same value, and excitementLevel() checks
+  // instantClassic first, so worthYourTime (tier 2) could never actually
+  // fire for NHL. Shifted all three up one goal to give each tier its own
+  // real qualification rate and fix the dead tier.
+  nhl: { solid: 3, worthYourTime: 2, instantClassic: 1 }
 };
 
 /** "Late enough to matter" - final period/inning or overtime, per sport. game.q carries quarter/period/inning depending on lg. */
