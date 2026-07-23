@@ -196,7 +196,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(text = "Bump favorite teams' games to top", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
@@ -221,7 +221,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.VisibilityOff, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(text = "Show scores by default in History", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
@@ -242,7 +242,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.FilterAlt, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(text = "Minimum tier to show", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
@@ -270,7 +270,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.Wifi, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(text = "Wi-Fi only for highlights video", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
@@ -291,7 +291,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.LightMode, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(text = "Light theme", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)

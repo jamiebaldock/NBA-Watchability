@@ -72,9 +72,9 @@ fun SecretScreen(
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.ThumbDown, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
@@ -89,8 +89,7 @@ fun SecretScreen(
                 Switch(
                     checked = playerHaterMode,
                     onCheckedChange = { onTogglePlayerHaterMode() },
-                    colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime),
-                    modifier = Modifier.padding(end = 24.dp)
+                    colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime)
                 )
             }
             HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
