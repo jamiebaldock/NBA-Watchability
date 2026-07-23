@@ -23,6 +23,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -82,6 +84,13 @@ private val ROSTER_BROWSABLE_LEAGUES = listOf(LeagueGroup.NBA, LeagueGroup.WNBA,
 fun FavoritePlayersScreen(
     favoritePlayerNames: Set<String>,
     onToggleFavoritePlayer: (FavoritePlayer) -> Unit,
+    // Player Hater Mode easter egg - explicit params (not
+    // LocalPlayerHaterMode/LocalHatedPlayerNames) since this screen is a
+    // drill-down reached before AppRoot's CompositionLocalProvider is in
+    // scope (see AppRoot.kt's showFavoritePlayers block).
+    playerHaterMode: Boolean = false,
+    hatedPlayerNames: Set<String> = emptySet(),
+    onToggleHatedPlayer: (FavoritePlayer) -> Unit = {},
     onBack: () -> Unit
 ) {
     var selectedLeague by rememberSaveable { mutableStateOf(LeagueGroup.NBA) }
@@ -195,20 +204,20 @@ fun FavoritePlayersScreen(
                                     PickableTeamRow(team = t, onClick = { selectedTeam = t; query = "" })
                                 }
                                 items(filteredPlayers, key = { (t, p) -> "player-${t.name}-${p.id}" }) { (playerTeam, player) ->
+                                    val favoritePlayer = FavoritePlayer(
+                                        name = player.name,
+                                        team = playerTeam.name,
+                                        leagueGroup = selectedLeague.apiValue,
+                                        headshot = player.headshot
+                                    )
                                     PlayerSearchResultRow(
                                         player = player,
                                         teamName = playerTeam.name,
                                         isFavorite = player.name in favoritePlayerNames,
-                                        onToggle = {
-                                            onToggleFavoritePlayer(
-                                                FavoritePlayer(
-                                                    name = player.name,
-                                                    team = playerTeam.name,
-                                                    leagueGroup = selectedLeague.apiValue,
-                                                    headshot = player.headshot
-                                                )
-                                            )
-                                        }
+                                        onToggle = { onToggleFavoritePlayer(favoritePlayer) },
+                                        showHateCheckbox = playerHaterMode,
+                                        isHated = player.name in hatedPlayerNames,
+                                        onToggleHated = { onToggleHatedPlayer(favoritePlayer) }
                                     )
                                 }
                             }
@@ -245,14 +254,14 @@ fun FavoritePlayersScreen(
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                             ) {
                                 items(filtered, key = { it.id }) { player ->
+                                    val favoritePlayer = FavoritePlayer(name = player.name, team = team.name, leagueGroup = selectedLeague.apiValue, headshot = player.headshot)
                                     PlayerRow(
                                         player = player,
                                         isFavorite = player.name in favoritePlayerNames,
-                                        onToggle = {
-                                            onToggleFavoritePlayer(
-                                                FavoritePlayer(name = player.name, team = team.name, leagueGroup = selectedLeague.apiValue, headshot = player.headshot)
-                                            )
-                                        }
+                                        onToggle = { onToggleFavoritePlayer(favoritePlayer) },
+                                        showHateCheckbox = playerHaterMode,
+                                        isHated = player.name in hatedPlayerNames,
+                                        onToggleHated = { onToggleHatedPlayer(favoritePlayer) }
                                     )
                                 }
                             }
@@ -352,7 +361,14 @@ private fun PlayerHeadshot(name: String, url: String?) {
 }
 
 @Composable
-private fun PlayerRow(player: Player, isFavorite: Boolean, onToggle: () -> Unit) {
+private fun PlayerRow(
+    player: Player,
+    isFavorite: Boolean,
+    onToggle: () -> Unit,
+    showHateCheckbox: Boolean = false,
+    isHated: Boolean = false,
+    onToggleHated: () -> Unit = {}
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -361,6 +377,16 @@ private fun PlayerRow(player: Player, isFavorite: Boolean, onToggle: () -> Unit)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
             PlayerHeadshot(player.name, player.headshot)
             Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
+        }
+        // Independent of the favorite heart - a player can be marked hated
+        // without ever being favorited, so this is an extra control, not a
+        // swap of the heart's own meaning.
+        if (showHateCheckbox) {
+            Checkbox(
+                checked = isHated,
+                onCheckedChange = { onToggleHated() },
+                colors = CheckboxDefaults.colors(checkedColor = TierWorthYourTime)
+            )
         }
         Icon(
             imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
@@ -378,7 +404,15 @@ private fun PlayerRow(player: Player, isFavorite: Boolean, onToggle: () -> Unit)
  * to, the same way FavoritePlayersLeagueGroup's already-favorited rows do.
  */
 @Composable
-private fun PlayerSearchResultRow(player: Player, teamName: String, isFavorite: Boolean, onToggle: () -> Unit) {
+private fun PlayerSearchResultRow(
+    player: Player,
+    teamName: String,
+    isFavorite: Boolean,
+    onToggle: () -> Unit,
+    showHateCheckbox: Boolean = false,
+    isHated: Boolean = false,
+    onToggleHated: () -> Unit = {}
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -390,6 +424,13 @@ private fun PlayerSearchResultRow(player: Player, teamName: String, isFavorite: 
                 Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
                 Text(text = teamName, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
             }
+        }
+        if (showHateCheckbox) {
+            Checkbox(
+                checked = isHated,
+                onCheckedChange = { onToggleHated() },
+                colors = CheckboxDefaults.colors(checkedColor = TierWorthYourTime)
+            )
         }
         Icon(
             imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,

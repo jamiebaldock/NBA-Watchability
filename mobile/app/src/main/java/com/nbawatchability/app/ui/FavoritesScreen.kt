@@ -1,7 +1,6 @@
 package com.nbawatchability.app.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,13 +21,12 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -105,6 +103,13 @@ fun FavoritesScreen(
     onAddPlayerClick: () -> Unit,
     onToggleFavoriteTeam: (Team) -> Unit,
     onToggleFavoritePlayer: (FavoritePlayer) -> Unit,
+    // Player Hater Mode easter egg - the on/off flag and the hated-names set
+    // itself come from LocalPlayerHaterMode/LocalHatedPlayerNames (read
+    // directly inside FavoritePlayersLeagueGroup below, already in scope
+    // since this whole screen renders inside AppRoot's CompositionLocalProvider) -
+    // only the toggle callback needs threading, same convention as every
+    // other favorite/remove callback on this screen.
+    onToggleHatedPlayer: (FavoritePlayer) -> Unit = {},
     belledGameIds: Set<String> = emptySet(),
     onToggleBell: (Game) -> Unit = {}
 ) {
@@ -221,7 +226,7 @@ fun FavoritesScreen(
                     onToggleBell = onToggleBell
                 )
                 2 -> FavoriteTeamsPage(favoriteTeams, onRemoveFavoriteTeam, onAddTeamClick)
-                else -> FavoritePlayersPage(favoritePlayers, onRemoveFavoritePlayer, onAddPlayerClick)
+                else -> FavoritePlayersPage(favoritePlayers, onRemoveFavoritePlayer, onToggleHatedPlayer, onAddPlayerClick)
             }
         }
     }
@@ -439,7 +444,12 @@ private fun FavoriteTeamsPage(favoriteTeams: List<Team>, onRemoveFavoriteTeam: (
  * FavoritePlayersScreen (Settings), reached via [onAddPlayerClick].
  */
 @Composable
-private fun FavoritePlayersPage(favoritePlayers: List<FavoritePlayer>, onRemoveFavoritePlayer: (FavoritePlayer) -> Unit, onAddPlayerClick: () -> Unit) {
+private fun FavoritePlayersPage(
+    favoritePlayers: List<FavoritePlayer>,
+    onRemoveFavoritePlayer: (FavoritePlayer) -> Unit,
+    onToggleHatedPlayer: (FavoritePlayer) -> Unit,
+    onAddPlayerClick: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -458,12 +468,12 @@ private fun FavoritePlayersPage(favoritePlayers: List<FavoritePlayer>, onRemoveF
             LeagueGroup.entries.forEach { league ->
                 val playersInLeague = playersByLeague[league.apiValue].orEmpty()
                 if (playersInLeague.isNotEmpty()) {
-                    FavoritePlayersLeagueGroup(league.displayName, playersInLeague, onRemoveFavoritePlayer)
+                    FavoritePlayersLeagueGroup(league.displayName, playersInLeague, onRemoveFavoritePlayer, onToggleHatedPlayer)
                 }
             }
             val unknownLeaguePlayers = playersByLeague[null].orEmpty()
             if (unknownLeaguePlayers.isNotEmpty()) {
-                FavoritePlayersLeagueGroup("Other", unknownLeaguePlayers, onRemoveFavoritePlayer)
+                FavoritePlayersLeagueGroup("Other", unknownLeaguePlayers, onRemoveFavoritePlayer, onToggleHatedPlayer)
             }
             Spacer(modifier = Modifier.height(4.dp))
         }
@@ -474,6 +484,11 @@ private fun FavoritePlayersPage(favoritePlayers: List<FavoritePlayer>, onRemoveF
     }
 }
 
+/**
+ * Swipe-left-to-reveal-delete (SwipeToRevealRow) replaced the old persistent
+ * "X" icon here - see that file's own doc comment for why a hand-rolled drag
+ * implementation instead of material3's SwipeToDismissBox.
+ */
 @Composable
 private fun FavoriteTeamsLeagueGroup(leagueLabel: String, teams: List<Team>, onRemoveFavoriteTeam: (Team) -> Unit) {
     Text(
@@ -483,30 +498,39 @@ private fun FavoriteTeamsLeagueGroup(leagueLabel: String, teams: List<Team>, onR
         modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
     )
     teams.forEach { team ->
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        SwipeToRevealRow(onDelete = { onRemoveFavoriteTeam(team) }, modifier = Modifier.padding(vertical = 4.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 if (team.logo != null) {
                     AsyncImage(model = themeAwareLogoUrl(team.logo), contentDescription = null, modifier = Modifier.size(32.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                 }
                 Text(text = team.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
             }
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Remove ${team.name}",
-                tint = TextMuted,
-                modifier = Modifier.size(22.dp).clickable { onRemoveFavoriteTeam(team) }
-            )
         }
     }
 }
 
+/**
+ * Same swipe-to-reveal-delete as FavoriteTeamsLeagueGroup above, plus the
+ * Player Hater Mode "hate on this player" checkbox where the old "X" used to
+ * sit - only shown while LocalPlayerHaterMode is on (read directly, already
+ * in scope - see FavoritesScreen's onToggleHatedPlayer doc comment). Delete
+ * itself moved to the swipe gesture regardless of hater mode, so the
+ * checkbox never competes with a remove icon for the same spot.
+ */
 @Composable
-private fun FavoritePlayersLeagueGroup(leagueLabel: String, players: List<FavoritePlayer>, onRemoveFavoritePlayer: (FavoritePlayer) -> Unit) {
+private fun FavoritePlayersLeagueGroup(
+    leagueLabel: String,
+    players: List<FavoritePlayer>,
+    onRemoveFavoritePlayer: (FavoritePlayer) -> Unit,
+    onToggleHatedPlayer: (FavoritePlayer) -> Unit
+) {
+    val playerHaterMode = LocalPlayerHaterMode.current
+    val hatedPlayerNames = LocalHatedPlayerNames.current
+
     Text(
         text = leagueLabel,
         color = TextSecondary,
@@ -514,25 +538,28 @@ private fun FavoritePlayersLeagueGroup(leagueLabel: String, players: List<Favori
         modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
     )
     players.forEach { player ->
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                PlayerAvatar(name = player.name, headshotUrl = player.headshot)
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
-                    Text(text = player.team, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+        SwipeToRevealRow(onDelete = { onRemoveFavoritePlayer(player) }, modifier = Modifier.padding(vertical = 4.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    PlayerAvatar(name = player.name, headshotUrl = player.headshot)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
+                        Text(text = player.team, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                if (playerHaterMode) {
+                    Checkbox(
+                        checked = player.name in hatedPlayerNames,
+                        onCheckedChange = { onToggleHatedPlayer(player) },
+                        colors = CheckboxDefaults.colors(checkedColor = TierWorthYourTime)
+                    )
                 }
             }
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Remove ${player.name}",
-                tint = TextMuted,
-                modifier = Modifier.size(22.dp).clickable { onRemoveFavoritePlayer(player) }
-            )
         }
     }
 }

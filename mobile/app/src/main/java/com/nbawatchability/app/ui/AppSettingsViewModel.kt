@@ -79,6 +79,10 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch { repository.setAllLeaguesSelected(value) }
     }
 
+    fun togglePlayerHaterMode() {
+        viewModelScope.launch { repository.setPlayerHaterMode(!settings.playerHaterMode) }
+    }
+
     /**
      * Picks a single real league, turning "All Leagues" back off - the one
      * place this reset happens, shared by every tab's dropdown

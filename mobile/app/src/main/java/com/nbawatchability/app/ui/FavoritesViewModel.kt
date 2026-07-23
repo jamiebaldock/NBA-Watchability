@@ -14,6 +14,10 @@ import kotlinx.coroutines.launch
 
 const val MAX_FAVORITE_TEAMS = 5
 const val MAX_FAVORITE_PLAYERS = 10
+// Player Hater Mode easter egg - global cap (not per-league like the two
+// above), James's specific call: up to 10 hated players total, across every
+// league at once.
+const val MAX_HATED_PLAYERS = 10
 
 class FavoritesViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -31,6 +35,9 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
     var favoritePlayers by mutableStateOf<List<FavoritePlayer>>(emptyList())
         private set
 
+    var hatedPlayers by mutableStateOf<List<FavoritePlayer>>(emptyList())
+        private set
+
     init {
         viewModelScope.launch {
             repository.favoriteTeams.collect {
@@ -41,11 +48,16 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             repository.favoritePlayers.collect { favoritePlayers = it }
         }
+        viewModelScope.launch {
+            repository.hatedPlayers.collect { hatedPlayers = it }
+        }
     }
 
     fun isFavoriteTeam(name: String): Boolean = favoriteTeams.any { it.name == name }
 
     fun isFavoritePlayer(name: String): Boolean = favoritePlayers.any { it.name == name }
+
+    fun isHatedPlayer(name: String): Boolean = hatedPlayers.any { it.name == name }
 
     /**
      * Adds [team] if not already favorited, removes it otherwise - the same
@@ -92,5 +104,21 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
         }
         val updated = if (alreadyFavorited) favoritePlayers.filterNot { it.name == player.name } else favoritePlayers + player
         viewModelScope.launch { repository.setFavoritePlayers(updated) }
+    }
+
+    /**
+     * Player Hater Mode easter egg - independent of toggleFavoritePlayer
+     * above (a player can be hated without being favorited, or favorited
+     * without being hated). Cap is global (MAX_HATED_PLAYERS), not per-league
+     * - unlike favorites, there's no per-league reasoning to preserve here.
+     */
+    fun toggleHatedPlayer(player: FavoritePlayer) {
+        val alreadyHated = isHatedPlayer(player.name)
+        if (!alreadyHated && hatedPlayers.size >= MAX_HATED_PLAYERS) {
+            Toast.makeText(getApplication(), "Up to $MAX_HATED_PLAYERS hated players for now", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val updated = if (alreadyHated) hatedPlayers.filterNot { it.name == player.name } else hatedPlayers + player
+        viewModelScope.launch { repository.setHatedPlayers(updated) }
     }
 }

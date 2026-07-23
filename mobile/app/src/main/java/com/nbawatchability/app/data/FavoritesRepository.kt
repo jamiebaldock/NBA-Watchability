@@ -16,6 +16,11 @@ private val Context.favoritesDataStore: DataStore<Preferences> by preferencesDat
 
 private val FAVORITE_TEAMS_KEY = stringPreferencesKey("favorite_teams_json")
 private val FAVORITE_PLAYERS_KEY = stringPreferencesKey("favorite_players_json")
+// Player Hater Mode easter egg - a separate list from favorites (someone you
+// hate isn't someone you favorited), same FavoritePlayer shape reused as-is
+// since it already carries everything a checkbox row needs (name/team/
+// league/headshot) without inventing a parallel type.
+private val HATED_PLAYERS_KEY = stringPreferencesKey("hated_players_json")
 private val json = Json { ignoreUnknownKeys = true }
 
 /**
@@ -47,5 +52,14 @@ class FavoritesRepository(private val context: Context) {
 
     suspend fun setFavoritePlayers(players: List<FavoritePlayer>) {
         context.favoritesDataStore.edit { prefs -> prefs[FAVORITE_PLAYERS_KEY] = json.encodeToString(players) }
+    }
+
+    val hatedPlayers: Flow<List<FavoritePlayer>> = context.favoritesDataStore.data.map { prefs ->
+        val raw = prefs[HATED_PLAYERS_KEY] ?: return@map emptyList()
+        runCatching { json.decodeFromString<List<FavoritePlayer>>(raw) }.getOrDefault(emptyList())
+    }
+
+    suspend fun setHatedPlayers(players: List<FavoritePlayer>) {
+        context.favoritesDataStore.edit { prefs -> prefs[HATED_PLAYERS_KEY] = json.encodeToString(players) }
     }
 }

@@ -36,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +45,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,6 +82,13 @@ import java.time.format.DateTimeFormatter
 private val localTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
 private val localDateFormatter = DateTimeFormatter.ofPattern("MMMM d - yyyy")
 private const val TABULAR_NUMS = "tnum"
+
+// Confetti-burst easter egg guard - a plain module-level Set (not DataStore-
+// persisted), so "already celebrated" only lasts the life of the process,
+// not forever. Deliberately simple: an unbounded persisted set of every
+// Instant Classic game.id ever seen would only grow, for a purely cosmetic
+// one-shot animation that doesn't need to remember across app restarts.
+private val instantClassicCelebrated = mutableSetOf<String>()
 
 @Composable
 fun GameCard(
@@ -136,13 +146,34 @@ fun GameCard(
     // live tile (no rubric breakdown or real top-performer stats yet) does
     // nothing, same as today's behavior; only invoked when game.hasBreakdown
     // is true (gated below, not by the caller).
-    onGameClick: (Game) -> Unit = {}
+    onGameClick: (Game) -> Unit = {},
+    // History "All time" only: this is the single highest-scoring game in
+    // that preset's currently-qualifying set - see HistoryScreen.kt's
+    // topGame computation. Purely decorative (a crown next to the tier
+    // badge), no other behavior change.
+    isGoat: Boolean = false
 ) {
     val tier = game.effectiveTier(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights)
 
+    // Confetti + haptic easter egg, once per game.id for the life of the
+    // process (instantClassicCelebrated below) - a game that's already
+    // Instant Classic every time this tile re-renders (scrolling it in and
+    // out of view, switching tabs and back) only gets the burst the first
+    // time, not on every recomposition.
+    val haptic = LocalHapticFeedback.current
+    var showConfetti by remember { mutableStateOf(false) }
+    LaunchedEffect(game.id, tier, game.status) {
+        if (tier == Tier.INSTANT_CLASSIC && game.status == GameStatus.FINAL && game.id !in instantClassicCelebrated) {
+            instantClassicCelebrated += game.id
+            showConfetti = true
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+    }
+
+    Box(modifier = modifier) {
     Card(
         onClick = { if (game.hasBreakdown) onGameClick(game) },
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = SurfaceCardElevated),
         shape = RoundedCornerShape(14.dp),
         border = tier?.let { BorderStroke(1.5.dp, it.color()) }
@@ -184,10 +215,21 @@ fun GameCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (tier != null) {
-                        TierBadge(
-                            tier = tier,
-                            numericScore = if (showNumericScore) game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) else null
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TierBadge(
+                                tier = tier,
+                                numericScore = if (showNumericScore) game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) else null
+                            )
+                            if (isGoat) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "👑 GOAT",
+                                    color = TierInstantClassic,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
                     } else {
                         Spacer(modifier = Modifier.size(0.dp))
                     }
@@ -288,6 +330,13 @@ fun GameCard(
                 }
             }
         }
+    }
+    if (showConfetti) {
+        ConfettiBurst(
+            modifier = Modifier.matchParentSize(),
+            onFinished = { showConfetti = false }
+        )
+    }
     }
 }
 
@@ -397,6 +446,82 @@ private fun BellButton(isBelled: Boolean, onClick: () -> Unit, modifier: Modifie
     )
 }
 
+// Player Hater Mode easter egg (LocalPlayerHaterMode, scoped down to just
+// LocalHatedPlayerNames - see StandoutPerformerCallout below) - swaps the
+// plain "name: line" callout for one of these instead: backhanded
+// compliments, not straight insults, so it reads as "damning with faint
+// praise" rather than actually mean. Only used as a fallback when
+// [performer.line] doesn't parse into 2+ stats (see parseStatParts/
+// playerHaterLine below) - most standout lines are a single stat (e.g. MLB's
+// "2 HR", NFL's "300 pass yds", a non-triple-double NBA/WNBA "38 PTS"), so
+// this bank covers the common case. Picked once per performer
+// (remember-keyed on name+line, not re-rolled every recomposition) so it
+// doesn't visibly flicker between jokes as the tile scrolls in and out of
+// view.
+private val PLAYER_HATER_SINGLE_STAT_LINES = listOf(
+    "%s dropped %s - brave of them to try that hard.",
+    "%s put up %s. Clean box score for someone who clearly got lucky.",
+    "Respect to %s for %s, considering the competition.",
+    "%s: %s. Not bad for a guy who probably practices.",
+    "%s really showed up tonight with %s - shocking, honestly.",
+    "%s posted %s. Even a stopped clock is right twice a day.",
+    "You have to admire %s for %s - grit over talent, clearly.",
+    "%s went for %s. Impressive, if you don't think about it too hard.",
+    "%s: %s, and somehow still not the best player on the floor.",
+    "%s managed %s - a real glow-up from whatever that was last game.",
+    "%s with %s tonight. Great stats for someone who disappears in big games.",
+    "Give %s credit for %s - the refs were feeling generous.",
+    "%s dropped %s. Efficient, for a volume shooter.",
+    "%s's %s is cute, but let's see them do it in the playoffs.",
+    "%s posted %s - a career night, statistically speaking.",
+    "%s: %s. Somebody finally showed up.",
+    "%s put together %s - who knew they still had it in them.",
+    "%s's %s looks great on paper. Paper doesn't play defense.",
+    "%s racked up %s tonight - against that defense, so did everyone.",
+    "%s finished with %s. A real testament to matchup luck.",
+    "Oh wow, %s really showed up with %s. Groundbreaking stuff.",
+    "Oh wow, %s had %s tonight. Somebody alert the historians.",
+    "Big night for %s: %s. Circle the calendar.",
+    "Oh wow, %s: %s. The bar was in hell and they still tripped over it.",
+    "%s had %s tonight - a real 'my mom is proud' kind of stat line.",
+    "Oh wow, %s pulled off %s. Someone tell their fantasy owners.",
+    "%s: %s. Not the best game of their career, but sure, we'll clap.",
+    "Oh wow, %s put up %s. Truly can't stop won't stop, allegedly."
+)
+
+private data class StatPart(val value: Int, val label: String)
+
+// [performer.line] is always "NUMBER label" pairs, comma-separated - a
+// single stat for every sport except an NBA/WNBA triple-double, which is
+// always exactly "X PTS, Y REB, Z AST" (gameMapper.ts's findStandoutPerformers).
+// Parses that shape generically rather than hardcoding the triple-double
+// case, so it degrades gracefully (returns a 1-element list, falls through
+// to the single-stat bank above) for every other sport's line format.
+private fun parseStatParts(line: String): List<StatPart> =
+    line.split(", ").mapNotNull { part ->
+        Regex("""^(\d+)\s+(.+)$""").find(part.trim())?.let { match ->
+            StatPart(match.groupValues[1].toInt(), match.groupValues[2])
+        }
+    }
+
+/**
+ * "Jayson Tatum finally got more than 38 PTS and 11 REB. 2 AST tho. 🙂 Really?" -
+ * calls out the single weakest stat in a multi-stat line by name instead of
+ * a generic template, James's specific ask over the earlier template-only
+ * approach. Falls back to [PLAYER_HATER_SINGLE_STAT_LINES] when there's
+ * only one stat to compare (nothing to single out as the weak link).
+ */
+private fun playerHaterLine(name: String, line: String): String {
+    val stats = parseStatParts(line)
+    if (stats.size < 2) return PLAYER_HATER_SINGLE_STAT_LINES.random().format(name, line)
+
+    val weakestIndex = stats.indices.minByOrNull { stats[it].value }!!
+    val weakest = stats[weakestIndex]
+    val othersText = stats.filterIndexed { i, _ -> i != weakestIndex }
+        .joinToString(" and ") { "more than ${it.value} ${it.label}" }
+    return "$name finally got $othersText. ${weakest.value} ${weakest.label} tho. 🙂 Really?"
+}
+
 /**
  * One line per standout performer in this game - deliberately plain text
  * (name + line), not a full card, since this can appear on any tile
@@ -404,7 +529,10 @@ private fun BellButton(isBelled: Boolean, onClick: () -> Unit, modifier: Modifie
  * little else drawing attention to it. Every standout shows here (not just
  * already-favorited ones), so a player worth favoriting can be spotted
  * mid-browse; a favorited name gets the same accent-tint/long-press
- * treatment TeamRow above gives a favorited team.
+ * treatment TeamRow above gives a favorited team. Player Hater Mode
+ * (LocalPlayerHaterMode) only roasts a performer who's also on the
+ * LocalHatedPlayerNames list - being a standout here isn't enough on its
+ * own, someone has to have actually marked them as hated first.
  */
 @Composable
 private fun StandoutPerformerCallout(
@@ -413,9 +541,12 @@ private fun StandoutPerformerCallout(
     onTogglePlayer: (StandoutPerformer) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val playerHaterMode = LocalPlayerHaterMode.current
+    val hatedPlayerNames = LocalHatedPlayerNames.current
     Column(modifier = modifier) {
         performers.forEach { performer ->
             val isFavorite = performer.name in favoritePlayerNames
+            val isHated = performer.name in hatedPlayerNames
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -436,8 +567,15 @@ private fun StandoutPerformerCallout(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                 }
+                val text = if (playerHaterMode && isHated) {
+                    remember(performer.name, performer.line) {
+                        playerHaterLine(performer.name, performer.line)
+                    }
+                } else {
+                    "${performer.name}: ${performer.line}"
+                }
                 Text(
-                    text = "${performer.name}: ${performer.line}",
+                    text = text,
                     color = if (isFavorite) FavoriteAccent else TextSecondary,
                     fontWeight = if (isFavorite) FontWeight.Bold else FontWeight.Normal,
                     style = MaterialTheme.typography.bodySmall

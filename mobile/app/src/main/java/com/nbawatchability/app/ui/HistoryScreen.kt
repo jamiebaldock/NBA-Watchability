@@ -69,6 +69,18 @@ private val earliestDateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
 private const val ALL_TIME_MIN_SCORE_NBA = 90
 private const val ALL_TIME_MIN_SCORE_WNBA = 75
 
+// Random pick shown when a preset/date range has nothing qualifying - one of
+// several instead of always the same sentence, purely for flavor.
+private val EMPTY_HISTORY_LINES = listOf(
+    "No barn burners in this range",
+    "Nothing but duds as far as the eye can see",
+    "Crickets. Not even the good kind",
+    "This range is drier than a preseason box score",
+    "Zero certified bangers found here",
+    "Not a single classic hiding in here",
+    "This stretch is criminally boring"
+)
+
 /**
  * "Which old games are actually worth going back to watch" - surfaces the
  * per-league watchability backfill (NBA and WNBA both have one, each scored
@@ -289,12 +301,16 @@ fun HistoryScreen(
 
                     if (displayGames.isEmpty()) {
                         val earliestText = earliestDate?.format(earliestDateFormatter)
+                        // Re-picked whenever the preset changes (not on every
+                        // recomposition) so it doesn't flicker between jokes
+                        // while this same empty state stays on screen.
+                        val emptyStateLine = remember(selectedPreset) { EMPTY_HISTORY_LINES.random() }
                         Column(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = "No barn burners in this range" +
+                                text = emptyStateLine +
                                     (if (earliestText != null) " - data goes back to $earliestText, try a wider one." else "."),
                                 color = TextSecondary,
                                 textAlign = TextAlign.Center,
@@ -303,6 +319,18 @@ fun HistoryScreen(
                             )
                         }
                     } else {
+                        // "All time" only - the single highest-scoring game in
+                        // the All-time-qualifying set (displayGames, before
+                        // sort/min-tier-filter/favorite-bump reorder it below)
+                        // gets the GOAT crown. Any other preset leaves this
+                        // null - a "highest of the last 7 days" badge isn't
+                        // the same claim as "of all time" and shouldn't wear
+                        // the same crown.
+                        val goatId = if (selectedPreset is HistoryRangePreset.AllTime) {
+                            displayGames.maxByOrNull { it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) ?: -1 }?.id
+                        } else {
+                            null
+                        }
                         // Ordered by the user's own rubric weights (not just
                         // the server's stored score) when sorting by rating -
                         // every History game already has a score, so unlike
@@ -352,7 +380,8 @@ fun HistoryScreen(
                                     onToggleFavoriteTeam = onToggleFavoriteTeam,
                                     favoritePlayerNames = favoritePlayerNames,
                                     onToggleFavoritePlayer = onToggleFavoritePlayer,
-                                    onGameClick = onGameClick
+                                    onGameClick = onGameClick,
+                                    isGoat = game.id == goatId
                                 )
                             }
                         }

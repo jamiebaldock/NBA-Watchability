@@ -57,6 +57,8 @@ android {
 
     buildFeatures {
         compose = true
+        // BuildConfig.VERSION_NAME - AboutScreen's version-number tap easter egg reads this.
+        buildConfig = true
     }
 
     packaging {

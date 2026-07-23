@@ -32,6 +32,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -110,6 +111,7 @@ enum class BottomNavTab(val label: String, val icon: ImageVector) {
 @Composable
 fun AppRoot() {
     var showAbout by rememberSaveable { mutableStateOf(false) }
+    var showSecret by rememberSaveable { mutableStateOf(false) }
     var showRubricWeights by rememberSaveable { mutableStateOf(false) }
     var showSelectedSports by rememberSaveable { mutableStateOf(false) }
     var showFavoriteTeams by rememberSaveable { mutableStateOf(false) }
@@ -164,6 +166,7 @@ fun AppRoot() {
     // was active underneath (the Settings tab, typically) rather than
     // exiting the app.
     BackHandler(enabled = showAbout) { showAbout = false }
+    BackHandler(enabled = showSecret) { showSecret = false }
     BackHandler(enabled = showRubricWeights) { showRubricWeights = false }
     BackHandler(enabled = showSelectedSports) { showSelectedSports = false }
     BackHandler(enabled = showFavoriteTeams) { showFavoriteTeams = false }
@@ -173,7 +176,16 @@ fun AppRoot() {
     BackHandler(enabled = showGameDetail != null) { showGameDetail = null }
 
     if (showAbout) {
-        AboutScreen(onBack = { showAbout = false })
+        AboutScreen(onBack = { showAbout = false }, onSecretUnlocked = { showAbout = false; showSecret = true })
+        return
+    }
+
+    if (showSecret) {
+        SecretScreen(
+            playerHaterMode = appSettingsViewModel.settings.playerHaterMode,
+            onTogglePlayerHaterMode = appSettingsViewModel::togglePlayerHaterMode,
+            onBack = { showSecret = false }
+        )
         return
     }
 
@@ -221,6 +233,13 @@ fun AppRoot() {
         FavoritePlayersScreen(
             favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet(),
             onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
+            // Explicit params, not LocalPlayerHaterMode/LocalHatedPlayerNames -
+            // this screen is a drill-down that returns early above the
+            // CompositionLocalProvider wrapping the bottom-nav Scaffold below,
+            // so those composition locals aren't in scope here.
+            playerHaterMode = appSettingsViewModel.settings.playerHaterMode,
+            hatedPlayerNames = favoritesViewModel.hatedPlayers.map { it.name }.toSet(),
+            onToggleHatedPlayer = favoritesViewModel::toggleHatedPlayer,
             onBack = { showFavoritePlayers = false }
         )
         return
@@ -266,6 +285,15 @@ fun AppRoot() {
         return
     }
 
+    // Provided here (not higher up) because this is the only subtree where a
+    // GameCard - and therefore StandoutPerformerCallout - actually renders;
+    // every drill-down screen above (About, rubric weights, Selected Sports,
+    // favorites pickers, alerts settings, the secret screen itself) returns
+    // early before reaching this point.
+    CompositionLocalProvider(
+        LocalPlayerHaterMode provides appSettingsViewModel.settings.playerHaterMode,
+        LocalHatedPlayerNames provides favoritesViewModel.hatedPlayers.map { it.name }.toSet()
+    ) {
     Scaffold(
         containerColor = BackgroundBase,
         bottomBar = {
@@ -432,6 +460,7 @@ fun AppRoot() {
                 }
             }
         }
+    }
     }
 }
 
@@ -800,6 +829,7 @@ private fun FavoritesTab(
         onAddPlayerClick = onAddPlayerClick,
         onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
         onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
+        onToggleHatedPlayer = favoritesViewModel::toggleHatedPlayer,
         belledGameIds = belledGameIds,
         onToggleBell = onToggleBell
     )

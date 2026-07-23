@@ -33,6 +33,11 @@ private val LIGHT_THEME_KEY = booleanPreferencesKey("light_theme")
 // above (GameDetailTab lives in the ui package).
 private val DEFAULT_GAME_DETAIL_TAB_KEY = stringPreferencesKey("default_game_detail_tab")
 private val ALL_LEAGUES_SELECTED_KEY = booleanPreferencesKey("all_leagues_selected")
+// Unlocked via AboutScreen's version-number tap easter egg (SecretScreen.kt),
+// not a normal Settings row - see PlayerHaterMode.kt for how this reaches
+// StandoutPerformerCallout without threading a parameter through every
+// GameCard call site.
+private val PLAYER_HATER_MODE_KEY = booleanPreferencesKey("player_hater_mode")
 
 // Only the core US sports set ships enabled by default for now - NBA/WNBA/MLB/
 // NFL/NHL are all fully built - every other LeagueGroup entry (F1, cricket,
@@ -84,7 +89,10 @@ data class AppSettings(
     // tracked this independently and reset to false on every fresh entry,
     // which read as a bug when switching tabs mid-session (James's report,
     // 2026-07-20).
-    val isAllLeaguesSelected: Boolean = false
+    val isAllLeaguesSelected: Boolean = false,
+    // Easter egg, see PLAYER_HATER_MODE_KEY above - not shown in the normal
+    // Settings list, only togglable from the hidden SecretScreen.
+    val playerHaterMode: Boolean = false
 )
 
 /** Persists the last-selected league, which leagues show in the dropdown, and Games-tab display prefs (numeric score) - on-device only, so they survive an app restart. */
@@ -104,7 +112,8 @@ class AppSettingsRepository(private val context: Context) {
             wifiOnlyHighlights = prefs[WIFI_ONLY_HIGHLIGHTS_KEY] ?: false,
             lightTheme = prefs[LIGHT_THEME_KEY] ?: false,
             defaultGameDetailTab = prefs[DEFAULT_GAME_DETAIL_TAB_KEY] ?: "BREAKDOWN",
-            isAllLeaguesSelected = prefs[ALL_LEAGUES_SELECTED_KEY] ?: false
+            isAllLeaguesSelected = prefs[ALL_LEAGUES_SELECTED_KEY] ?: false,
+            playerHaterMode = prefs[PLAYER_HATER_MODE_KEY] ?: false
         )
     }
 
@@ -154,5 +163,9 @@ class AppSettingsRepository(private val context: Context) {
 
     suspend fun setAllLeaguesSelected(value: Boolean) {
         context.appSettingsDataStore.edit { it[ALL_LEAGUES_SELECTED_KEY] = value }
+    }
+
+    suspend fun setPlayerHaterMode(value: Boolean) {
+        context.appSettingsDataStore.edit { it[PLAYER_HATER_MODE_KEY] = value }
     }
 }
