@@ -27,7 +27,6 @@ const POLL_INTERVAL_MS = 3 * 60 * 1000;
 const LEAGUE_GROUPS: LeagueGroup[] = ["nba", "wnba", "mlb", "nfl", "nhl"];
 
 type ExcitementLevel = 0 | 1 | 2 | 3;
-const TIER_RANK: Record<string, ExcitementLevel> = { solid: 1, worth_your_time: 2, instant_classic: 3 };
 
 // Absolute-margin cutoffs (points/runs/goals) for each excitement level, per
 // sport - loosely picked, not fit against real data. game.lg's "summer"
@@ -222,24 +221,27 @@ async function pollOnce(): Promise<void> {
       const deviceLeagues = device.leagues.split(",").filter(Boolean);
       if (deviceLeagues.length > 0 && !deviceLeagues.includes(normalizedLeague)) continue;
 
-      const isBelled = belledSet.has(device.device_id);
-      const isFavoriteGame = getDeviceFavorites(device.device_id).some(
-        (fav) => fav.team_name === game.a || fav.team_name === game.h
-      );
-
-      if (isBelled) {
+      // Bell always wins - a specific game the user explicitly asked about
+      // fires regardless of every other setting below.
+      if (belledSet.has(device.device_id)) {
         await notifyDevice(device, game, "You belled this one - it's getting close.");
         continue;
       }
-      if (isFavoriteGame) {
-        await notifyDevice(device, game, "Your team's game is getting close.");
-        continue;
-      }
-      if (device.favorites_only) continue;
-      if (!device.tier_threshold) continue; // "off" for non-favorite games
-      const requiredRank = TIER_RANK[device.tier_threshold] ?? 99;
-      if (level < requiredRank) continue;
-      await notifyDevice(device, game, "A close game worth checking out.");
+
+      // No bell on this game: only a device that opted into broader
+      // favorite-team alerting (favorites_only - see AlertsSettingsScreen's
+      // "Alerts for favorite teams" toggle) gets anything further. There's
+      // no non-favorite/rating-threshold path anymore - alerts are for
+      // specific (belled) games unless the user explicitly asked for all of
+      // their favorite teams' games too.
+      if (!device.favorites_only) continue;
+
+      const isFavoriteGame = getDeviceFavorites(device.device_id).some(
+        (fav) => fav.team_name === game.a || fav.team_name === game.h
+      );
+      if (!isFavoriteGame) continue;
+
+      await notifyDevice(device, game, "Your team's game is getting close.");
     }
   }
 }

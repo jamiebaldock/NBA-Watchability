@@ -238,8 +238,6 @@ fun AppRoot() {
             onDeliveryChange = alertsViewModel::setDelivery,
             favoritesOnly = alertsViewModel.settings.favoritesOnly,
             onToggleFavoritesOnly = alertsViewModel::setFavoritesOnly,
-            tierThreshold = alertsViewModel.settings.tierThreshold,
-            onTierThresholdChange = alertsViewModel::setTierThreshold,
             onBack = { showAlertsSettings = false }
         )
         return

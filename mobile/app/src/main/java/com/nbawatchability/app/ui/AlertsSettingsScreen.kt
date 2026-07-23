@@ -17,7 +17,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,7 +39,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.filled.Schedule
 import com.nbawatchability.app.data.AlertDelivery
-import com.nbawatchability.app.data.AlertTierThreshold
 import com.nbawatchability.app.data.LEAD_TIME_OPTIONS_MINUTES
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextMuted
@@ -56,6 +54,13 @@ import com.nbawatchability.app.ui.theme.TierWorthYourTime
  * changes re-register the device so the backend's next poll picks them up;
  * starting-soon changes never leave the device, they just reschedule the
  * local alarms.
+ *
+ * Alerts are scoped to specific games by default (the bell) - [favoritesOnly]
+ * (despite the storage-layer name, kept as-is to avoid an API/schema churn)
+ * is really "also alert for every favorite team's game, not just belled
+ * ones" - see alertsPoller.ts's device loop for the matching backend
+ * behavior. There's deliberately no broader "any close game" option
+ * anymore: alerts are for what you've belled, or (opt-in) your favorites.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,8 +75,6 @@ fun AlertsSettingsScreen(
     onDeliveryChange: (AlertDelivery) -> Unit,
     favoritesOnly: Boolean,
     onToggleFavoritesOnly: (Boolean) -> Unit,
-    tierThreshold: AlertTierThreshold?,
-    onTierThresholdChange: (AlertTierThreshold?) -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -97,9 +100,9 @@ fun AlertsSettingsScreen(
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.NotificationsActive, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
@@ -128,9 +131,9 @@ fun AlertsSettingsScreen(
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.NotificationsActive, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
@@ -158,15 +161,15 @@ fun AlertsSettingsScreen(
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.Shield, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text(text = "Favorite teams only", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                        Text(text = "Alerts for favorite teams", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            text = "Off also alerts on other close games, scoped by the rating below",
+                            text = "On: alerts for every favorite team's game, not just belled ones. Off: alerts only for games you've belled.",
                             color = TextMuted,
                             style = MaterialTheme.typography.labelSmall
                         )
@@ -177,11 +180,6 @@ fun AlertsSettingsScreen(
                     onCheckedChange = onToggleFavoritesOnly,
                     colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime)
                 )
-            }
-
-            if (!favoritesOnly) {
-                HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
-                TierThresholdRow(selected = tierThreshold, onSelected = onTierThresholdChange)
             }
         }
     }
@@ -247,49 +245,6 @@ private fun DeliveryRow(selected: AlertDelivery, onSelected: (AlertDelivery) -> 
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             AlertDelivery.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.label) },
-                    onClick = {
-                        onSelected(option)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TierThresholdRow(selected: AlertTierThreshold?, onSelected: (AlertTierThreshold?) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = true }
-                .padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Default.Tune, contentDescription = null, tint = TextSecondary)
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(text = "Minimum rating", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = selected?.label ?: "Off", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
-            }
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Off") },
-                onClick = {
-                    onSelected(null)
-                    expanded = false
-                }
-            )
-            AlertTierThreshold.entries.forEach { option ->
                 DropdownMenuItem(
                     text = { Text(option.label) },
                     onClick = {
