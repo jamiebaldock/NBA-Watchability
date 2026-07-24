@@ -86,6 +86,20 @@ db.exec(`
     date TEXT PRIMARY KEY,
     count INTEGER NOT NULL DEFAULT 0
   );
+
+  -- One row per real search attempt (or attempt skipped for lack of quota) -
+  -- backs the Admin page's stats dashboard. Persisted, not just console.log,
+  -- since a log line that scrolls off Render's live output is otherwise the
+  -- only record this ever happened at all (see recordHighlightsSearchLog).
+  CREATE TABLE IF NOT EXISTS highlights_search_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    checked_at TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    league_group TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    detail TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_highlights_log_checked_at ON highlights_search_log(checked_at);
 `);
 
 // Added after the initial release - ensureColumn (not a second CREATE TABLE
@@ -1085,7 +1099,7 @@ export function getSeasonLabels(leagueGroup: LeagueGroup): string[] {
 // recent-games-only scope) - the thing that turned an earlier scope bug
 // into a 22K-request storm was having no ceiling at all on total daily
 // volume, only per-game pacing that assumed the scope was already correct.
-const DAILY_SEARCH_BUDGET = 90;
+export const DAILY_SEARCH_BUDGET = 90;
 
 function todayUtcKey(): string {
   return new Date().toISOString().slice(0, 10);
@@ -1105,6 +1119,52 @@ export function recordSearchQuotaSpend(): void {
     `INSERT INTO youtube_search_budget (date, count) VALUES (?, 1)
      ON CONFLICT(date) DO UPDATE SET count = count + 1`
   ).run(todayUtcKey());
+}
+
+/** Today's real spend against DAILY_SEARCH_BUDGET - Admin stats dashboard. */
+export function getTodaySearchBudgetCount(): number {
+  const row = db.prepare(`SELECT count FROM youtube_search_budget WHERE date = ?`).get(todayUtcKey()) as { count: number } | undefined;
+  return row?.count ?? 0;
+}
+
+/** Recent days' spend, newest first - Admin stats dashboard. */
+export function getSearchBudgetHistory(limit = 14): { date: string; count: number }[] {
+  return db.prepare(`SELECT date, count FROM youtube_search_budget ORDER BY date DESC LIMIT ?`).all(limit) as {
+    date: string;
+    count: number;
+  }[];
+}
+
+export type HighlightsSearchOutcome = "matched" | "no_match" | "api_error" | "quota_exhausted";
+
+/**
+ * One row per real search attempt (or attempt skipped for lack of quota) -
+ * called from every place a highlights search actually happens: the normal
+ * poller/demand-driven path (gamesService.ts's checkGameHighlights,
+ * mlbGamesService.ts's checkMlbGameHighlights) and the Admin page's manual
+ * resend. Without this, the only record of what happened is a console.log
+ * line that scrolls off Render's live output the moment nobody's watching.
+ */
+export function recordHighlightsSearchLog(eventId: string, leagueGroup: string, outcome: HighlightsSearchOutcome, detail?: string): void {
+  db.prepare(`INSERT INTO highlights_search_log (checked_at, event_id, league_group, outcome, detail) VALUES (?, ?, ?, ?, ?)`).run(
+    now(),
+    eventId,
+    leagueGroup,
+    outcome,
+    detail ?? null
+  );
+}
+
+/** Outcome counts over the last [sinceDays] days - Admin stats dashboard. */
+export function getSearchOutcomeCounts(sinceDays = 7): Record<HighlightsSearchOutcome, number> {
+  const cutoff = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
+  const rows = db.prepare(`SELECT outcome, COUNT(*) as c FROM highlights_search_log WHERE checked_at >= ? GROUP BY outcome`).all(cutoff) as {
+    outcome: HighlightsSearchOutcome;
+    c: number;
+  }[];
+  const counts: Record<HighlightsSearchOutcome, number> = { matched: 0, no_match: 0, api_error: 0, quota_exhausted: 0 };
+  for (const row of rows) counts[row.outcome] = row.c;
+  return counts;
 }
 
 export function closeDb(): void {

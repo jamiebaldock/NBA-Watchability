@@ -28,6 +28,7 @@ import {
   getFinalMlbGamesMissingHighlights,
   getGame,
   markHighlightsChecked,
+  recordHighlightsSearchLog,
   recordSearchQuotaSpend,
   setHighlights,
   setMlbFinalRubric,
@@ -272,23 +273,36 @@ export async function getNextMlbScheduledDate(afterDate: string): Promise<string
  * via markHighlightsChecked, the same real-upload-timestamp persistence via
  * setHighlights) - only the channel searched (youtubeClient.ts's
  * HighlightsLeague "mlb" branch, MLB's real channel id UCoLrcjPV5PbUrUyXq5mjc_A,
- * confirmed directly against youtube.com/@MLB) differs. Not called from
- * anywhere yet - see this file's header comment.
+ * confirmed directly against youtube.com/@MLB) differs. Wired into
+ * highlightsPoller.ts since 1612d94.
  */
 async function checkMlbGameHighlights(row: GameRow): Promise<void> {
   if (!canSpendSearchQuota()) {
     console.warn(`checkMlbGameHighlights: daily search budget spent, deferring ${row.away} @ ${row.home}`);
+    recordHighlightsSearchLog(row.eventId, row.leagueGroup, "quota_exhausted");
     return;
   }
 
   console.log(`checkMlbGameHighlights: searching for ${row.away} @ ${row.home} (${row.eventId})`);
   recordSearchQuotaSpend();
-  const match = await searchHighlightsVideo("mlb", row.away, row.home, row.tipoffUtc);
+
+  let match;
+  try {
+    match = await searchHighlightsVideo("mlb", row.away, row.home, row.tipoffUtc);
+  } catch (err) {
+    console.error(`checkMlbGameHighlights: search failed for ${row.away} @ ${row.home} (${row.eventId})`, err);
+    recordHighlightsSearchLog(row.eventId, row.leagueGroup, "api_error", String(err));
+    markHighlightsChecked(row.eventId, new Date().toISOString());
+    return;
+  }
+
   markHighlightsChecked(row.eventId, new Date().toISOString());
   if (match) {
     setHighlights(row.eventId, match.videoId, match.publishedAt);
+    recordHighlightsSearchLog(row.eventId, row.leagueGroup, "matched");
     console.log(`checkMlbGameHighlights: matched "${match.title}" (${match.videoId})`);
   } else {
+    recordHighlightsSearchLog(row.eventId, row.leagueGroup, "no_match");
     console.log(`checkMlbGameHighlights: no match for ${row.away} @ ${row.home} (${row.eventId})`);
   }
 }

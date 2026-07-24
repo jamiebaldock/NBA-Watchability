@@ -183,9 +183,12 @@ async function fetchDurationsSeconds(apiKey: string, videoIds: string[]): Promis
  * team nicknames and the "full game highlights" phrase in the title, AND
  * run under MAX_HIGHLIGHTS_SECONDS (a real highlights reel's length - filters
  * out unrelated long-form videos that happen to match on text alone). Returns
- * null (not an error) if YOUTUBE_API_KEY isn't set, the request fails, or
- * nothing qualifies - callers should treat that as "no highlights
- * available" rather than retrying, to stay well under the 100/day cap.
+ * null (not an error) if YOUTUBE_API_KEY isn't set or the search genuinely
+ * found nothing that qualifies - callers should treat that as "no highlights
+ * available" rather than retrying, to stay well under the 100/day cap. A
+ * real network/HTTP failure throws instead of returning null (see the
+ * search.list call below) so callers can log it as a distinct outcome
+ * rather than silently folding it into "no highlights available."
  */
 export async function searchHighlightsVideo(
   league: HighlightsLeague,
@@ -244,17 +247,21 @@ export async function searchHighlightsVideo(
     publishedBefore: publishedBefore.toISOString(),
   });
 
+  // Network/HTTP failures throw rather than returning null, unlike "searched
+  // successfully, found nothing" below - callers (gamesService.ts's
+  // checkGameHighlights, mlbGamesService.ts's checkMlbGameHighlights, and
+  // the Admin page's manual resend) need to tell the two apart to log an
+  // accurate outcome (api_error vs no_match) for the stats dashboard.
   let data: YoutubeSearchResponse;
   try {
     const res = await fetch(`${YOUTUBE_SEARCH_URL}?${params.toString()}`);
     if (!res.ok) {
-      console.error(`YouTube search failed: ${res.status} ${res.statusText}`);
-      return null;
+      throw new Error(`YouTube search failed: ${res.status} ${res.statusText}`);
     }
     data = (await res.json()) as YoutubeSearchResponse;
   } catch (err) {
     console.error("YouTube search request failed", err);
-    return null;
+    throw err;
   }
 
   const textMatches: HighlightsMatch[] = [];

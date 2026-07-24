@@ -7,6 +7,7 @@ import {
   getFinalGamesMissingHighlights,
   getGame,
   markHighlightsChecked,
+  recordHighlightsSearchLog,
   recordSearchQuotaSpend,
   setFinalRubric,
   setHighlights,
@@ -194,18 +195,31 @@ export function isDueForHighlightsCheck(row: GameRow, now: number): boolean {
 async function checkGameHighlights(row: GameRow): Promise<void> {
   if (!canSpendSearchQuota()) {
     console.warn(`checkGameHighlights: daily search budget spent, deferring ${row.away} @ ${row.home}`);
+    recordHighlightsSearchLog(row.eventId, row.leagueGroup, "quota_exhausted");
     return;
   }
 
   const highlightsLeague: HighlightsLeague = row.league === "wnba" ? "wnba" : "nba";
   console.log(`checkGameHighlights: searching for ${row.away} @ ${row.home} (${row.eventId}, ${highlightsLeague})`);
   recordSearchQuotaSpend();
-  const match = await searchHighlightsVideo(highlightsLeague, row.away, row.home, row.tipoffUtc);
+
+  let match;
+  try {
+    match = await searchHighlightsVideo(highlightsLeague, row.away, row.home, row.tipoffUtc);
+  } catch (err) {
+    console.error(`checkGameHighlights: search failed for ${row.away} @ ${row.home} (${row.eventId})`, err);
+    recordHighlightsSearchLog(row.eventId, row.leagueGroup, "api_error", String(err));
+    markHighlightsChecked(row.eventId, new Date().toISOString());
+    return;
+  }
+
   markHighlightsChecked(row.eventId, new Date().toISOString());
   if (match) {
     setHighlights(row.eventId, match.videoId, match.publishedAt);
+    recordHighlightsSearchLog(row.eventId, row.leagueGroup, "matched");
     console.log(`checkGameHighlights: matched "${match.title}" (${match.videoId})`);
   } else {
+    recordHighlightsSearchLog(row.eventId, row.leagueGroup, "no_match");
     console.log(`checkGameHighlights: no match for ${row.away} @ ${row.home} (${row.eventId})`);
   }
 }

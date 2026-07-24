@@ -15,6 +15,7 @@ backend/data/games.db-shm
 
 # Android / Gradle
 mobile/.gradle/
+mobile/.kotlin/
 mobile/build/
 mobile/app/build/
 mobile/local.properties

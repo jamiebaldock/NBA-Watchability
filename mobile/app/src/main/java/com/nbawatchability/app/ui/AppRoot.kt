@@ -112,6 +112,8 @@ enum class BottomNavTab(val label: String, val icon: ImageVector) {
 fun AppRoot() {
     var showAbout by rememberSaveable { mutableStateOf(false) }
     var showSecret by rememberSaveable { mutableStateOf(false) }
+    var showAdminPin by rememberSaveable { mutableStateOf(false) }
+    var showAdminDashboard by rememberSaveable { mutableStateOf(false) }
     var showRubricWeights by rememberSaveable { mutableStateOf(false) }
     var showSelectedSports by rememberSaveable { mutableStateOf(false) }
     var showFavoriteTeams by rememberSaveable { mutableStateOf(false) }
@@ -132,6 +134,7 @@ fun AppRoot() {
     val starredGamesViewModel: StarredGamesViewModel = viewModel()
     val favoritesViewModel: FavoritesViewModel = viewModel()
     val alertsViewModel: AlertsViewModel = viewModel()
+    val adminViewModel: AdminViewModel = viewModel()
 
     // Re-registers this device (favorites + enabled-leagues snapshot) on
     // first composition and again whenever either changes, so the backend's
@@ -167,6 +170,8 @@ fun AppRoot() {
     // exiting the app.
     BackHandler(enabled = showAbout) { showAbout = false }
     BackHandler(enabled = showSecret) { showSecret = false }
+    BackHandler(enabled = showAdminPin) { showAdminPin = false }
+    BackHandler(enabled = showAdminDashboard) { showAdminDashboard = false }
     BackHandler(enabled = showRubricWeights) { showRubricWeights = false }
     BackHandler(enabled = showSelectedSports) { showSelectedSports = false }
     BackHandler(enabled = showFavoriteTeams) { showFavoriteTeams = false }
@@ -176,7 +181,19 @@ fun AppRoot() {
     BackHandler(enabled = showGameDetail != null) { showGameDetail = null }
 
     if (showAbout) {
-        AboutScreen(onBack = { showAbout = false }, onSecretUnlocked = { showAbout = false; showSecret = true })
+        AboutScreen(
+            onBack = { showAbout = false },
+            onSecretUnlocked = { showAbout = false; showSecret = true },
+            onAdminUnlocked = {
+                showAbout = false
+                if (adminViewModel.token != null) {
+                    showAdminDashboard = true
+                    adminViewModel.loadDashboard()
+                } else {
+                    showAdminPin = true
+                }
+            }
+        )
         return
     }
 
@@ -185,6 +202,40 @@ fun AppRoot() {
             playerHaterMode = appSettingsViewModel.settings.playerHaterMode,
             onTogglePlayerHaterMode = appSettingsViewModel::togglePlayerHaterMode,
             onBack = { showSecret = false }
+        )
+        return
+    }
+
+    if (showAdminPin) {
+        // Fires once submitPin's successful login lands in DataStore and
+        // this ViewModel's token flow re-emits - moves straight to the
+        // dashboard rather than requiring a second tap once unlocked.
+        LaunchedEffect(adminViewModel.token) {
+            if (adminViewModel.token != null) {
+                showAdminPin = false
+                showAdminDashboard = true
+            }
+        }
+        AdminPinScreen(
+            isLoggingIn = adminViewModel.isLoggingIn,
+            error = adminViewModel.loginError,
+            onSubmit = adminViewModel::submitPin,
+            onBack = { showAdminPin = false }
+        )
+        return
+    }
+
+    if (showAdminDashboard) {
+        AdminDashboardScreen(
+            state = adminViewModel.dashboardState,
+            resendStateFor = adminViewModel::resendStateFor,
+            onResend = adminViewModel::resendHighlights,
+            onRefresh = { adminViewModel.loadDashboard() },
+            onLogOut = {
+                adminViewModel.logOut()
+                showAdminDashboard = false
+            },
+            onBack = { showAdminDashboard = false }
         )
         return
     }

@@ -17,6 +17,15 @@ import {
   getTeamsForLeagueGroup,
 } from "./httpHandler";
 import { registerAlertDevice, setAlertGameSub } from "./alertsService";
+import {
+  AdminBadRequestError,
+  AdminUnauthorizedError,
+  adminLogin,
+  getAdminMissingHighlights,
+  getAdminStats,
+  isValidAdminToken,
+  resendHighlightsSearch,
+} from "./adminService";
 import { isFcmConfigured } from "./fcm";
 import { startHighlightsPoller } from "./highlightsPoller";
 import { startAlertsPoller } from "./alertsPoller";
@@ -260,6 +269,73 @@ app.post("/alerts/game-sub", express.json(), (req, res) => {
 // credentials versus just being present as an env var.
 app.get("/alerts/status", (_req, res) => {
   res.json({ fcmConfigured: isFcmConfigured() });
+});
+
+// The Admin page's four routes (mobile: SecretScreen-style hidden entry,
+// see AboutScreen.kt's title-tap gesture). /admin/login is the only one
+// that doesn't require a bearer token - every other one below checks it via
+// requireAdmin first, matching this file's existing "explicit check per
+// handler" style rather than introducing Express middleware chaining, which
+// nothing else here uses.
+app.post("/admin/login", express.json(), (req, res) => {
+  try {
+    const pin = String(req.body?.pin ?? "");
+    res.json(adminLogin(pin));
+  } catch (err) {
+    if (err instanceof AdminUnauthorizedError) {
+      res.status(401).json({ error: err.message });
+    } else if (err instanceof AdminBadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
+});
+
+function requireAdmin(req: express.Request, res: express.Response): boolean {
+  const auth = req.header("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : undefined;
+  if (!isValidAdminToken(token)) {
+    res.status(401).json({ error: "unauthorized" });
+    return false;
+  }
+  return true;
+}
+
+app.get("/admin/stats", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    res.json(getAdminStats());
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
+  }
+});
+
+app.get("/admin/missing-highlights", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    res.json({ games: getAdminMissingHighlights() });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
+  }
+});
+
+app.post("/admin/resend-highlights", express.json(), async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const eventId = String(req.body?.eventId ?? "");
+    res.json(await resendHighlightsSearch(eventId));
+  } catch (err) {
+    if (err instanceof AdminBadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
 });
 
 app.listen(PORT, () => {
