@@ -53,6 +53,7 @@ import { generateHookAndStakes } from "./llm";
 import { computeNhlWatchabilityScore, tierForNhlScore } from "./nhlRubric";
 import { GameJson } from "./types";
 import { isYoutubeSearchConfigured, searchHighlightsVideo } from "./youtubeClient";
+import { preferDarkLogoVariant } from "./teamLogos";
 
 export function isNhlLeagueGroup(leagueGroup: string): leagueGroup is "nhl" {
   return leagueGroup === "nhl";
@@ -149,8 +150,8 @@ async function processNhlEvent(event: EspnNhlEvent): Promise<GameJson> {
     leagueGroup: "nhl",
     away: away.team.displayName,
     home: home.team.displayName,
-    awayLogo: away.team.logo,
-    homeLogo: home.team.logo,
+    awayLogo: preferDarkLogoVariant(away.team.logo),
+    homeLogo: preferDarkLogoVariant(home.team.logo),
     tipoffUtc: event.date,
     status
   });

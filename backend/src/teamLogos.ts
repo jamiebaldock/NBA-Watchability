@@ -97,6 +97,19 @@ export function teamLogoUrl(displayName: string, leagueGroup: string = "nba"): s
 // History-backfill fallback above.
 const DARK_VARIANT_URL_PATTERNS: RegExp[] = [
   /\/teamlogos\/wnba\/500\/(scoreboard\/)?tor\.png(\?.*)?$/, // Toronto Tempo
+  /\/teamlogos\/mlb\/500\/(scoreboard\/)?col\.png(\?.*)?$/, // Colorado Rockies
+  /\/teamlogos\/mlb\/500\/(scoreboard\/)?sd\.png(\?.*)?$/, // San Diego Padres
+  /\/teamlogos\/mlb\/500\/(scoreboard\/)?det\.png(\?.*)?$/, // Detroit Tigers
+  /\/teamlogos\/mlb\/500\/(scoreboard\/)?kc\.png(\?.*)?$/, // Kansas City Royals
+  /\/teamlogos\/mlb\/500\/(scoreboard\/)?nyy\.png(\?.*)?$/, // New York Yankees
+  /\/teamlogos\/mlb\/500\/(scoreboard\/)?tb\.png(\?.*)?$/, // Tampa Bay Rays
+  /\/teamlogos\/mlb\/500\/(scoreboard\/)?lad\.png(\?.*)?$/, // LA Dodgers
+  /\/teamlogos\/mlb\/500\/(scoreboard\/)?chw\.png(\?.*)?$/, // Chicago White Sox
+  /\/teamlogos\/nfl\/500\/(scoreboard\/)?lar\.png(\?.*)?$/, // LA Rams
+  /\/teamlogos\/nfl\/500\/(scoreboard\/)?nyg\.png(\?.*)?$/, // NY Giants
+  /\/teamlogos\/nhl\/500\/(scoreboard\/)?tb\.png(\?.*)?$/, // Tampa Bay Lightning
+  /\/teamlogos\/nhl\/500\/(scoreboard\/)?tor\.png(\?.*)?$/, // Toronto Maple Leafs
+  /\/teamlogos\/nhl\/500\/(scoreboard\/)?wsh\.png(\?.*)?$/, // Washington Capitals
 ];
 
 export function preferDarkLogoVariant(url: string | undefined): string | undefined {

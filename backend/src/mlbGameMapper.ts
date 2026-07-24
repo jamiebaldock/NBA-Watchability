@@ -13,6 +13,7 @@ import {
 } from "./mlbEspnClient";
 import { MlbRubricInputs } from "./mlbRubric";
 import { GameStatus, StandoutPerformerJson } from "./types";
+import { preferDarkLogoVariant } from "./teamLogos";
 
 export function mapMlbEspnState(state: "pre" | "in" | "post"): GameStatus {
   if (state === "post") return "final";
@@ -127,8 +128,8 @@ export function mapMlbEventToGame(event: EspnMlbEvent, summary: EspnMlbSummary):
     home: home.team.displayName,
     awayScore,
     homeScore,
-    awayLogo: away.team.logo,
-    homeLogo: home.team.logo,
+    awayLogo: preferDarkLogoVariant(away.team.logo),
+    homeLogo: preferDarkLogoVariant(home.team.logo),
     standoutPerformers: findStandoutHitters(players, teamNameById),
     rubricInputs: {
       finalMargin: Math.abs(homeScore - awayScore),

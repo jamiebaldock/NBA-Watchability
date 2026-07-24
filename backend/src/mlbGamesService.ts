@@ -44,6 +44,7 @@ import { generateHookAndStakes } from "./llm";
 import { computeMlbWatchabilityScore, tierForMlbScore } from "./mlbRubric";
 import { GameJson } from "./types";
 import { isYoutubeSearchConfigured, searchHighlightsVideo } from "./youtubeClient";
+import { preferDarkLogoVariant } from "./teamLogos";
 
 export function isMlbLeagueGroup(leagueGroup: string): leagueGroup is "mlb" {
   return leagueGroup === "mlb";
@@ -146,8 +147,8 @@ async function processMlbEvent(event: EspnMlbEvent): Promise<GameJson> {
     leagueGroup: "mlb",
     away: away.team.displayName,
     home: home.team.displayName,
-    awayLogo: away.team.logo,
-    homeLogo: home.team.logo,
+    awayLogo: preferDarkLogoVariant(away.team.logo),
+    homeLogo: preferDarkLogoVariant(home.team.logo),
     tipoffUtc: event.date,
     status
   });

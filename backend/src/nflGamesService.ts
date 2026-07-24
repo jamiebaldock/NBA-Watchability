@@ -42,6 +42,7 @@ import { generateHookAndStakes } from "./llm";
 import { computeNflWatchabilityScore, tierForNflScore } from "./nflRubric";
 import { GameJson } from "./types";
 import { isYoutubeSearchConfigured, searchHighlightsVideo } from "./youtubeClient";
+import { preferDarkLogoVariant } from "./teamLogos";
 
 export function isNflLeagueGroup(leagueGroup: string): leagueGroup is "nfl" {
   return leagueGroup === "nfl";
@@ -152,8 +153,8 @@ async function processNflEvent(event: EspnNflEvent): Promise<GameJson> {
     leagueGroup: "nfl",
     away: away.team.displayName,
     home: home.team.displayName,
-    awayLogo: away.team.logo,
-    homeLogo: home.team.logo,
+    awayLogo: preferDarkLogoVariant(away.team.logo),
+    homeLogo: preferDarkLogoVariant(home.team.logo),
     tipoffUtc: event.date,
     status
   });
