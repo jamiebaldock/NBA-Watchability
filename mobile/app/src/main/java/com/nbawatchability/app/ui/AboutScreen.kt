@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nbawatchability.app.BuildConfig
+import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
@@ -152,15 +153,29 @@ fun AboutScreen(onBack: () -> Unit, onSecretUnlocked: () -> Unit, onAdminUnlocke
                 text = "Every NBA, WNBA, MLB, NFL, and NHL game gets a Watchability Score once it's " +
                     "final, built from what actually makes a game exciting: close margins, comebacks, " +
                     "lead changes, clutch finishes, buzzer-beaters, overtime, and standout individual " +
-                    "performances.\n\nScores land in one of four tiers - 🔥 Instant Classic, " +
-                    "⭐ Worth Your Time, 👍 Solid, or 😴 Skippable - and each " +
-                    "league is scored on its own scale, calibrated separately against real completed " +
-                    "games rather than one generic formula. Nothing about how a game turns out is shown " +
-                    "until you ask for it.",
+                    "performances.\n\nScores land in one of four tiers, shown as a badge right on the " +
+                    "tile - and each league is scored on its own scale, calibrated separately against " +
+                    "real completed games rather than one generic formula. Nothing about how a game " +
+                    "turns out is shown until you ask for it.",
                 color = TextSecondary,
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
-                modifier = Modifier.padding(bottom = 20.dp)
+                modifier = Modifier.padding(bottom = 12.dp)
             )
+            // Real TierBadge composable, same one GameCard renders on every
+            // tile - a live example beats describing four emoji in a
+            // sentence. One example score per tier, not the exact real
+            // bracket boundaries (those can shift per league) - just
+            // plausible numbers so this reads as "here's what it looks
+            // like," not a promise about where each tier's cutoff sits.
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 20.dp)
+            ) {
+                TierBadge(tier = Tier.INSTANT_CLASSIC, numericScore = 92)
+                TierBadge(tier = Tier.WORTH_YOUR_TIME, numericScore = 75)
+                TierBadge(tier = Tier.SOLID, numericScore = 55)
+                TierBadge(tier = Tier.SKIPPABLE, numericScore = 30)
+            }
 
             HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
 
