@@ -1117,6 +1117,16 @@ export function getHighlightsDiagnostics(): {
   budgetHistory: { date: string; count: number }[];
   lagPercentiles: Record<string, LagPercentiles>;
   missingByLeague: Record<string, { checkCount0: number; checkCount1: number; abandoned: number; total: number }>;
+  abandonedSample: {
+    eventId: string;
+    league: string;
+    away: string;
+    home: string;
+    tipoffUtc: string;
+    finalAt: string | null;
+    ytCheckCount: number;
+    ytLastCheckedAt: string | null;
+  }[];
 } {
   const budgetHistory = db.prepare(`SELECT date, count FROM youtube_search_budget ORDER BY date DESC LIMIT 10`).all() as {
     date: string;
@@ -1144,7 +1154,21 @@ export function getHighlightsDiagnostics(): {
     else bucket.abandoned++;
   }
 
-  return { budgetHistory, lagPercentiles, missingByLeague };
+  const abandonedSample = rows
+    .filter((row) => row.ytCheckCount >= 2)
+    .slice(0, 15)
+    .map((row) => ({
+      eventId: row.eventId,
+      league: row.league,
+      away: row.away,
+      home: row.home,
+      tipoffUtc: row.tipoffUtc,
+      finalAt: row.finalAt,
+      ytCheckCount: row.ytCheckCount,
+      ytLastCheckedAt: row.ytLastCheckedAt,
+    }));
+
+  return { budgetHistory, lagPercentiles, missingByLeague, abandonedSample };
 }
 
 export function closeDb(): void {
