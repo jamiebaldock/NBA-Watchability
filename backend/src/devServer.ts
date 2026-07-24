@@ -21,8 +21,9 @@ import { isFcmConfigured } from "./fcm";
 import { startHighlightsPoller } from "./highlightsPoller";
 import { startAlertsPoller } from "./alertsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
-import { getHighlightsDiagnostics } from "./gameStore";
+import { getGame, getHighlightsDiagnostics } from "./gameStore";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
+import { HighlightsLeague, searchHighlightsVideo } from "./youtubeClient";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
@@ -269,6 +270,29 @@ app.get("/alerts/status", (_req, res) => {
 app.get("/admin/highlights-diagnostics", (_req, res) => {
   try {
     res.json(getHighlightsDiagnostics());
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
+  }
+});
+
+// TEMPORARY read-only diagnostic - runs one real searchHighlightsVideo call
+// against a specific already-abandoned game, without persisting anything
+// (no markHighlightsChecked/setHighlights), to see what YouTube's real API
+// actually returns for a stuck row instead of guessing. Costs 1 real
+// search.list unit per call - part of the same investigation as
+// /admin/highlights-diagnostics above. Remove alongside it.
+app.get("/admin/highlights-test-search", async (req, res) => {
+  try {
+    const eventId = String(req.query.eventId ?? "");
+    const row = getGame(eventId);
+    if (!row) {
+      res.status(404).json({ error: "no such game" });
+      return;
+    }
+    const league: HighlightsLeague = row.leagueGroup as HighlightsLeague;
+    const match = await searchHighlightsVideo(league, row.away, row.home, row.tipoffUtc);
+    res.json({ eventId, away: row.away, home: row.home, tipoffUtc: row.tipoffUtc, league, match });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "internal error" });
