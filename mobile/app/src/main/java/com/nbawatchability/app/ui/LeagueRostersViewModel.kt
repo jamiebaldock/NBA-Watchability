@@ -43,10 +43,21 @@ class LeagueRostersViewModel : ViewModel() {
         currentTeams = teams
         uiState = LeagueRostersUiState.Loading
         viewModelScope.launch {
-            uiState = try {
+            val result = try {
                 LeagueRostersUiState.Loaded(fetchAll(leagueGroup, teams))
             } catch (e: Exception) {
                 LeagueRostersUiState.Error(e.message ?: "Couldn't reach the backend")
+            }
+            // Discard a stale response for a league the caller has since
+            // moved away from (e.g. quickly switching NBA -> WNBA tabs
+            // before the slower, 30-team NBA fetch finishes) - without this
+            // guard, whichever request happens to resolve last simply wins
+            // regardless of which league is actually selected now, which is
+            // exactly how a WNBA search ended up showing NBA team names
+            // (James's report, 2026-07-24: Angela Dugalic/Nell Angloma
+            // shown with Timberwolves/Knicks).
+            if (currentLeagueGroup == leagueGroup) {
+                uiState = result
             }
         }
     }

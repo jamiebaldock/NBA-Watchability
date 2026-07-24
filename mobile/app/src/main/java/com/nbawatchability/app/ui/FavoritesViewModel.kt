@@ -115,7 +115,7 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
     fun toggleHatedPlayer(player: FavoritePlayer) {
         val alreadyHated = isHatedPlayer(player.name)
         if (!alreadyHated && hatedPlayers.size >= MAX_HATED_PLAYERS) {
-            Toast.makeText(getApplication(), "Up to $MAX_HATED_PLAYERS hated players for now", Toast.LENGTH_SHORT).show()
+            Toast.makeText(getApplication(), "Up to $MAX_HATED_PLAYERS players you're not a fan of for now", Toast.LENGTH_SHORT).show()
             return
         }
         val updated = if (alreadyHated) hatedPlayers.filterNot { it.name == player.name } else hatedPlayers + player

@@ -22,8 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -64,15 +62,23 @@ import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 import kotlinx.coroutines.launch
 
 private val FAVORITES_PAGE_TITLES = listOf("Upcoming Games", "Past Games", "Teams", "Players")
+// Player Hater Mode easter egg - a 5th page, appended only while
+// LocalPlayerHaterMode is on (see pageTitles below). Never appears, never
+// swipeable to, while the mode is off. Tab label is deliberately the emoji,
+// not the word "hated" - James's call to keep the tab/copy softer even
+// though the mode itself keeps its name.
+private const val HATED_PLAYERS_PAGE_TITLE = "👎 Players"
 
 /**
- * The Favorites tab (formerly "My Teams") - 4 swipeable pages behind a
- * shared "Favorites" app bar, same TabRow-synced HorizontalPager pattern as
- * LeadersScreen.kt's Standings/Stats pair: favorited teams' upcoming games,
- * their past games, then the existing favorite-teams and favorite-players
- * management lists (view/manage only - adding still happens on their own
- * dedicated Settings sub-screens, so there's one place that owns "every
- * team/player in a league").
+ * The Favorites tab (formerly "My Teams") - 4 swipeable pages (5 with
+ * Player Hater Mode on) behind a shared "Favorites" app bar, same
+ * TabRow-synced HorizontalPager pattern as LeadersScreen.kt's Standings/
+ * Stats pair: favorited teams' upcoming games, their past games, then the
+ * existing favorite-teams and favorite-players management lists (view/
+ * manage only - adding still happens on their own dedicated Settings
+ * sub-screens, so there's one place that owns "every team/player in a
+ * league"), and finally - only while the easter egg is on - the hated-
+ * players list.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,20 +109,32 @@ fun FavoritesScreen(
     onAddPlayerClick: () -> Unit,
     onToggleFavoriteTeam: (Team) -> Unit,
     onToggleFavoritePlayer: (FavoritePlayer) -> Unit,
-    // Player Hater Mode easter egg - the on/off flag and the hated-names set
-    // itself come from LocalPlayerHaterMode/LocalHatedPlayerNames (read
-    // directly inside FavoritePlayersLeagueGroup below, already in scope
-    // since this whole screen renders inside AppRoot's CompositionLocalProvider) -
-    // only the toggle callback needs threading, same convention as every
-    // other favorite/remove callback on this screen.
-    onToggleHatedPlayer: (FavoritePlayer) -> Unit = {},
+    // Hated Players page (5th page, Player Hater Mode only) - the on/off
+    // flag itself comes from LocalPlayerHaterMode (read directly, already
+    // in scope since this whole screen renders inside AppRoot's
+    // CompositionLocalProvider); hatedPlayers is threaded explicitly since
+    // this page needs the actual list to render, not just names.
+    hatedPlayers: List<FavoritePlayer> = emptyList(),
+    onRemoveHatedPlayer: (FavoritePlayer) -> Unit = {},
+    onAddHatedPlayerClick: () -> Unit = {},
     belledGameIds: Set<String> = emptySet(),
     onToggleBell: (Game) -> Unit = {}
 ) {
-    val pagerState = rememberPagerState(initialPage = 0) { FAVORITES_PAGE_TITLES.size }
+    val playerHaterMode = LocalPlayerHaterMode.current
+    val pageTitles = if (playerHaterMode) FAVORITES_PAGE_TITLES + HATED_PLAYERS_PAGE_TITLE else FAVORITES_PAGE_TITLES
+    val pagerState = rememberPagerState(initialPage = 0) { pageTitles.size }
     val scope = rememberCoroutineScope()
     val favoriteTeamNames = favoriteTeams.map { it.name }.toSet()
     val favoritePlayerNames = favoritePlayers.map { it.name }.toSet()
+    // Defensive: if Player Hater Mode gets turned off (from the hidden
+    // SecretScreen, in a different tab) while the pager is actually sitting
+    // on the now-removed 5th page, snap back to the first page rather than
+    // leaving the pager pointed past the end of its own (now shorter) list.
+    LaunchedEffect(playerHaterMode) {
+        if (!playerHaterMode && pagerState.currentPage >= FAVORITES_PAGE_TITLES.size) {
+            pagerState.scrollToPage(0)
+        }
+    }
     // Each Games page keeps its own independent sort - unlike
     // isAllLeaguesSelected (shared app-wide, see the param above), "oldest
     // first" for Upcoming and "newest first" for Past are both meaningful
@@ -159,10 +177,16 @@ fun FavoritesScreen(
                 },
                 secondary = {
                     NavChipRow(
-                        items = FAVORITES_PAGE_TITLES,
-                        selected = FAVORITES_PAGE_TITLES[pagerState.currentPage],
+                        items = pageTitles,
+                        // getOrElse, not direct indexing - momentarily safe
+                        // against the one-frame window right after Player
+                        // Hater Mode turns off, where pagerState.currentPage
+                        // can still report the now-removed 5th page's index
+                        // until the LaunchedEffect above's scrollToPage
+                        // actually lands.
+                        selected = pageTitles.getOrElse(pagerState.currentPage) { pageTitles.first() },
                         onSelected = { title ->
-                            scope.launch { pagerState.animateScrollToPage(FAVORITES_PAGE_TITLES.indexOf(title)) }
+                            scope.launch { pagerState.animateScrollToPage(pageTitles.indexOf(title)) }
                         },
                         label = { it }
                     )
@@ -225,8 +249,32 @@ fun FavoritesScreen(
                     belledGameIds = belledGameIds,
                     onToggleBell = onToggleBell
                 )
-                2 -> FavoriteTeamsPage(favoriteTeams, onRemoveFavoriteTeam, onAddTeamClick)
-                else -> FavoritePlayersPage(favoritePlayers, onRemoveFavoritePlayer, onToggleHatedPlayer, onAddPlayerClick)
+                2 -> FavoriteTeamsPage(
+                    favoriteTeams = favoriteTeams,
+                    selectedLeague = selectedLeague,
+                    showAllLeagues = isAllLeaguesSelected,
+                    onRemoveFavoriteTeam = onRemoveFavoriteTeam,
+                    onAddTeamClick = onAddTeamClick
+                )
+                3 -> FavoritePlayersPage(
+                    favoritePlayers = favoritePlayers,
+                    selectedLeague = selectedLeague,
+                    showAllLeagues = isAllLeaguesSelected,
+                    onRemoveFavoritePlayer = onRemoveFavoritePlayer,
+                    onAddPlayerClick = onAddPlayerClick
+                )
+                // Only reachable while playerHaterMode is on (pageTitles/
+                // pagerState's own pageCount excludes this page otherwise) -
+                // the else branch (rather than an explicit "4") is just
+                // defensive bounds safety for the one-frame window covered
+                // by the LaunchedEffect above.
+                else -> HatedPlayersPage(
+                    hatedPlayers = hatedPlayers,
+                    selectedLeague = selectedLeague,
+                    showAllLeagues = isAllLeaguesSelected,
+                    onRemoveHatedPlayer = onRemoveHatedPlayer,
+                    onAddHatedPlayerClick = onAddHatedPlayerClick
+                )
             }
         }
     }
@@ -400,16 +448,29 @@ private fun EmptyBox(message: String) {
  * The favorite-teams management list (view/remove, grouped by league) -
  * moved as-is from the old MyTeamsScreen, now one page of the Favorites
  * pager instead of half of a single stacked screen. Adding still happens on
- * FavoriteTeamsScreen (Settings), reached via [onAddTeamClick].
+ * FavoriteTeamsScreen (Settings), reached via [onAddTeamClick]. Scoped by
+ * [selectedLeague]/[showAllLeagues] the same way FavoriteGamesPage already
+ * was - this page used to ignore the shared league dropdown entirely and
+ * always show every league's group (James's bug report, 2026-07-24).
  */
 @Composable
-private fun FavoriteTeamsPage(favoriteTeams: List<Team>, onRemoveFavoriteTeam: (Team) -> Unit, onAddTeamClick: () -> Unit) {
+private fun FavoriteTeamsPage(
+    favoriteTeams: List<Team>,
+    selectedLeague: LeagueGroup,
+    showAllLeagues: Boolean,
+    onRemoveFavoriteTeam: (Team) -> Unit,
+    onAddTeamClick: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
+        val leaguesToShow = if (showAllLeagues) LeagueGroup.entries else listOf(selectedLeague)
+        val teamsByLeague = favoriteTeams.groupBy { it.leagueGroup }
+        val visibleTeamCount = leaguesToShow.sumOf { teamsByLeague[it.apiValue].orEmpty().size }
+
         if (favoriteTeams.isEmpty()) {
             Text(
                 text = "No favorite teams yet - add up to $MAX_FAVORITE_TEAMS per league to see them marked across the app.",
@@ -417,17 +478,25 @@ private fun FavoriteTeamsPage(favoriteTeams: List<Team>, onRemoveFavoriteTeam: (
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(modifier = Modifier.height(12.dp))
+        } else if (visibleTeamCount == 0) {
+            Text(
+                text = "No favorite teams in ${selectedLeague.shortDisplayName} - pick \"All Leagues\" from the dropdown to see the rest.",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(12.dp))
         } else {
-            val teamsByLeague = favoriteTeams.groupBy { it.leagueGroup }
-            LeagueGroup.entries.forEach { league ->
+            leaguesToShow.forEach { league ->
                 val teamsInLeague = teamsByLeague[league.apiValue].orEmpty()
                 if (teamsInLeague.isNotEmpty()) {
                     FavoriteTeamsLeagueGroup(league.displayName, teamsInLeague, onRemoveFavoriteTeam)
                 }
             }
-            val unknownLeagueTeams = teamsByLeague[null].orEmpty()
-            if (unknownLeagueTeams.isNotEmpty()) {
-                FavoriteTeamsLeagueGroup("Other", unknownLeagueTeams, onRemoveFavoriteTeam)
+            if (showAllLeagues) {
+                val unknownLeagueTeams = teamsByLeague[null].orEmpty()
+                if (unknownLeagueTeams.isNotEmpty()) {
+                    FavoriteTeamsLeagueGroup("Other", unknownLeagueTeams, onRemoveFavoriteTeam)
+                }
             }
             Spacer(modifier = Modifier.height(4.dp))
         }
@@ -441,13 +510,16 @@ private fun FavoriteTeamsPage(favoriteTeams: List<Team>, onRemoveFavoriteTeam: (
 /**
  * The favorite-players management list (view/remove, grouped by league) -
  * moved as-is from the old MyTeamsScreen. Adding still happens on
- * FavoritePlayersScreen (Settings), reached via [onAddPlayerClick].
+ * FavoritePlayersScreen (Settings), reached via [onAddPlayerClick]. Scoped
+ * by [selectedLeague]/[showAllLeagues] the same way FavoriteTeamsPage now
+ * is - same bug, same fix.
  */
 @Composable
 private fun FavoritePlayersPage(
     favoritePlayers: List<FavoritePlayer>,
+    selectedLeague: LeagueGroup,
+    showAllLeagues: Boolean,
     onRemoveFavoritePlayer: (FavoritePlayer) -> Unit,
-    onToggleHatedPlayer: (FavoritePlayer) -> Unit,
     onAddPlayerClick: () -> Unit
 ) {
     Column(
@@ -456,6 +528,10 @@ private fun FavoritePlayersPage(
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
+        val leaguesToShow = if (showAllLeagues) LeagueGroup.entries else listOf(selectedLeague)
+        val playersByLeague = favoritePlayers.groupBy { it.leagueGroup }
+        val visiblePlayerCount = leaguesToShow.sumOf { playersByLeague[it.apiValue].orEmpty().size }
+
         if (favoritePlayers.isEmpty()) {
             Text(
                 text = "No favorite players yet - add up to $MAX_FAVORITE_PLAYERS per league to get called out when they have a big game.",
@@ -463,17 +539,25 @@ private fun FavoritePlayersPage(
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(modifier = Modifier.height(12.dp))
+        } else if (visiblePlayerCount == 0) {
+            Text(
+                text = "No favorite players in ${selectedLeague.shortDisplayName} - pick \"All Leagues\" from the dropdown to see the rest.",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(12.dp))
         } else {
-            val playersByLeague = favoritePlayers.groupBy { it.leagueGroup }
-            LeagueGroup.entries.forEach { league ->
+            leaguesToShow.forEach { league ->
                 val playersInLeague = playersByLeague[league.apiValue].orEmpty()
                 if (playersInLeague.isNotEmpty()) {
-                    FavoritePlayersLeagueGroup(league.displayName, playersInLeague, onRemoveFavoritePlayer, onToggleHatedPlayer)
+                    FavoritePlayersLeagueGroup(league.displayName, playersInLeague, onRemoveFavoritePlayer)
                 }
             }
-            val unknownLeaguePlayers = playersByLeague[null].orEmpty()
-            if (unknownLeaguePlayers.isNotEmpty()) {
-                FavoritePlayersLeagueGroup("Other", unknownLeaguePlayers, onRemoveFavoritePlayer, onToggleHatedPlayer)
+            if (showAllLeagues) {
+                val unknownLeaguePlayers = playersByLeague[null].orEmpty()
+                if (unknownLeaguePlayers.isNotEmpty()) {
+                    FavoritePlayersLeagueGroup("Other", unknownLeaguePlayers, onRemoveFavoritePlayer)
+                }
             }
             Spacer(modifier = Modifier.height(4.dp))
         }
@@ -514,23 +598,16 @@ private fun FavoriteTeamsLeagueGroup(leagueLabel: String, teams: List<Team>, onR
 }
 
 /**
- * Same swipe-to-reveal-delete as FavoriteTeamsLeagueGroup above, plus the
- * Player Hater Mode "hate on this player" checkbox where the old "X" used to
- * sit - only shown while LocalPlayerHaterMode is on (read directly, already
- * in scope - see FavoritesScreen's onToggleHatedPlayer doc comment). Delete
- * itself moved to the swipe gesture regardless of hater mode, so the
- * checkbox never competes with a remove icon for the same spot.
+ * Same swipe-to-reveal-delete as FavoriteTeamsLeagueGroup above - that's the
+ * only removal gesture this list needs. An earlier version also had a
+ * Player Hater Mode "hate on this player" checkbox here, letting you mark a
+ * player hated without leaving this screen - removed (James's call) once it
+ * became redundant clutter: it wasn't wired to anything removal-related,
+ * and the dedicated Hated Players page + its own add flow (a thumbs-down,
+ * FavoritePlayersScreen's PlayerPickerMode.HATE) already covers that.
  */
 @Composable
-private fun FavoritePlayersLeagueGroup(
-    leagueLabel: String,
-    players: List<FavoritePlayer>,
-    onRemoveFavoritePlayer: (FavoritePlayer) -> Unit,
-    onToggleHatedPlayer: (FavoritePlayer) -> Unit
-) {
-    val playerHaterMode = LocalPlayerHaterMode.current
-    val hatedPlayerNames = LocalHatedPlayerNames.current
-
+private fun FavoritePlayersLeagueGroup(leagueLabel: String, players: List<FavoritePlayer>, onRemoveFavoritePlayer: (FavoritePlayer) -> Unit) {
     Text(
         text = leagueLabel,
         color = TextSecondary,
@@ -541,23 +618,106 @@ private fun FavoritePlayersLeagueGroup(
         SwipeToRevealRow(onDelete = { onRemoveFavoritePlayer(player) }, modifier = Modifier.padding(vertical = 4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                    PlayerAvatar(name = player.name, headshotUrl = player.headshot)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
-                        Text(text = player.team, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                    }
+                PlayerAvatar(name = player.name, headshotUrl = player.headshot)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
+                    Text(text = player.team, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
                 }
-                if (playerHaterMode) {
-                    Checkbox(
-                        checked = player.name in hatedPlayerNames,
-                        onCheckedChange = { onToggleHatedPlayer(player) },
-                        colors = CheckboxDefaults.colors(checkedColor = TierWorthYourTime)
-                    )
+            }
+        }
+    }
+}
+
+/**
+ * Player Hater Mode's own management list (view/remove, grouped by league) -
+ * the 5th Favorites page, mirrors FavoriteTeamsPage/FavoritePlayersPage's
+ * league-scoping shape exactly. Adding happens on FavoritePlayersScreen in
+ * PlayerPickerMode.HATE (reached via [onAddHatedPlayerClick]), same
+ * search/browse flow as favoriting a player, just a thumbs-down instead of
+ * a heart as the selection indicator there.
+ */
+@Composable
+private fun HatedPlayersPage(
+    hatedPlayers: List<FavoritePlayer>,
+    selectedLeague: LeagueGroup,
+    showAllLeagues: Boolean,
+    onRemoveHatedPlayer: (FavoritePlayer) -> Unit,
+    onAddHatedPlayerClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+    ) {
+        val leaguesToShow = if (showAllLeagues) LeagueGroup.entries else listOf(selectedLeague)
+        val playersByLeague = hatedPlayers.groupBy { it.leagueGroup }
+        val visiblePlayerCount = leaguesToShow.sumOf { playersByLeague[it.apiValue].orEmpty().size }
+
+        if (hatedPlayers.isEmpty()) {
+            Text(
+                text = "Nobody here yet - add up to $MAX_HATED_PLAYERS players you're not a fan of to get them roasted instead of celebrated.",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        } else if (visiblePlayerCount == 0) {
+            Text(
+                text = "None in ${selectedLeague.shortDisplayName} - pick \"All Leagues\" from the dropdown to see the rest.",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        } else {
+            leaguesToShow.forEach { league ->
+                val playersInLeague = playersByLeague[league.apiValue].orEmpty()
+                if (playersInLeague.isNotEmpty()) {
+                    HatedPlayersLeagueGroup(league.displayName, playersInLeague, onRemoveHatedPlayer)
+                }
+            }
+            if (showAllLeagues) {
+                val unknownLeaguePlayers = playersByLeague[null].orEmpty()
+                if (unknownLeaguePlayers.isNotEmpty()) {
+                    HatedPlayersLeagueGroup("Other", unknownLeaguePlayers, onRemoveHatedPlayer)
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
+        Button(onClick = onAddHatedPlayerClick, modifier = Modifier.fillMaxWidth()) {
+            Text("Add a player you can't stand 👎")
+        }
+    }
+}
+
+/**
+ * Same swipe-to-reveal-delete shape as FavoriteTeamsLeagueGroup/
+ * FavoritePlayersLeagueGroup - no hate checkbox here (unlike
+ * FavoritePlayersLeagueGroup's), since every row on this page is already
+ * hated by definition; swiping to delete *is* the un-hate action.
+ */
+@Composable
+private fun HatedPlayersLeagueGroup(leagueLabel: String, players: List<FavoritePlayer>, onRemoveHatedPlayer: (FavoritePlayer) -> Unit) {
+    Text(
+        text = leagueLabel,
+        color = TextSecondary,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+    )
+    players.forEach { player ->
+        SwipeToRevealRow(onDelete = { onRemoveHatedPlayer(player) }, modifier = Modifier.padding(vertical = 4.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PlayerAvatar(name = player.name, headshotUrl = player.headshot)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
+                    Text(text = player.team, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

@@ -118,6 +118,7 @@ fun AppRoot() {
     var showSelectedSports by rememberSaveable { mutableStateOf(false) }
     var showFavoriteTeams by rememberSaveable { mutableStateOf(false) }
     var showFavoritePlayers by rememberSaveable { mutableStateOf(false) }
+    var showHatedPlayers by rememberSaveable { mutableStateOf(false) }
     var showAlertsSettings by rememberSaveable { mutableStateOf(false) }
     var highlightsVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     // Plain remember (not rememberSaveable) - Game isn't a Bundle-compatible
@@ -176,6 +177,7 @@ fun AppRoot() {
     BackHandler(enabled = showSelectedSports) { showSelectedSports = false }
     BackHandler(enabled = showFavoriteTeams) { showFavoriteTeams = false }
     BackHandler(enabled = showFavoritePlayers) { showFavoritePlayers = false }
+    BackHandler(enabled = showHatedPlayers) { showHatedPlayers = false }
     BackHandler(enabled = showAlertsSettings) { showAlertsSettings = false }
     BackHandler(enabled = highlightsVideoId != null) { highlightsVideoId = null }
     BackHandler(enabled = showGameDetail != null) { showGameDetail = null }
@@ -288,10 +290,25 @@ fun AppRoot() {
             // this screen is a drill-down that returns early above the
             // CompositionLocalProvider wrapping the bottom-nav Scaffold below,
             // so those composition locals aren't in scope here.
-            playerHaterMode = appSettingsViewModel.settings.playerHaterMode,
             hatedPlayerNames = favoritesViewModel.hatedPlayers.map { it.name }.toSet(),
             onToggleHatedPlayer = favoritesViewModel::toggleHatedPlayer,
             onBack = { showFavoritePlayers = false }
+        )
+        return
+    }
+
+    if (showHatedPlayers) {
+        // Same screen as showFavoritePlayers above, just in HATE mode - a
+        // thumbs-down selection indicator instead of the heart, reached from
+        // the Hated Players page's own "Add a player you can't stand" button
+        // rather than Settings.
+        FavoritePlayersScreen(
+            favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet(),
+            onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
+            hatedPlayerNames = favoritesViewModel.hatedPlayers.map { it.name }.toSet(),
+            onToggleHatedPlayer = favoritesViewModel::toggleHatedPlayer,
+            mode = PlayerPickerMode.HATE,
+            onBack = { showHatedPlayers = false }
         )
         return
     }
@@ -404,6 +421,7 @@ fun AppRoot() {
                     onGameClick = { showGameDetail = it },
                     onAddTeamClick = { showFavoriteTeams = true },
                     onAddPlayerClick = { showFavoritePlayers = true },
+                    onAddHatedPlayerClick = { showHatedPlayers = true },
                     belledGameIds = alertsViewModel.belledGameIds,
                     onToggleBell = alertsViewModel::toggleBell
                 )
@@ -842,6 +860,7 @@ private fun FavoritesTab(
     onGameClick: (com.nbawatchability.app.data.Game) -> Unit,
     onAddTeamClick: () -> Unit,
     onAddPlayerClick: () -> Unit,
+    onAddHatedPlayerClick: () -> Unit,
     belledGameIds: Set<String> = emptySet(),
     onToggleBell: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
@@ -880,7 +899,9 @@ private fun FavoritesTab(
         onAddPlayerClick = onAddPlayerClick,
         onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
         onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
-        onToggleHatedPlayer = favoritesViewModel::toggleHatedPlayer,
+        hatedPlayers = favoritesViewModel.hatedPlayers,
+        onRemoveHatedPlayer = favoritesViewModel::toggleHatedPlayer,
+        onAddHatedPlayerClick = onAddHatedPlayerClick,
         belledGameIds = belledGameIds,
         onToggleBell = onToggleBell
     )

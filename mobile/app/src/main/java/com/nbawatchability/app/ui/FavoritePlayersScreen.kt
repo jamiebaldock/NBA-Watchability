@@ -22,9 +22,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ThumbDownOffAlt
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -71,13 +71,25 @@ import com.nbawatchability.app.ui.theme.themeAwareLogoUrl
 private val ROSTER_BROWSABLE_LEAGUES = listOf(LeagueGroup.NBA, LeagueGroup.WNBA, LeagueGroup.NHL, LeagueGroup.MLB, LeagueGroup.NFL)
 
 /**
- * Search/browse screen for favoriting players - reachable from Settings,
- * mirrors FavoriteTeamsScreen's shape but adds one more drill-down level
- * (league -> team -> player) since there's no single "every player in a
- * league" endpoint, only per-team rosters. Picking a team pushes into a
- * second in-screen step rather than a separate navigation destination, so
- * "back" from the player list returns to the team list, not out of the
- * whole screen.
+ * Which action this screen's search/browse rows are picking a player *for* -
+ * FAVORITE (a heart, reached from Settings) or HATE (a thumbs-down, reached
+ * from Favorites' Hated Players page's own "Add a player you can't stand"
+ * button). Same underlying search/browse flow either way, one indicator per
+ * row - the whole row is the tap target, so there's no separate checkbox
+ * needed alongside it (an earlier version had one, for hating a player
+ * while browsing to favorite one; removed once the dedicated HATE mode flow
+ * made it redundant - James's call).
+ */
+enum class PlayerPickerMode { FAVORITE, HATE }
+
+/**
+ * Search/browse screen for favoriting (or, in [mode] HATE, hating) players -
+ * reachable from Settings, mirrors FavoriteTeamsScreen's shape but adds one
+ * more drill-down level (league -> team -> player) since there's no single
+ * "every player in a league" endpoint, only per-team rosters. Picking a team
+ * pushes into a second in-screen step rather than a separate navigation
+ * destination, so "back" from the player list returns to the team list, not
+ * out of the whole screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,10 +99,13 @@ fun FavoritePlayersScreen(
     // Player Hater Mode easter egg - explicit params (not
     // LocalPlayerHaterMode/LocalHatedPlayerNames) since this screen is a
     // drill-down reached before AppRoot's CompositionLocalProvider is in
-    // scope (see AppRoot.kt's showFavoritePlayers block).
-    playerHaterMode: Boolean = false,
+    // scope (see AppRoot.kt's showFavoritePlayers block). Only needed in
+    // HATE mode now (the FAVORITE-mode hate-checkbox this used to also
+    // gate is gone), but still passed unconditionally from both call sites
+    // rather than adding a second, mode-specific screen signature.
     hatedPlayerNames: Set<String> = emptySet(),
     onToggleHatedPlayer: (FavoritePlayer) -> Unit = {},
+    mode: PlayerPickerMode = PlayerPickerMode.FAVORITE,
     onBack: () -> Unit
 ) {
     var selectedLeague by rememberSaveable { mutableStateOf(LeagueGroup.NBA) }
@@ -124,7 +139,10 @@ fun FavoritePlayersScreen(
         containerColor = BackgroundBase,
         topBar = {
             TopAppBar(
-                title = { Text(selectedTeam?.name ?: "Favorite Players", color = TextPrimary) },
+                title = {
+                    val defaultTitle = if (mode == PlayerPickerMode.HATE) "Players You Can't Stand" else "Favorite Players"
+                    Text(selectedTeam?.name ?: defaultTitle, color = TextPrimary)
+                },
                 navigationIcon = {
                     IconButton(onClick = { if (selectedTeam != null) { selectedTeam = null; query = "" } else onBack() }) {
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -176,8 +194,19 @@ fun FavoritePlayersScreen(
                     is TeamsUiState.Loading -> LoadingBox()
                     is TeamsUiState.Error -> ErrorBox(state.message, teamsViewModel::retry)
                     is TeamsUiState.Loaded -> {
-                        val filteredTeams = remember(state.data, query) {
-                            state.data.teams.filter { it.name.contains(query, ignoreCase = true) }
+                        // A team incidentally matching the same substring as
+                        // a player-name search (e.g. "Los Angeles Sparks"
+                        // matching "ang") reads as confusing noise, not a
+                        // useful result - this screen only ever picks a
+                        // player, never a team, in either mode. Browsing
+                        // team-by-team without a query is unaffected (still
+                        // lists every team); only suppressed once there's
+                        // actually something to search for (James's report,
+                        // 2026-07-24 - confirmed the same shape in FAVORITE
+                        // mode too, not just HATE).
+                        val showTeamResults = query.isBlank()
+                        val filteredTeams = remember(state.data, query, showTeamResults) {
+                            if (showTeamResults) state.data.teams.filter { it.name.contains(query, ignoreCase = true) } else emptyList()
                         }
                         // Only searched once there's a query - with no query
                         // typed yet, the plain team list below is exactly
@@ -192,7 +221,7 @@ fun FavoritePlayersScreen(
                             }
                         }
                         if (filteredTeams.isEmpty() && filteredPlayers.isEmpty() && query.isNotBlank()) {
-                            EmptyBox("No teams or players match \"$query\".")
+                            EmptyBox(if (showTeamResults) "No teams or players match \"$query\"." else "No players match \"$query\".")
                         } else if (filteredTeams.isEmpty() && query.isBlank()) {
                             EmptyBox("No teams match \"$query\".")
                         } else {
@@ -213,9 +242,9 @@ fun FavoritePlayersScreen(
                                     PlayerSearchResultRow(
                                         player = player,
                                         teamName = playerTeam.name,
+                                        mode = mode,
                                         isFavorite = player.name in favoritePlayerNames,
                                         onToggle = { onToggleFavoritePlayer(favoritePlayer) },
-                                        showHateCheckbox = playerHaterMode,
                                         isHated = player.name in hatedPlayerNames,
                                         onToggleHated = { onToggleHatedPlayer(favoritePlayer) }
                                     )
@@ -257,9 +286,9 @@ fun FavoritePlayersScreen(
                                     val favoritePlayer = FavoritePlayer(name = player.name, team = team.name, leagueGroup = selectedLeague.apiValue, headshot = player.headshot)
                                     PlayerRow(
                                         player = player,
+                                        mode = mode,
                                         isFavorite = player.name in favoritePlayerNames,
                                         onToggle = { onToggleFavoritePlayer(favoritePlayer) },
-                                        showHateCheckbox = playerHaterMode,
                                         isHated = player.name in hatedPlayerNames,
                                         onToggleHated = { onToggleHatedPlayer(favoritePlayer) }
                                     )
@@ -363,14 +392,21 @@ private fun PlayerHeadshot(name: String, url: String?) {
 @Composable
 private fun PlayerRow(
     player: Player,
+    mode: PlayerPickerMode = PlayerPickerMode.FAVORITE,
     isFavorite: Boolean,
     onToggle: () -> Unit,
-    showHateCheckbox: Boolean = false,
     isHated: Boolean = false,
     onToggleHated: () -> Unit = {}
 ) {
+    // The whole row is the tap target now (matching PickableTeamRow's
+    // pattern above) - a per-row checkbox used to sit here as a second,
+    // narrower way to toggle hated status while browsing to favorite;
+    // removed once the dedicated HATE mode flow made it redundant (James's
+    // call), and tapping just the small trailing icon alone was a punier
+    // target than tapping anywhere on the row.
+    val onRowClick = if (mode == PlayerPickerMode.HATE) onToggleHated else onToggle
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp).clickable(onClick = onRowClick),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -378,21 +414,32 @@ private fun PlayerRow(
             PlayerHeadshot(player.name, player.headshot)
             Text(text = player.name, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
         }
-        // Independent of the favorite heart - a player can be marked hated
-        // without ever being favorited, so this is an extra control, not a
-        // swap of the heart's own meaning.
-        if (showHateCheckbox) {
-            Checkbox(
-                checked = isHated,
-                onCheckedChange = { onToggleHated() },
-                colors = CheckboxDefaults.colors(checkedColor = TierWorthYourTime)
-            )
-        }
+        PlayerPickerIndicator(mode = mode, isFavorite = isFavorite, isHated = isHated)
+    }
+}
+
+/**
+ * The row's status indicator - purely visual now that the row itself is the
+ * tap target (see PlayerRow/PlayerSearchResultRow above) - a heart in
+ * FAVORITE mode, a thumbs-down in HATE mode (James's ask: a distinct
+ * indicator for the "add a player you can't stand" flow, not the same
+ * heart/star used for favoriting).
+ */
+@Composable
+private fun PlayerPickerIndicator(mode: PlayerPickerMode, isFavorite: Boolean, isHated: Boolean) {
+    if (mode == PlayerPickerMode.HATE) {
+        Icon(
+            imageVector = if (isHated) Icons.Filled.ThumbDown else Icons.Filled.ThumbDownOffAlt,
+            contentDescription = if (isHated) "On your list" else "Not on your list",
+            tint = if (isHated) TierInstantClassic else TextMuted,
+            modifier = Modifier.size(26.dp)
+        )
+    } else {
         Icon(
             imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-            contentDescription = if (isFavorite) "Remove favorite" else "Add favorite",
+            contentDescription = if (isFavorite) "Favorited" else "Not favorited",
             tint = if (isFavorite) TierInstantClassic else TextMuted,
-            modifier = Modifier.size(26.dp).clickable(onClick = onToggle)
+            modifier = Modifier.size(26.dp)
         )
     }
 }
@@ -407,14 +454,15 @@ private fun PlayerRow(
 private fun PlayerSearchResultRow(
     player: Player,
     teamName: String,
+    mode: PlayerPickerMode = PlayerPickerMode.FAVORITE,
     isFavorite: Boolean,
     onToggle: () -> Unit,
-    showHateCheckbox: Boolean = false,
     isHated: Boolean = false,
     onToggleHated: () -> Unit = {}
 ) {
+    val onRowClick = if (mode == PlayerPickerMode.HATE) onToggleHated else onToggle
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp).clickable(onClick = onRowClick),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -425,18 +473,6 @@ private fun PlayerSearchResultRow(
                 Text(text = teamName, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
             }
         }
-        if (showHateCheckbox) {
-            Checkbox(
-                checked = isHated,
-                onCheckedChange = { onToggleHated() },
-                colors = CheckboxDefaults.colors(checkedColor = TierWorthYourTime)
-            )
-        }
-        Icon(
-            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-            contentDescription = if (isFavorite) "Remove favorite" else "Add favorite",
-            tint = if (isFavorite) TierInstantClassic else TextMuted,
-            modifier = Modifier.size(26.dp).clickable(onClick = onToggle)
-        )
+        PlayerPickerIndicator(mode = mode, isFavorite = isFavorite, isHated = isHated)
     }
 }

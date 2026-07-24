@@ -31,10 +31,17 @@ class RosterViewModel : ViewModel() {
         currentTeamId = teamId
         uiState = RosterUiState.Loading
         viewModelScope.launch {
-            uiState = try {
+            val result = try {
                 RosterUiState.Loaded(NetworkLeagueContentRepository.roster(BACKEND_BASE_URL, leagueGroup, teamId))
             } catch (e: Exception) {
                 RosterUiState.Error(e.message ?: "Couldn't reach the backend")
+            }
+            // Same stale-response guard as LeagueRostersViewModel - discard
+            // a result for a team/league the caller has since navigated
+            // away from, so a slow-to-resolve earlier pick can't overwrite
+            // a faster-resolving later one.
+            if (currentLeagueGroup == leagueGroup && currentTeamId == teamId) {
+                uiState = result
             }
         }
     }
