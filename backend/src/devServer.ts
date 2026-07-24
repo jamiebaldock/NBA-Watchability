@@ -21,9 +21,7 @@ import { isFcmConfigured } from "./fcm";
 import { startHighlightsPoller } from "./highlightsPoller";
 import { startAlertsPoller } from "./alertsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
-import { getGame, getHighlightsDiagnostics } from "./gameStore";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
-import { HighlightsLeague, searchHighlightsVideo } from "./youtubeClient";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
@@ -262,100 +260,6 @@ app.post("/alerts/game-sub", express.json(), (req, res) => {
 // credentials versus just being present as an env var.
 app.get("/alerts/status", (_req, res) => {
   res.json({ fcmConfigured: isFcmConfigured() });
-});
-
-// TEMPORARY read-only diagnostic - investigating James's report that
-// recent/current games aren't reliably getting highlights. Remove once the
-// investigation is resolved.
-app.get("/admin/highlights-diagnostics", (_req, res) => {
-  try {
-    res.json(getHighlightsDiagnostics());
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "internal error" });
-  }
-});
-
-// TEMPORARY read-only diagnostic - runs one real searchHighlightsVideo call
-// against a specific already-abandoned game, without persisting anything
-// (no markHighlightsChecked/setHighlights), to see what YouTube's real API
-// actually returns for a stuck row instead of guessing. Costs 1 real
-// search.list unit per call - part of the same investigation as
-// /admin/highlights-diagnostics above. Remove alongside it.
-app.get("/admin/highlights-test-search", async (req, res) => {
-  try {
-    const eventId = String(req.query.eventId ?? "");
-    const row = getGame(eventId);
-    if (!row) {
-      res.status(404).json({ error: "no such game" });
-      return;
-    }
-    const league: HighlightsLeague = row.leagueGroup as HighlightsLeague;
-    const match = await searchHighlightsVideo(league, row.away, row.home, row.tipoffUtc);
-    res.json({ eventId, away: row.away, home: row.home, tipoffUtc: row.tipoffUtc, league, match });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "internal error" });
-  }
-});
-
-// TEMPORARY, same investigation - shows the RAW candidate titles YouTube's
-// search actually returns (before searchHighlightsVideo's own title/channel
-// filter), to distinguish "no video was ever posted" from "a real video
-// exists but doesn't match on text" (e.g. an unexpected team-nickname
-// abbreviation). Costs 1 real search.list unit per call.
-app.get("/admin/highlights-raw-search", async (req, res) => {
-  try {
-    const eventId = String(req.query.eventId ?? "");
-    const row = getGame(eventId);
-    if (!row) {
-      res.status(404).json({ error: "no such game" });
-      return;
-    }
-    const apiKey = process.env.YOUTUBE_API_KEY;
-    if (!apiKey) {
-      res.status(500).json({ error: "no api key" });
-      return;
-    }
-    const channelIds: Record<string, string> = {
-      nba: "UCWJ2lWNubArHWmf3FIHbfcQ",
-      wnba: "UCO9a_ryN_l7DIDS-VIt-zmw",
-      mlb: "UCoLrcjPV5PbUrUyXq5mjc_A",
-    };
-    const channelId = channelIds[row.leagueGroup];
-    const gameDate = new Date(row.tipoffUtc);
-    const publishedAfter = new Date(Date.UTC(gameDate.getUTCFullYear(), gameDate.getUTCMonth(), gameDate.getUTCDate()));
-    const publishedBefore = new Date(publishedAfter.getTime() + 3 * 24 * 60 * 60 * 1000);
-    const nickname = (name: string) => name.trim().split(/\s+/).pop() ?? name;
-    const awayNickname = nickname(row.away);
-    const homeNickname = nickname(row.home);
-    const q =
-      row.leagueGroup === "nhl" ? `${awayNickname} ${homeNickname} NHL highlights` : `${awayNickname} ${homeNickname} full game highlights`;
-    const params = new URLSearchParams({
-      key: apiKey,
-      part: "snippet",
-      channelId,
-      q,
-      type: "video",
-      order: "relevance",
-      maxResults: "20",
-      publishedAfter: publishedAfter.toISOString(),
-      publishedBefore: publishedBefore.toISOString(),
-    });
-    const ytRes = await fetch(`https://www.googleapis.com/youtube/v3/search?${params.toString()}`);
-    const data = (await ytRes.json()) as { items?: Array<{ snippet?: { title?: string; publishedAt?: string } }> };
-    res.json({
-      eventId,
-      away: row.away,
-      home: row.home,
-      tipoffUtc: row.tipoffUtc,
-      window: { publishedAfter: publishedAfter.toISOString(), publishedBefore: publishedBefore.toISOString() },
-      titles: (data.items ?? []).map((i) => ({ title: i.snippet?.title, publishedAt: i.snippet?.publishedAt })),
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "internal error" });
-  }
 });
 
 app.listen(PORT, () => {
