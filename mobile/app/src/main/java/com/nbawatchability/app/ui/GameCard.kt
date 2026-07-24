@@ -489,6 +489,40 @@ private val PLAYER_HATER_SINGLE_STAT_LINES = listOf(
     "Oh wow, %s put up %s. Truly can't stop won't stop, allegedly."
 )
 
+// Spoiler-free versions: no actual stats, just gentle acknowledgment they showed up
+private val PLAYER_HATER_SINGLE_STAT_LINES_SPOILER_FREE = listOf(
+    "%s finally decided to play tonight - color me shocked.",
+    "%s: putting in actual effort. Groundbreaking.",
+    "Wow, %s showed up. Somebody alert the scoreboard.",
+    "%s actually remembered they're on a basketball team.",
+    "Give %s a hand for participating. Truly inspiring.",
+    "%s had a game tonight - no further comment needed.",
+    "Oh wow, %s decided to exist. Revolutionary.",
+    "%s pulled off the impossible: being present.",
+    "Credit to %s for at least trying tonight.",
+    "%s: 'I'm gonna show up.' And then they did. Riveting stuff.",
+    "Respect to %s for a genuine effort. Maybe.",
+    "Big night for %s - and I mean that generously.",
+    "Oh wow, %s actually contributed something. Let's celebrate.",
+    "%s stepped up - the bar was definitely on the floor.",
+    "Give it up for %s just... existing out there tonight.",
+    "%s played a real game of basketball tonight.",
+    "Oh wow, %s remembered the rules. How refreshing.",
+    "%s: 'I can be useful.' Today was the day they tested that theory.",
+    "Applause for %s, whose effort tonight was... present.",
+    "Oh wow, %s didn't phone this one in. Shocking twist."
+)
+
+// Multi-stat (triple-double and good) spoiler-free
+private val PLAYER_HATER_MULTI_STAT_SPOILER_FREE = listOf(
+    "%s finally got it together. Only took long enough.",
+    "%s showed up with their whole game tonight. Plot twist.",
+    "Oh wow, %s was actually useful. In multiple ways. Historic.",
+    "%s: 'I can contribute across the board.' And tonight they proved it, kinda.",
+    "Oh wow, %s did multiple things well. Stop the presses.",
+    "%s had one of those games where they remembered how to play."
+)
+
 private data class StatPart(val value: Int, val label: String)
 
 // [performer.line] is always "NUMBER label" pairs, comma-separated - a
@@ -505,21 +539,14 @@ private fun parseStatParts(line: String): List<StatPart> =
     }
 
 /**
- * "Jayson Tatum finally got more than 38 PTS and 11 REB. 2 AST tho. 🙂 Really?" -
- * calls out the single weakest stat in a multi-stat line by name instead of
- * a generic template, James's specific ask over the earlier template-only
- * approach. Falls back to [PLAYER_HATER_SINGLE_STAT_LINES] when there's
- * only one stat to compare (nothing to single out as the weak link).
+ * Spoiler-free roasts: no stat numbers mentioned, just gentle mockery
+ * that the player showed up. Uses random template from the spoiler-free
+ * banks that work for any game (single-stat or multi-stat).
  */
 private fun playerHaterLine(name: String, line: String): String {
     val stats = parseStatParts(line)
-    if (stats.size < 2) return PLAYER_HATER_SINGLE_STAT_LINES.random().format(name, line)
-
-    val weakestIndex = stats.indices.minByOrNull { stats[it].value }!!
-    val weakest = stats[weakestIndex]
-    val othersText = stats.filterIndexed { i, _ -> i != weakestIndex }
-        .joinToString(" and ") { "more than ${it.value} ${it.label}" }
-    return "$name finally got $othersText. ${weakest.value} ${weakest.label} tho. 🙂 Really?"
+    val bank = if (stats.size < 2) PLAYER_HATER_SINGLE_STAT_LINES_SPOILER_FREE else PLAYER_HATER_MULTI_STAT_SPOILER_FREE
+    return bank.random().format(name)
 }
 
 /**
