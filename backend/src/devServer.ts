@@ -326,11 +326,16 @@ app.get("/admin/highlights-raw-search", async (req, res) => {
     const gameDate = new Date(row.tipoffUtc);
     const publishedAfter = new Date(Date.UTC(gameDate.getUTCFullYear(), gameDate.getUTCMonth(), gameDate.getUTCDate()));
     const publishedBefore = new Date(publishedAfter.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const nickname = (name: string) => name.trim().split(/\s+/).pop() ?? name;
+    const awayNickname = nickname(row.away);
+    const homeNickname = nickname(row.home);
+    const q =
+      row.leagueGroup === "nhl" ? `${awayNickname} ${homeNickname} NHL highlights` : `${awayNickname} ${homeNickname} full game highlights`;
     const params = new URLSearchParams({
       key: apiKey,
       part: "snippet",
       channelId,
-      q: `${row.away} ${row.home} highlights`,
+      q,
       type: "video",
       order: "relevance",
       maxResults: "20",
