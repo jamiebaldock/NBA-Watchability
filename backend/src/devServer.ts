@@ -21,6 +21,7 @@ import { isFcmConfigured } from "./fcm";
 import { startHighlightsPoller } from "./highlightsPoller";
 import { startAlertsPoller } from "./alertsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
+import { getHighlightsDiagnostics } from "./gameStore";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
 
 const app = express();
@@ -260,6 +261,18 @@ app.post("/alerts/game-sub", express.json(), (req, res) => {
 // credentials versus just being present as an env var.
 app.get("/alerts/status", (_req, res) => {
   res.json({ fcmConfigured: isFcmConfigured() });
+});
+
+// TEMPORARY read-only diagnostic - investigating James's report that
+// recent/current games aren't reliably getting highlights. Remove once the
+// investigation is resolved.
+app.get("/admin/highlights-diagnostics", (_req, res) => {
+  try {
+    res.json(getHighlightsDiagnostics());
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
+  }
 });
 
 app.listen(PORT, () => {
