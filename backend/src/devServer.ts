@@ -299,6 +299,60 @@ app.get("/admin/highlights-test-search", async (req, res) => {
   }
 });
 
+// TEMPORARY, same investigation - shows the RAW candidate titles YouTube's
+// search actually returns (before searchHighlightsVideo's own title/channel
+// filter), to distinguish "no video was ever posted" from "a real video
+// exists but doesn't match on text" (e.g. an unexpected team-nickname
+// abbreviation). Costs 1 real search.list unit per call.
+app.get("/admin/highlights-raw-search", async (req, res) => {
+  try {
+    const eventId = String(req.query.eventId ?? "");
+    const row = getGame(eventId);
+    if (!row) {
+      res.status(404).json({ error: "no such game" });
+      return;
+    }
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+      res.status(500).json({ error: "no api key" });
+      return;
+    }
+    const channelIds: Record<string, string> = {
+      nba: "UCWJ2lWNubArHWmf3FIHbfcQ",
+      wnba: "UCO9a_ryN_l7DIDS-VIt-zmw",
+      mlb: "UCoLrcjPV5PbUrUyXq5mjc_A",
+    };
+    const channelId = channelIds[row.leagueGroup];
+    const gameDate = new Date(row.tipoffUtc);
+    const publishedAfter = new Date(Date.UTC(gameDate.getUTCFullYear(), gameDate.getUTCMonth(), gameDate.getUTCDate()));
+    const publishedBefore = new Date(publishedAfter.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const params = new URLSearchParams({
+      key: apiKey,
+      part: "snippet",
+      channelId,
+      q: `${row.away} ${row.home} highlights`,
+      type: "video",
+      order: "relevance",
+      maxResults: "20",
+      publishedAfter: publishedAfter.toISOString(),
+      publishedBefore: publishedBefore.toISOString(),
+    });
+    const ytRes = await fetch(`https://www.googleapis.com/youtube/v3/search?${params.toString()}`);
+    const data = (await ytRes.json()) as { items?: Array<{ snippet?: { title?: string; publishedAt?: string } }> };
+    res.json({
+      eventId,
+      away: row.away,
+      home: row.home,
+      tipoffUtc: row.tipoffUtc,
+      window: { publishedAfter: publishedAfter.toISOString(), publishedBefore: publishedBefore.toISOString() },
+      titles: (data.items ?? []).map((i) => ({ title: i.snippet?.title, publishedAt: i.snippet?.publishedAt })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Big4 Watchability backend dev server listening on http://localhost:${PORT}`);
   console.log(`Try: http://localhost:${PORT}/schedule?start=2025-01-15&end=2025-01-15`);
