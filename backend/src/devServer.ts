@@ -338,6 +338,50 @@ app.post("/admin/resend-highlights", express.json(), async (req, res) => {
   }
 });
 
+// TEMPORARY read-only diagnostic - broad, query-less samples of each
+// channel's most recent uploads (order=date, no team filter), to survey
+// real title conventions across many teams at once (a handful of quota
+// units instead of one search per suspect team). Investigating whether the
+// D-BACKS/Diamondbacks mismatch has siblings across NBA/WNBA/MLB before
+// designing a general fix. Remove once done.
+app.get("/admin/channel-sample", async (req, res) => {
+  try {
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+      res.status(500).json({ error: "no api key" });
+      return;
+    }
+    const channelIds: Record<string, string> = {
+      nba: "UCWJ2lWNubArHWmf3FIHbfcQ",
+      wnba: "UCO9a_ryN_l7DIDS-VIt-zmw",
+      mlb: "UCoLrcjPV5PbUrUyXq5mjc_A",
+    };
+    const league = String(req.query.league ?? "nba");
+    const channelId = channelIds[league];
+    if (!channelId) {
+      res.status(400).json({ error: "unknown league" });
+      return;
+    }
+    const params = new URLSearchParams({
+      key: apiKey,
+      part: "snippet",
+      channelId,
+      type: "video",
+      order: "date",
+      maxResults: "50",
+    });
+    const ytRes = await fetch(`https://www.googleapis.com/youtube/v3/search?${params.toString()}`);
+    const data = (await ytRes.json()) as { items?: Array<{ snippet?: { title?: string; publishedAt?: string } }> };
+    res.json({
+      league,
+      titles: (data.items ?? []).map((i) => ({ title: i.snippet?.title, publishedAt: i.snippet?.publishedAt })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Big4 Watchability backend dev server listening on http://localhost:${PORT}`);
   console.log(`Try: http://localhost:${PORT}/schedule?start=2025-01-15&end=2025-01-15`);
