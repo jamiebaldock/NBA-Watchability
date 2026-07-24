@@ -215,21 +215,10 @@ fun GameCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (tier != null) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            TierBadge(
-                                tier = tier,
-                                numericScore = if (showNumericScore) game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) else null
-                            )
-                            if (isGoat) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "👑 GOAT",
-                                    color = TierInstantClassic,
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                        }
+                        TierBadge(
+                            tier = tier,
+                            numericScore = if (showNumericScore) game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) else null
+                        )
                     } else {
                         Spacer(modifier = Modifier.size(0.dp))
                     }
@@ -256,12 +245,22 @@ fun GameCard(
                 // down also needs it to tag a long-press favorite.
                 val gameLeagueGroup = leagueGroupOf(game).apiValue
 
+                // Which row the GOAT badge (isGoat) lands on - the winning
+                // team's, per James's ask to move it off the header and
+                // onto the winner's own name instead. Only ever meaningful
+                // when isGoat is true, which HistoryScreen.kt already gates
+                // on a final, scored game, so awayScore/homeScore are safe
+                // to compare directly here.
+                val awayWon = isGoat && (game.awayScore ?: 0) > (game.homeScore ?: 0)
+                val homeWon = isGoat && !awayWon
+
                 Column(modifier = Modifier.padding(top = 8.dp)) {
                     TeamRow(
                         logoUrl = game.awayLogo,
                         name = game.away,
                         score = game.awayScore.takeIf { showScore },
                         isFavorite = game.away in favoriteTeamNames,
+                        showGoatBadge = awayWon,
                         onLongPress = { onToggleFavoriteTeam(Team(name = game.away, logo = game.awayLogo, leagueGroup = gameLeagueGroup)) }
                     )
                     Spacer(modifier = Modifier.height(4.dp))
@@ -270,6 +269,7 @@ fun GameCard(
                         name = game.home,
                         score = game.homeScore.takeIf { showScore },
                         isFavorite = game.home in favoriteTeamNames,
+                        showGoatBadge = homeWon,
                         onLongPress = { onToggleFavoriteTeam(Team(name = game.home, logo = game.homeLogo, leagueGroup = gameLeagueGroup)) }
                     )
                 }
@@ -641,6 +641,11 @@ private fun TeamRow(
     name: String,
     score: Int? = null,
     isFavorite: Boolean = false,
+    // History "All time" only - this team is the winner of the single
+    // highest-scoring game in that preset's currently-qualifying set (see
+    // GameCard's isGoat param). Renders inline next to the name instead of
+    // up in the header, per James's ask.
+    showGoatBadge: Boolean = false,
     onLongPress: () -> Unit = {}
 ) {
     Row(
@@ -669,6 +674,15 @@ private fun TeamRow(
             baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = TEAM_NAME_FONT_SIZE),
             modifier = Modifier.weight(1f, fill = false)
         )
+        if (showGoatBadge) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "🐐 GOAT",
+                color = TierInstantClassic,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
         if (score != null) {
             Spacer(modifier = Modifier.width(8.dp))
             Text(
